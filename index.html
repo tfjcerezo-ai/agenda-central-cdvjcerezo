@@ -274,6 +274,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
   <button class="nav-btn" onclick="nav('notas',this)">Notas</button>
   <button class="nav-btn" onclick="nav('tiempo',this)">⏱ Tiempo</button>
   <button class="nav-btn" onclick="nav('finanzas',this)">💰 Finanzas</button>
+  <button class="nav-btn" onclick="nav('comisiones',this)">💸 Comisiones</button>
   <button class="nav-btn" onclick="nav('equipo',this)">👥 Equipo</button>
   <button class="nav-btn" onclick="nav('ajustes',this)">⚙️ Ajustes</button>
 </nav>
@@ -684,6 +685,14 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
   </div>
 </div>
 
+<!-- COMISIONES (vista personal para no-directores) -->
+<div class="section" id="section-comisiones">
+  <div class="section-title">💸 Mis Comisiones</div>
+  <div id="misComStats"></div>
+  <div class="divider"></div>
+  <div id="misComDetalle"></div>
+</div>
+
 <!-- EQUIPO -->
 <div class="section" id="section-equipo">
   <div class="section-title">Equipo CDV by JCerezo</div>
@@ -780,8 +789,14 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
       </div>
     </div>
     <div style="margin-top:12px;padding:10px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:8px;font-size:11px;color:var(--gris);">
-      URL de acceso: <span style="color:var(--dorado);font-weight:600;">agenda-central-cdvbyjcerezo.netlify.app</span>
+      URL de acceso: <span style="color:var(--dorado);font-weight:600;">agenda.cdvbyjcerezo.com</span>
     </div>
+  </div>
+
+  <!-- GESTIÓN DE USUARIOS (solo Director) -->
+  <div id="panelGestionUsuarios" style="display:none;margin-top:16px;">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">⚙️ Gestión de permisos</div>
+    <div id="listaGestionUsuarios"></div>
   </div>
 </div>
 
@@ -1048,24 +1063,30 @@ let cronoActivo = false;
 // LOGIN Y USUARIOS
 // =====================
 const USUARIOS = [
-  {usuario:'javier',nombre:'Javier Cerezo Martínez',rol:'director',pass:'cdv2026'},
-  {usuario:'javierjr',nombre:'Javier Cerezo Jr.',rol:'asistente',pass:'jcjr2026'},
-  {usuario:'paula',nombre:'Paula',rol:'comercial',pass:'paula2026'},
+  {usuario:'javier',nombre:'Javier Cerezo Martínez',rol:'director',pass:'cdv2026',nombreEquipo:'Javier',comisionPct:5},
+  {usuario:'javierjr',nombre:'Javier Cerezo Jr.',rol:'asistente',pass:'jcjr2026',nombreEquipo:'Javier Cerezo Jr.',comisionPct:0},
+  {usuario:'paula',nombre:'Paula',rol:'comercial',pass:'paula2026',nombreEquipo:'Paula',comisionPct:8},
 ];
 
-// Permisos por rol
-const PERMISOS = {
-  director: ['hoy','tareas','proyectos','calendario','notas','tiempo','finanzas','equipo','ajustes'],
-  asistente: ['hoy','tareas','calendario','notas','tiempo'],
-  comercial: ['hoy','tareas','calendario','tiempo'],
+// Pestañas disponibles en la app
+const TODAS_LAS_TABS = ['hoy','tareas','proyectos','calendario','notas','tiempo','finanzas','comisiones','equipo','ajustes'];
+
+// Permisos por defecto (se pueden sobreescribir por usuario en localStorage)
+const DEFAULT_PERMISOS = {
+  director: ['hoy','tareas','proyectos','calendario','notas','tiempo','finanzas','comisiones','equipo','ajustes'],
+  asistente: ['hoy','tareas','calendario','notas','tiempo','comisiones'],
+  comercial: ['hoy','tareas','calendario','tiempo','comisiones'],
 };
 
-// Pestañas visibles por rol
-const NAV_ROLES = {
-  director: ['hoy','tareas','proyectos','calendario','notas','tiempo','finanzas','equipo','ajustes'],
-  asistente: ['hoy','tareas','calendario','notas','tiempo'],
-  comercial: ['hoy','tareas','calendario','tiempo'],
-};
+// Permisos dinámicos: cargados de localStorage o por defecto
+function getPermisos(usuario) {
+  const guardado = localStorage.getItem('cdv_permisos_' + usuario);
+  return guardado ? JSON.parse(guardado) : null;
+}
+
+// NAV_ROLES resuelto dinámicamente por usuario
+const PERMISOS = DEFAULT_PERMISOS;
+const NAV_ROLES = DEFAULT_PERMISOS;
 
 let usuarioActual = null;
 
@@ -1082,7 +1103,15 @@ function mostrarApp() {
 function aplicarPermisos() {
   if(!usuarioActual) return;
   const rol = usuarioActual.rol;
-  const permitidas = NAV_ROLES[rol] || [];
+  // Usar permisos personalizados si existen, si no los del rol
+  const personalizado = getPermisos(usuarioActual.usuario);
+  const permitidas = personalizado || NAV_ROLES[rol] || [];
+  // Mostrar panel gestión solo al director
+  const panelGestion = document.getElementById('panelGestionUsuarios');
+  if(panelGestion) {
+    panelGestion.style.display = rol === 'director' ? 'block' : 'none';
+    if(rol === 'director') renderGestionUsuarios();
+  }
   // Mostrar/ocultar pestañas nav
   document.querySelectorAll('.nav-btn').forEach(btn => {
     const onclick = btn.getAttribute('onclick') || '';
@@ -1185,6 +1214,7 @@ function nav(id, btn) {
   if(id==='tiempo') renderRegistros();
   if(id==='liga') renderLiga();
   if(id==='ajustes') renderComResumen();
+  if(id==='comisiones') renderMisComisiones();
 }
 
 function navTiempo(id, btn) {
@@ -2270,6 +2300,140 @@ function save() {
   localStorage.setItem('cdv_eq',JSON.stringify(equipo));
   syncASupabase();
 }
+
+// =====================
+// MIS COMISIONES (vista personal)
+// =====================
+function renderMisComisiones() {
+  if(!usuarioActual) return;
+  const nombreEquipo = usuarioActual.nombreEquipo || usuarioActual.nombre;
+  const misVentas = ventas.filter(v => v.closer===nombreEquipo || v.setter===nombreEquipo);
+
+  const calcMiCom = (v) => {
+    const esCloser = v.closer === nombreEquipo;
+    const esSetter = v.setter === nombreEquipo;
+    if(esCloser && esSetter) return v.com_closer + v.com_setter;
+    if(esCloser) return v.com_closer || 0;
+    if(esSetter) return v.com_setter || 0;
+    return 0;
+  };
+
+  const total = misVentas.reduce((a,v) => a + calcMiCom(v), 0);
+  const cobrado = misVentas.filter(v=>v.estado==='cobrado').reduce((a,v) => a + calcMiCom(v), 0);
+  const pendiente = total - cobrado;
+
+  document.getElementById('misComStats').innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${total.toFixed(0)}€</div><div class="stat-label">Total comisiones</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobrado.toFixed(0)}€</div><div class="stat-label">Cobrado</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pendiente.toFixed(0)}€</div><div class="stat-label">Pendiente</div></div>
+      <div class="stat-card"><div class="stat-numero">${misVentas.length}</div><div class="stat-label">Ventas</div></div>
+    </div>`;
+
+  document.getElementById('misComDetalle').innerHTML = misVentas.length
+    ? misVentas.map(v => {
+        const miCom = calcMiCom(v);
+        const esCloser = v.closer === nombreEquipo;
+        const esSetter = v.setter === nombreEquipo;
+        const miRol = (esCloser && esSetter) ? 'Closer + Setter' : esCloser ? 'Closer' : 'Setter';
+        const cobrado = v.estado === 'cobrado';
+        return `
+        <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-left:3px solid ${cobrado?'var(--verde)':'var(--dorado)'};border-radius:10px;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${v.cliente}</div>
+              <div style="font-size:10px;color:var(--gris);margin-top:2px;">Tu rol: ${miRol} · Venta: ${v.importe||0}€</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${miCom.toFixed(0)}€</div>
+              <div style="font-size:9px;color:${cobrado?'var(--verde)':'var(--rojo)'};">${cobrado?'✅ Cobrado':'⏳ Pendiente'}</div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--gris);">📅 Cobro previsto: ${fmtFecha(v.fecha_cobro||v.fechaCobro||'')}</div>
+        </div>`;
+      }).join('')
+    : '<div class="empty-state"><div class="empty-icon">💸</div><div class="empty-text">No tienes ventas asignadas todavía</div></div>';
+}
+
+// =====================
+// GESTIÓN DE USUARIOS (solo Director)
+// =====================
+const LABELS_TABS = {
+  hoy:'Hoy', tareas:'Tareas', proyectos:'Proyectos', calendario:'Calendario',
+  notas:'Notas', tiempo:'Tiempo', finanzas:'Finanzas', comisiones:'Comisiones',
+  equipo:'Equipo', ajustes:'Ajustes'
+};
+
+function renderGestionUsuarios() {
+  const noDirectores = USUARIOS.filter(u => u.rol !== 'director');
+  document.getElementById('listaGestionUsuarios').innerHTML = noDirectores.map(u => {
+    const permsActuales = getPermisos(u.usuario) || DEFAULT_PERMISOS[u.rol] || [];
+    const tabsDisponibles = TODAS_LAS_TABS.filter(t => t !== 'ajustes'); // ajustes siempre oculto para no-directores
+    return `
+    <div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${u.nombre}</div>
+          <div style="font-size:10px;color:var(--gris);">@${u.usuario} · ${u.rol} · Comisión: <span style="color:var(--dorado)">${u.comisionPct}%</span></div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Secciones visibles</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        ${tabsDisponibles.map(tab => `
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;background:var(--negro-claro);padding:4px 8px;border-radius:6px;border:1px solid ${permsActuales.includes(tab)?'var(--dorado)':'var(--negro-borde)'};">
+            <input type="checkbox" ${permsActuales.includes(tab)?'checked':''} value="${tab}" onchange="togglePermiso('${u.usuario}','${tab}',this.checked)" style="accent-color:var(--dorado)">
+            ${LABELS_TABS[tab]}
+          </label>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Comisión %</label>
+          <input type="number" class="form-input" id="com_${u.usuario}" value="${u.comisionPct}" min="0" max="100" placeholder="%" style="font-size:12px;">
+        </div>
+        <div style="display:flex;align-items:flex-end;">
+          <button class="btn-primary" onclick="guardarConfigUsuario('${u.usuario}')" style="font-size:11px;padding:8px 12px;width:100%;">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function togglePermiso(usuario, tab, activo) {
+  const permsActuales = getPermisos(usuario) || DEFAULT_PERMISOS[USUARIOS.find(u=>u.usuario===usuario)?.rol] || [];
+  let nuevos = [...permsActuales];
+  if(activo && !nuevos.includes(tab)) nuevos.push(tab);
+  if(!activo) nuevos = nuevos.filter(t => t !== tab);
+  localStorage.setItem('cdv_permisos_' + usuario, JSON.stringify(nuevos));
+  renderGestionUsuarios();
+}
+
+function guardarConfigUsuario(usuarioId) {
+  const user = USUARIOS.find(u => u.usuario === usuarioId);
+  if(!user) return;
+  const nuevaCom = parseFloat(document.getElementById('com_'+usuarioId)?.value) || 0;
+  user.comisionPct = nuevaCom;
+  // Guardar config extendida en localStorage
+  const config = JSON.parse(localStorage.getItem('cdv_userconfig') || '{}');
+  config[usuarioId] = { comisionPct: nuevaCom };
+  localStorage.setItem('cdv_userconfig', JSON.stringify(config));
+  mostrarMensaje('✅ Configuración guardada para ' + user.nombre);
+}
+
+function mostrarMensaje(msg) {
+  const div = document.createElement('div');
+  div.textContent = msg;
+  div.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--negro-claro);border:1px solid var(--dorado);color:var(--dorado);padding:10px 18px;border-radius:8px;font-size:12px;z-index:9999;';
+  document.body.appendChild(div);
+  setTimeout(() => div.remove(), 2500);
+}
+
+// Cargar config de comisiones guardada al inicio
+(function cargarConfigUsuarios() {
+  const config = JSON.parse(localStorage.getItem('cdv_userconfig') || '{}');
+  USUARIOS.forEach(u => {
+    if(config[u.usuario]?.comisionPct !== undefined) u.comisionPct = config[u.usuario].comisionPct;
+  });
+})();
 </script>
 </body>
 </html>
