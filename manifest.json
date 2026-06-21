@@ -1,0 +1,17 @@
+{
+  "name": "Agenda Central CDV by JCerezo",
+  "short_name": "CDV Agenda",
+  "description": "Centro de mando operativo de CDV by JCerezo",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0A",
+  "theme_color": "#C9A84C",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAMAAAD04JH5AAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABjUEExRVhJZgAATU0AKgAAAAgAAgExAAIAAAAHAAAAJgESAAMAAAABAAEAAIdpAAQAAAABAAAALgAAAABBZG9iZSBJbWFnZVJlYWR5AAAAAFdpbmRvd3MgUGhvdG8gRWRpdG9yIDEwLjAuMTAwMTEuMTYzODQAAAAsAAAAFAAAAA==",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

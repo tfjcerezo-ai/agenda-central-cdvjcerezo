@@ -1,0 +1,2275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CDV Agenda">
+<meta name="theme-color" content="#0A0A0A">
+<link rel="manifest" href="/manifest.json">
+<title>Agenda Central · CDV by JCerezo</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --negro:#0A0A0A; --negro-medio:#141414; --negro-claro:#1E1E1E;
+  --negro-borde:#2A2A2A; --dorado:#C9A84C; --dorado-claro:#E8C96D;
+  --dorado-oscuro:#9A7A2A; --blanco:#FFFFFF; --blanco-suave:#F5F5F0;
+  --gris:#888888; --gris-claro:#CCCCCC;
+  --verde:#51CF66; --azul:#4A9EE8; --rojo:#FF6B6B;
+  --elocrea:#2A4A9E; --elocrea-claro:#4A7ADE;
+  --liga:#B8960C; --liga-claro:#D4B020;
+  --consultoria:#444444; --incubacion:#6B2AA0;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+/* HEADER */
+.header{background:linear-gradient(135deg,var(--negro),var(--negro-medio));border-bottom:1px solid var(--negro-borde);padding:14px 20px;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;}
+.header-logo{display:flex;align-items:center;gap:10px;}
+.logo-circle{width:38px;height:38px;background:linear-gradient(135deg,var(--dorado-oscuro),var(--dorado-claro));border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:15px;color:var(--negro);}
+.header-title{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:var(--dorado);letter-spacing:1px;}
+.header-sub{font-size:10px;color:var(--gris);letter-spacing:2px;text-transform:uppercase;}
+.header-date-day{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--dorado);line-height:1;text-align:right;}
+.header-date-info{font-size:10px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;text-align:right;}
+
+/* NAV */
+.nav{display:flex;background:var(--negro-medio);border-bottom:1px solid var(--negro-borde);overflow-x:auto;scrollbar-width:none;position:sticky;top:67px;z-index:99;}
+.nav::-webkit-scrollbar{display:none;}
+.nav-btn{flex:0 0 auto;padding:11px 16px;background:none;border:none;color:var(--gris);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all 0.3s;border-bottom:2px solid transparent;white-space:nowrap;}
+.nav-btn.active{color:var(--dorado);border-bottom-color:var(--dorado);}
+
+/* CONTENT */
+.content{padding:16px 20px;max-width:600px;margin:0 auto;}
+.section{display:none;}
+.section.active{display:block;animation:fadeIn 0.3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.section-title{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:600;color:var(--dorado);margin-bottom:14px;letter-spacing:0.5px;display:flex;align-items:center;gap:8px;}
+.section-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--dorado-oscuro),transparent);}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.stat-card{background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:10px;padding:14px;text-align:center;}
+.stat-numero{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--dorado);line-height:1;}
+.stat-label{font-size:10px;color:var(--gris);text-transform:uppercase;letter-spacing:1.5px;margin-top:4px;}
+
+/* ALERTA */
+.alerta{background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;}
+.alerta-texto{font-size:12px;color:#FF6B6B;font-weight:500;line-height:1.4;}
+
+/* TAREAS */
+.tarea-item{background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;transition:all 0.2s;cursor:pointer;}
+.tarea-item:hover{border-color:var(--dorado-oscuro);}
+.tarea-item.completada{opacity:0.4;}
+.tarea-item.completada .tarea-texto{text-decoration:line-through;}
+.prioridad-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:6px;}
+.dot-urgente{background:#FF6B6B;box-shadow:0 0 6px rgba(255,107,107,0.6);}
+.dot-importante{background:var(--dorado);box-shadow:0 0 6px rgba(201,168,76,0.5);}
+.dot-normal{background:var(--gris);}
+.dot-estrategico{background:var(--incubacion);box-shadow:0 0 6px rgba(107,42,160,0.5);}
+.tarea-check{width:20px;height:20px;border:2px solid var(--negro-borde);border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all 0.2s;}
+.tarea-check.checked{background:var(--dorado);border-color:var(--dorado);color:var(--negro);font-size:11px;}
+.tarea-contenido{flex:1;}
+.tarea-texto{font-size:13px;font-weight:500;color:var(--blanco-suave);margin-bottom:5px;line-height:1.4;}
+.tarea-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.tarea-fecha{font-size:10px;color:var(--gris);}
+.tarea-fecha.hoy{color:#FF6B6B;}
+
+/* BADGES */
+.badge{padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
+.badge-urgente{background:rgba(255,107,107,0.15);color:#FF6B6B;border:1px solid rgba(255,107,107,0.3);}
+.badge-importante{background:rgba(201,168,76,0.15);color:var(--dorado);border:1px solid rgba(201,168,76,0.3);}
+.badge-normal{background:rgba(136,136,136,0.15);color:var(--gris-claro);border:1px solid rgba(136,136,136,0.3);}
+.badge-estrategico{background:rgba(107,42,160,0.15);color:#9B6FD4;border:1px solid rgba(107,42,160,0.3);}
+
+/* PROYECTO TAG */
+.ptag{padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
+.ptag-elocrea{background:rgba(42,74,158,0.3);color:#7AADFF;border:1px solid rgba(42,74,158,0.5);}
+.ptag-liga{background:rgba(184,150,12,0.2);color:var(--liga-claro);border:1px solid rgba(184,150,12,0.4);}
+.ptag-cdv{background:rgba(201,168,76,0.15);color:var(--dorado);border:1px solid rgba(201,168,76,0.3);}
+.ptag-consultoria{background:rgba(68,68,68,0.5);color:var(--gris-claro);border:1px solid rgba(100,100,100,0.4);}
+.ptag-personal{background:rgba(81,207,102,0.15);color:var(--verde);border:1px solid rgba(81,207,102,0.3);}
+
+/* EVENTOS */
+.evento-item{background:var(--negro-claro);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid var(--dorado);display:flex;align-items:center;gap:10px;}
+.evento-item.elocrea{border-left-color:var(--elocrea-claro);}
+.evento-item.liga{border-left-color:var(--liga-claro);}
+.evento-item.cdv{border-left-color:var(--dorado);}
+.evento-item.personal{border-left-color:var(--verde);}
+.evento-item.medico{border-left-color:#FF6B6B;}
+.evento-hora{font-size:11px;font-weight:700;color:var(--dorado);white-space:nowrap;min-width:38px;}
+.evento-item.elocrea .evento-hora{color:var(--elocrea-claro);}
+.evento-item.liga .evento-hora{color:var(--liga-claro);}
+.evento-info{flex:1;}
+.evento-titulo{font-size:13px;font-weight:600;color:var(--blanco-suave);margin-bottom:2px;}
+.evento-desc{font-size:11px;color:var(--gris);}
+.btn-borrar{background:rgba(255,107,107,0.15);border:1px solid rgba(255,107,107,0.3);color:var(--rojo);border-radius:6px;padding:3px 7px;font-size:10px;cursor:pointer;flex-shrink:0;}
+
+/* PROYECTOS */
+.proyecto-card{background:var(--negro-claro);border-radius:12px;padding:16px;margin-bottom:12px;border-left:3px solid;transition:all 0.2s;}
+.proyecto-card:hover{transform:translateX(2px);}
+.proyecto-card.elocrea{border-left-color:var(--elocrea-claro);}
+.proyecto-card.liga{border-left-color:var(--liga);}
+.proyecto-card.consultoria{border-left-color:var(--gris);}
+.proyecto-card.incubacion{border-left-color:var(--incubacion);}
+.proyecto-nombre{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin-bottom:4px;}
+.proyecto-card.elocrea .proyecto-nombre{color:var(--elocrea-claro);}
+.proyecto-card.liga .proyecto-nombre{color:var(--liga-claro);}
+.proyecto-card.consultoria .proyecto-nombre{color:var(--gris-claro);}
+.proyecto-card.incubacion .proyecto-nombre{color:#9B6FD4;}
+.proyecto-desc{font-size:11px;color:var(--gris);margin-bottom:10px;line-height:1.5;}
+.progreso-bar{height:3px;background:var(--negro-borde);border-radius:2px;overflow:hidden;margin-bottom:8px;}
+.progreso-fill{height:100%;border-radius:2px;}
+.proyecto-card.elocrea .progreso-fill{background:linear-gradient(90deg,var(--elocrea),var(--elocrea-claro));}
+.proyecto-card.liga .progreso-fill{background:linear-gradient(90deg,var(--liga),var(--liga-claro));}
+.proyecto-card.consultoria .progreso-fill{background:linear-gradient(90deg,#333,#555);}
+.proyecto-card.incubacion .progreso-fill{background:linear-gradient(90deg,var(--incubacion),#9B6FD4);}
+.proyecto-kpis{display:flex;gap:14px;flex-wrap:wrap;}
+.kpi{font-size:10px;color:var(--gris);}
+.kpi span{color:var(--blanco-suave);font-weight:600;}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+
+/* CALENDARIO */
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.cal-nav-btn{background:var(--negro-claro);border:1px solid var(--negro-borde);color:var(--dorado);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;}
+.cal-mes-nombre{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:600;color:var(--dorado);}
+.cal-vistas{display:flex;gap:6px;margin-bottom:12px;}
+.vista-btn{padding:5px 12px;background:var(--negro-claro);border:1px solid var(--negro-borde);color:var(--gris);border-radius:20px;font-size:11px;cursor:pointer;transition:all 0.2s;font-family:'Montserrat',sans-serif;}
+.vista-btn.active{background:rgba(201,168,76,0.15);border-color:var(--dorado-oscuro);color:var(--dorado);}
+.leyenda{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.leyenda-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--gris);}
+.leyenda-dot{width:7px;height:7px;border-radius:50%;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-dia-nombre{text-align:center;font-size:10px;color:var(--gris);padding:5px 0;text-transform:uppercase;letter-spacing:1px;font-weight:600;}
+.cal-dia{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:7px;cursor:pointer;transition:all 0.2s;font-size:13px;position:relative;}
+.cal-dia:hover{background:var(--negro-claro);}
+.cal-dia.otro-mes{color:var(--negro-borde);}
+.cal-dia.hoy{background:rgba(201,168,76,0.15);color:var(--dorado);font-weight:700;border:1px solid rgba(201,168,76,0.3);}
+.cal-dia.tiene-eventos::after{content:'';width:4px;height:4px;border-radius:50%;background:var(--dorado);position:absolute;bottom:2px;}
+.cal-dia.evento-liga::after{background:var(--liga-claro);}
+.cal-dia.evento-elocrea::after{background:var(--elocrea-claro);}
+
+/* NOTAS */
+.anotacion-item{background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:10px;padding:14px;margin-bottom:10px;}
+.anotacion-fecha{font-size:10px;color:var(--gris);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;}
+.anotacion-texto{font-size:13px;color:var(--blanco-suave);line-height:1.6;}
+
+/* TIEMPO - CRONÓMETRO */
+.crono-card{background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:16px;padding:24px;margin-bottom:16px;text-align:center;}
+.crono-display{font-family:'Cormorant Garamond',serif;font-size:52px;font-weight:700;color:var(--dorado);letter-spacing:4px;margin:12px 0;line-height:1;}
+.crono-estado{font-size:11px;color:var(--gris);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;}
+.crono-estado.activo{color:var(--verde);}
+.nivel-selector{display:flex;gap:8px;margin-bottom:16px;}
+.nivel-btn{flex:1;padding:10px 6px;border-radius:10px;border:1px solid var(--negro-borde);background:var(--negro);color:var(--gris);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.3s;text-align:center;line-height:1.4;}
+.nivel-btn.verde.active{background:rgba(81,207,102,0.15);border-color:rgba(81,207,102,0.4);color:var(--verde);}
+.nivel-btn.azul.active{background:rgba(74,158,232,0.15);border-color:rgba(74,158,232,0.4);color:var(--azul);}
+.nivel-btn.rojo.active{background:rgba(255,107,107,0.15);border-color:rgba(255,107,107,0.4);color:var(--rojo);}
+
+/* P&L LIGA */
+.pl-card{background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:16px;margin-bottom:12px;}
+.pl-sesion{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:var(--liga-claro);margin-bottom:10px;}
+.pl-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--negro-borde);font-size:12px;}
+.pl-row:last-child{border-bottom:none;}
+.pl-label{color:var(--gris);}
+.pl-ingreso{color:var(--verde);font-weight:600;}
+.pl-gasto{color:var(--rojo);font-weight:600;}
+.pl-total{display:flex;justify-content:space-between;padding:10px 0 0;margin-top:6px;border-top:1px solid var(--dorado-oscuro);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;}
+.pl-pos{color:var(--verde);}
+.pl-neg{color:var(--rojo);}
+
+/* FORMS */
+.form-group{margin-bottom:12px;}
+.form-label{display:block;font-size:10px;color:var(--gris);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px;font-weight:600;}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--negro-claro);border:1px solid var(--negro-borde);color:var(--blanco);padding:10px 14px;border-radius:8px;font-family:'Montserrat',sans-serif;font-size:13px;outline:none;transition:border-color 0.2s;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--dorado-oscuro);}
+.form-select option{background:var(--negro-claro);}
+.form-textarea{resize:vertical;min-height:70px;}
+
+.btn-primary{width:100%;padding:13px;background:linear-gradient(135deg,var(--dorado-oscuro),var(--dorado));color:var(--negro);border:none;border-radius:10px;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all 0.3s;margin-bottom:8px;}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(201,168,76,0.3);}
+.btn-secondary{width:100%;padding:11px;background:none;border:1px solid var(--negro-borde);color:var(--gris);border-radius:10px;font-family:'Montserrat',sans-serif;font-size:12px;cursor:pointer;}
+
+/* DIVIDER */
+.divider{height:1px;background:linear-gradient(90deg,var(--dorado-oscuro),transparent);margin:14px 0;}
+
+/* EMPTY */
+.empty-state{text-align:center;padding:32px 20px;color:var(--gris);}
+.empty-icon{font-size:28px;margin-bottom:8px;}
+.empty-text{font-size:13px;line-height:1.6;}
+
+/* FAB */
+.fab{position:fixed;bottom:24px;right:24px;width:52px;height:52px;background:linear-gradient(135deg,var(--dorado-oscuro),var(--dorado-claro));border-radius:50%;border:none;color:var(--negro);font-size:24px;cursor:pointer;box-shadow:0 4px 20px rgba(201,168,76,0.4);display:flex;align-items:center;justify-content:center;transition:all 0.3s;z-index:50;}
+.fab:hover{transform:scale(1.1);}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:none;align-items:flex-end;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--negro-medio);border-top:1px solid var(--negro-borde);border-radius:20px 20px 0 0;padding:22px 20px 40px;width:100%;max-height:90vh;overflow-y:auto;animation:slideUp 0.3s ease;}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-handle{width:40px;height:4px;background:var(--negro-borde);border-radius:2px;margin:0 auto 18px;}
+.modal-title{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--dorado);margin-bottom:18px;}
+
+/* FOOTER */
+.footer{text-align:center;padding:24px 20px 80px;border-top:1px solid var(--negro-claro);margin-top:20px;}
+.footer-brand{font-family:'Cormorant Garamond',serif;font-size:14px;color:var(--dorado);letter-spacing:1px;margin-bottom:4px;}
+.footer-copy{font-size:10px;color:#444;margin-top:6px;}
+
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--negro);}
+::-webkit-scrollbar-thumb{background:var(--negro-borde);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" style="position:fixed;inset:0;background:var(--negro);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;">
+  <div style="width:100%;max-width:360px;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <div id="logoLogin" style="margin-bottom:16px;"></div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--dorado);letter-spacing:1px;">CDV by JCerezo</div>
+      <div style="font-size:11px;color:var(--gris);letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Agenda Central</div>
+    </div>
+    <div id="loginError" style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:var(--rojo);display:none;text-align:center;">Usuario o contraseña incorrectos</div>
+    <div class="form-group"><label class="form-label">Usuario</label><input type="text" class="form-input" id="loginUser" placeholder="Tu usuario" autocomplete="username"></div>
+    <div class="form-group"><label class="form-label">Contraseña</label><input type="password" class="form-input" id="loginPass" placeholder="Tu contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn-primary" onclick="doLogin()" id="btnLogin">Entrar</button>
+    <div style="text-align:center;margin-top:16px;font-size:10px;color:var(--negro-borde);">© 2026 CDV by JCerezo · Desarrollado por JCerezo</div>
+  </div>
+</div>
+
+<!-- MAIN APP (oculto hasta login) -->
+<div id="mainApp" style="display:none;">
+
+<div id="appContent" style="display:none;">
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">
+    <img src="data:image/png;base64,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" style="width:42px;height:42px;border-radius:8px;object-fit:cover;" alt="CDV by JCerezo">
+    <div>
+      <div class="header-title">CDV by JCerezo</div>
+      <div class="header-sub">Agenda Central</div>
+    </div>
+  </div>
+  <div style="text-align:right;">
+    <div class="header-date-day" id="dayNum"></div>
+    <div class="header-date-info" id="dayInfo"></div>
+    <div id="syncStatus" style="font-size:9px;color:var(--dorado);text-align:right;margin-top:2px;"></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:4px;justify-content:flex-end;">
+      <div>
+        <div id="userNombre" style="font-size:10px;color:var(--blanco-suave);font-weight:600;"></div>
+        <div id="userRol" style="font-size:9px;color:var(--gris);"></div>
+      </div>
+      <button onclick="cerrarSesion()" style="background:rgba(255,107,107,0.15);border:1px solid rgba(255,107,107,0.3);color:var(--rojo);border-radius:6px;padding:3px 7px;font-size:9px;cursor:pointer;">Salir</button>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="nav('hoy',this)">Hoy</button>
+  <button class="nav-btn" onclick="nav('tareas',this)">Tareas</button>
+  <button class="nav-btn" onclick="nav('proyectos',this)">Proyectos</button>
+  <button class="nav-btn" onclick="nav('calendario',this)">Calendario</button>
+  <button class="nav-btn" onclick="nav('notas',this)">Notas</button>
+  <button class="nav-btn" onclick="nav('tiempo',this)">⏱ Tiempo</button>
+  <button class="nav-btn" onclick="nav('finanzas',this)">💰 Finanzas</button>
+  <button class="nav-btn" onclick="nav('equipo',this)">👥 Equipo</button>
+  <button class="nav-btn" onclick="nav('ajustes',this)">⚙️ Ajustes</button>
+</nav>
+
+<div class="content">
+
+<!-- HOY -->
+<div class="section active" id="section-hoy">
+  <div class="section-title">Panel de Hoy</div>
+  <div class="alerta" id="alertaHoy" style="display:none">
+    <span style="font-size:18px">🔴</span>
+    <div class="alerta-texto" id="alertaTexto"></div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-numero" id="statUrgentes">0</div><div class="stat-label">Urgentes</div></div>
+    <div class="stat-card"><div class="stat-numero" id="statHoy">0</div><div class="stat-label">Para hoy</div></div>
+    <div class="stat-card"><div class="stat-numero" id="statCompletadas">0</div><div class="stat-label">Hechas</div></div>
+    <div class="stat-card"><div class="stat-numero" id="statProyectos">3</div><div class="stat-label">Proyectos</div></div>
+  </div>
+  <div class="section-title">Reuniones de Hoy</div>
+  <div id="reunionesHoy"></div>
+  <div class="divider"></div>
+  <div class="section-title">Urgente Hoy</div>
+  <div id="tareasHoy"></div>
+</div>
+
+<!-- TAREAS -->
+<div class="section" id="section-tareas">
+  <div class="section-title">Pendientes</div>
+  <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
+    <button class="vista-btn active" onclick="filtrarT('todas',this)">Todas</button>
+    <button class="vista-btn" onclick="filtrarT('urgente',this)">🔴 Urgente</button>
+    <button class="vista-btn" onclick="filtrarT('importante',this)">🟡 Importante</button>
+    <button class="vista-btn" onclick="filtrarT('estrategico',this)">🔵 Estratégico</button>
+  </div>
+  <div id="listaTareas"></div>
+</div>
+
+<!-- PROYECTOS -->
+<div class="section" id="section-proyectos">
+  <div class="section-title">Proyectos Activos</div>
+  <button class="btn-primary" onclick="toggleFormProyecto()" id="btnNuevoProyecto" style="margin-bottom:14px;">+ Nuevo Proyecto Activo</button>
+
+  <!-- FORMULARIO NUEVO PROYECTO -->
+  <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:16px;margin-bottom:14px;display:none;" id="formProyecto">
+    <div class="form-group"><label class="form-label">Nombre</label><input type="text" class="form-input" id="pNombre" placeholder="Nombre del proyecto"></div>
+    <div class="form-group"><label class="form-label">Descripción / Estado actual</label><textarea class="form-textarea" id="pDesc" placeholder="Describe el estado actual..." style="min-height:60px;"></textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group"><label class="form-label">Estado</label>
+        <select class="form-select" id="pEstado">
+          <option value="activo">✅ Activo</option>
+          <option value="urgente">🔴 Urgente</option>
+          <option value="pausado">⏸ Pausado</option>
+          <option value="cerrado">✔️ Cerrado</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Progreso %</label>
+        <input type="number" class="form-input" id="pProgreso" placeholder="0-100" min="0" max="100"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Color</label>
+      <select class="form-select" id="pColor">
+        <option value="elocrea">Azul — Elocrea</option>
+        <option value="liga">Dorado — Liga</option>
+        <option value="consultoria">Gris — Consultoría</option>
+        <option value="incubacion">Púrpura — IA/Tech</option>
+      </select></div>
+    <input type="hidden" id="pEditId" value="">
+    <button class="btn-primary" onclick="guardarProyecto()">Guardar Proyecto</button>
+    <button class="btn-secondary" onclick="toggleFormProyecto()">Cancelar</button>
+  </div>
+
+  <div id="listaProyectos"></div>
+
+  <div class="divider"></div>
+  <div class="section-title">En Incubación</div>
+
+  <!-- FORMULARIO NUEVA IDEA -->
+  <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:16px;margin-bottom:14px;" id="formIncubacion" style="display:none">
+    <div class="form-group">
+      <label class="form-label">Nombre del proyecto / idea</label>
+      <input type="text" class="form-input" id="incNombre" placeholder="Ej: AUREA, App votaciones...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descripción</label>
+      <textarea class="form-textarea" id="incDesc" placeholder="¿Qué es? ¿Para qué sirve?" style="min-height:60px;"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select class="form-select" id="incEstado">
+          <option value="idea">💡 Idea</option>
+          <option value="evaluando">🔍 Evaluando</option>
+          <option value="desarrollo">⚙️ En desarrollo</option>
+          <option value="pausado">⏸ Pausado</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Proyecto vinculado</label>
+        <select class="form-select" id="incProyecto">
+          <option value="cdv">CDV General</option>
+          <option value="elocrea">Elocrea</option>
+          <option value="liga">Liga DJ</option>
+          <option value="consultoria">Consultoría</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="guardarIncubacion()">Añadir a Incubación</button>
+    <button class="btn-secondary" onclick="toggleFormIncubacion()">Cancelar</button>
+  </div>
+
+  <button class="btn-primary" onclick="toggleFormIncubacion()" id="btnNuevaIdea" style="margin-bottom:14px;">+ Nueva Idea / Proyecto</button>
+
+  <!-- LISTA INCUBACIÓN -->
+  <div id="listaIncubacion"></div>
+</div>
+
+<!-- CALENDARIO -->
+<div class="section" id="section-calendario">
+  <div class="section-title">Calendario</div>
+  <div class="leyenda">
+    <div class="leyenda-item"><div class="leyenda-dot" style="background:var(--dorado)"></div>CDV</div>
+    <div class="leyenda-item"><div class="leyenda-dot" style="background:var(--elocrea-claro)"></div>Elocrea</div>
+    <div class="leyenda-item"><div class="leyenda-dot" style="background:var(--liga-claro)"></div>Liga</div>
+    <div class="leyenda-item"><div class="leyenda-dot" style="background:var(--verde)"></div>Personal</div>
+  </div>
+  <div id="calFiltroUsuario" style="display:none;margin-bottom:10px;">
+    <select class="form-select" id="calUsuarioFiltro" onchange="renderCal()" style="font-size:11px;">
+      <option value="todos">👥 Ver todos</option>
+      <option value="javier">Solo Javier</option>
+      <option value="javierjr">Solo Javier Jr.</option>
+      <option value="paula">Solo Paula</option>
+    </select>
+  </div>
+  <div class="cal-vistas">
+    <button class="vista-btn active" onclick="cambiarVista('mes',this)">Mes</button>
+    <button class="vista-btn" onclick="cambiarVista('semana',this)">Semana</button>
+    <button class="vista-btn" onclick="cambiarVista('dia',this)">Día</button>
+  </div>
+  <div class="cal-header">
+    <button class="cal-nav-btn" onclick="navCal(-1)">‹</button>
+    <div class="cal-mes-nombre" id="calNombre"></div>
+    <button class="cal-nav-btn" onclick="navCal(1)">›</button>
+  </div>
+  <div id="calGrid"></div>
+  <div class="divider"></div>
+  <div class="section-title" style="font-size:16px;">Eventos del Mes</div>
+  <div id="eventosMes"></div>
+</div>
+
+<!-- NOTAS -->
+<div class="section" id="section-notas">
+  <div class="section-title">Notas</div>
+  <div class="form-group">
+    <textarea class="form-textarea" id="notaTexto" placeholder="Escribe una idea, nota o recordatorio..."></textarea>
+  </div>
+  <div class="form-group">
+    <select class="form-select" id="notaProyecto">
+      <option value="cdv">CDV General</option>
+      <option value="elocrea">Elocrea</option>
+      <option value="liga">Liga DJ</option>
+      <option value="consultoria">Consultoría</option>
+      <option value="personal">Personal</option>
+    </select>
+  </div>
+  <button class="btn-primary" onclick="guardarNota()">Guardar Nota</button>
+  <div class="divider"></div>
+  <div id="listaNota"></div>
+</div>
+
+<!-- TIEMPO -->
+<div class="section" id="section-tiempo">
+  <div class="section-title">Control de Tiempo</div>
+  <div class="cal-vistas">
+    <button class="vista-btn active" onclick="navTiempo('crono',this)">⏱ Cronómetro</button>
+    <button class="vista-btn" onclick="navTiempo('manual',this)">✍️ Manual</button>
+    <button class="vista-btn" onclick="navTiempo('registros',this)">📊 Registros</button>
+    <button class="vista-btn" onclick="navTiempo('glosario',this)">📖 Tarifas</button>
+  </div>
+
+  <!-- CRONÓMETRO -->
+  <div id="t-crono">
+    <div class="crono-card">
+      <div class="crono-estado" id="cronoEstado">Listo para empezar</div>
+      <div class="crono-display" id="cronoDisplay">00:00:00</div>
+      <div class="nivel-selector">
+        <div class="nivel-btn verde active" onclick="setNivel('verde',this)">🟢<br>Operativo<br>40€/h</div>
+        <div class="nivel-btn azul" onclick="setNivel('azul',this)">🔵<br>Estratégico<br>90€/h</div>
+        <div class="nivel-btn rojo" onclick="setNivel('rojo',this)">🔴<br>Negocio<br>150€/h</div>
+      </div>
+      <div class="form-group">
+        <select class="form-select" id="cronoProyecto">
+          <option value="elocrea">Elocrea</option>
+          <option value="liga">Liga DJ</option>
+          <option value="consultoria">Consultoría</option>
+          <option value="cdv">CDV General</option>
+          <option value="personal">Personal · 0€/h</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <input type="text" class="form-input" id="cronoDesc" placeholder="¿Qué estás haciendo?">
+      </div>
+      <button class="btn-primary" id="btnCrono" onclick="toggleCrono()">▶ Iniciar</button>
+      <button class="btn-primary" id="btnGuardar" onclick="guardarCrono()" style="display:none;background:linear-gradient(135deg,#2A7A2A,var(--verde));">💾 Guardar</button>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-numero" id="cronoValor">0€</div><div class="stat-label">Valor actual</div></div>
+      <div class="stat-card"><div class="stat-numero" id="cronoHoy">0h</div><div class="stat-label">Hoy</div></div>
+    </div>
+  </div>
+
+  <!-- MANUAL -->
+  <div id="t-manual" style="display:none">
+    <div class="form-group"><label class="form-label">Proyecto</label>
+      <select class="form-select" id="manProyecto">
+        <option value="elocrea">Elocrea</option><option value="liga">Liga DJ</option>
+        <option value="consultoria">Consultoría</option><option value="cdv">CDV General</option>
+        <option value="personal">Personal · 0€/h</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Nivel</label>
+      <select class="form-select" id="manNivel">
+        <option value="verde">🟢 Operativo — 40€/h</option>
+        <option value="azul">🔵 Estratégico — 90€/h</option>
+        <option value="rojo">🔴 Negocio/Cierre — 150€/h</option>
+        <option value="cero">⚪ Sin coste — 0€/h</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="manFecha"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group"><label class="form-label">Inicio</label><input type="time" class="form-input" id="manInicio" oninput="calcManual()"></div>
+      <div class="form-group"><label class="form-label">Fin</label><input type="time" class="form-input" id="manFin" oninput="calcManual()"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Descripción</label><textarea class="form-textarea" id="manDesc" placeholder="¿Qué hiciste?"></textarea></div>
+    <div class="stat-card" style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;color:var(--gris)">Valor estimado</span><div class="stat-numero" id="manValor" style="font-size:22px">0€</div></div></div>
+    <button class="btn-primary" onclick="guardarManual()">Guardar Registro</button>
+  </div>
+
+  <!-- REGISTROS -->
+  <div id="t-registros" style="display:none">
+    <div class="stats-grid" id="statsRegistros"></div>
+    <div id="listaRegistros"></div>
+  </div>
+
+  <!-- GLOSARIO TARIFAS -->
+  <div id="t-glosario" style="display:none">
+    <div style="background:rgba(81,207,102,0.08);border:1px solid rgba(81,207,102,0.3);border-radius:12px;padding:16px;margin-bottom:12px;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--verde);margin-bottom:10px;">🟢 Operativo · 40€/hora</div>
+      <div style="font-size:12px;color:var(--gris-claro);line-height:1.8;">
+        Administración · WhatsApp operativo · Correos rutinarios · Seguimiento administrativo · Coordinación básica · Organización logística · Actualización CRM · Preparación documentación · Publicaciones rutinarias · Producción operativa eventos · Montaje y desmontaje · Tareas repetitivas
+      </div>
+    </div>
+    <div style="background:rgba(74,158,232,0.08);border:1px solid rgba(74,158,232,0.3);border-radius:12px;padding:16px;margin-bottom:12px;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--azul);margin-bottom:10px;">🔵 Estratégico / Dirección · 90€/hora</div>
+      <div style="font-size:12px;color:var(--gris-claro);line-height:1.8;">
+        Consultoría estratégica · Diagnósticos empresariales · Análisis de negocio · Auditorías · Diseño de procesos · Diseño de sistemas · Desarrollo de nuevos proyectos · Planificación · Dirección de eventos · Dirección de equipos · Reuniones estratégicas · Desarrollo Liga · Informes ejecutivos · Formación especializada
+      </div>
+    </div>
+    <div style="background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.3);border-radius:12px;padding:16px;margin-bottom:12px;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--rojo);margin-bottom:10px;">🔴 Negocio / Cierre · 150€/hora</div>
+      <div style="font-size:12px;color:var(--gris-claro);line-height:1.8;">
+        Cierre de ventas · Dirección comercial externa · Negociación con clientes · Negociación con salas · Negociación con patrocinadores · Acuerdos estratégicos · Captación de clientes · Reuniones comerciales · Resolución de conflictos críticos · Representación empresarial · Desarrollo de alianzas · Networking orientado a negocio
+      </div>
+    </div>
+    <div style="background:rgba(136,136,136,0.08);border:1px solid rgba(136,136,136,0.2);border-radius:12px;padding:16px;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--gris);margin-bottom:10px;">⚪ Sin coste · 0€/hora</div>
+      <div style="font-size:12px;color:var(--gris-claro);line-height:1.8;">
+        Gestión personal y administrativa propia · Citas médicas · Tiempo libre · Primera consulta a cliente · Llamada de cortesía · Horas regaladas · Formación personal
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LIGA P&L -->
+<div class="section" id="section-liga">
+  <div class="section-title">Liga · P&L</div>
+  <div class="stats-grid" id="ligaStats"></div>
+  <div id="ligaSesiones"></div>
+  <div class="divider"></div>
+  <div class="section-title" style="font-size:16px;">Añadir Movimiento</div>
+  <div class="form-group"><label class="form-label">Sesión</label>
+    <select class="form-select" id="plSesion">
+      <option value="0">Sesión 0 — Siroco</option><option value="1">Sesión 1 — Epoka</option>
+      <option value="2">Sesión 2 — Hangar48</option><option value="3">Sesión 3 — Varvi</option>
+      <option value="4">Sesión 4 — 27 Jun</option><option value="general">General</option>
+    </select></div>
+  <div class="form-group"><label class="form-label">Tipo</label>
+    <select class="form-select" id="plTipo">
+      <option value="ingreso">💚 Ingreso</option>
+      <option value="gasto">🔴 Gasto</option>
+      <option value="horas">⏱ Horas imputadas</option>
+    </select></div>
+  <div class="form-group"><label class="form-label">Concepto</label><input type="text" class="form-input" id="plConcepto" placeholder="Ej: Taquilla, Fianza..."></div>
+  <div class="form-group"><label class="form-label">Importe €</label><input type="number" class="form-input" id="plImporte" placeholder="0"></div>
+  <button class="btn-primary" onclick="guardarMovLiga()">Añadir</button>
+</div>
+
+<!-- FINANZAS -->
+<div class="section" id="section-finanzas">
+  <div class="section-title">Finanzas</div>
+  <div class="cal-vistas">
+    <button class="vista-btn active" onclick="navFin('personal',this)">👤 Personal</button>
+    <button class="vista-btn" onclick="navFin('familiar',this)">🏠 Familiar</button>
+    <button class="vista-btn" onclick="navFin('cdv',this)">🏢 CDV</button>
+  </div>
+
+  <!-- PERSONAL -->
+  <div id="fin-personal">
+    <div class="stats-grid" id="statsPersonal"></div>
+    <div class="section-title" style="font-size:16px;">Añadir movimiento</div>
+    <div class="form-group"><label class="form-label">Concepto</label><input type="text" class="form-input" id="fpConcepto" placeholder="Ej: Sueldo, Alquiler..."></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group"><label class="form-label">Tipo</label>
+        <select class="form-select" id="fpTipo"><option value="ingreso">💚 Ingreso</option><option value="gasto">🔴 Gasto</option></select></div>
+      <div class="form-group"><label class="form-label">Importe €</label><input type="number" class="form-input" id="fpImporte" placeholder="0"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="fpFecha"></div>
+    <button class="btn-primary" onclick="guardarFinPersonal()">Añadir</button>
+    <div class="divider"></div>
+    <div id="listaFinPersonal"></div>
+  </div>
+
+  <!-- FAMILIAR -->
+  <div id="fin-familiar" style="display:none">
+    <div class="stats-grid" id="statsFamiliar"></div>
+    <div class="section-title" style="font-size:16px;">Añadir movimiento</div>
+    <div class="form-group"><label class="form-label">Concepto</label><input type="text" class="form-input" id="ffConcepto" placeholder="Ej: Hipoteca, Colegio..."></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group"><label class="form-label">Tipo</label>
+        <select class="form-select" id="ffTipo"><option value="ingreso">💚 Ingreso</option><option value="gasto">🔴 Gasto</option></select></div>
+      <div class="form-group"><label class="form-label">Importe €</label><input type="number" class="form-input" id="ffImporte" placeholder="0"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="ffFecha"></div>
+    <button class="btn-primary" onclick="guardarFinFamiliar()">Añadir</button>
+    <div class="divider"></div>
+    <div id="listaFinFamiliar"></div>
+  </div>
+
+  <!-- CDV -->
+  <div id="fin-cdv" style="display:none">
+    <div class="stats-grid" id="statsCDV"></div>
+    <div class="cal-vistas" style="margin-bottom:14px;">
+      <button class="vista-btn active" onclick="navCDV('elocrea',this)">Elocrea</button>
+      <button class="vista-btn" onclick="navCDV('liga',this)">Liga</button>
+      <button class="vista-btn" onclick="navCDV('consultoria',this)">Consultoría</button>
+      <button class="vista-btn" onclick="navCDV('eventos',this)">Eventos</button>
+    </div>
+
+    <!-- ELOCREA VENTAS -->
+    <div id="cdv-elocrea">
+      <div class="cal-vistas" style="margin-bottom:12px;">
+        <button class="vista-btn active" onclick="navElocrea('ventas',this)">Ventas</button>
+        <button class="vista-btn" onclick="navElocrea('comisiones',this)">💰 Comisiones</button>
+      </div>
+      <div id="el-ventas">
+        <div class="section-title" style="font-size:16px;">Ventas Elocrea</div>
+        <div id="listaVentas"></div>
+        <div class="divider"></div>
+        <div class="section-title" style="font-size:16px;">Nueva Venta</div>
+      <div class="form-group"><label class="form-label">Cliente</label><input type="text" class="form-input" id="vCliente" placeholder="Nombre empresa cliente"></div>
+      <div class="form-group"><label class="form-label">Importe venta €</label><input type="number" class="form-input" id="vImporte" placeholder="0" oninput="calcComisiones()"></div>
+      <div class="form-group"><label class="form-label">Closer</label>
+        <select class="form-select" id="vCloser">
+          <option value="Juan Antonio">Juan Antonio</option>
+          <option value="Koenraad">Koenraad</option>
+          <option value="Francisco">Francisco</option>
+          <option value="Paula">Paula</option>
+          <option value="Xabat">Xabat</option>
+          <option value="Ian Marcos">Ian Marcos</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Setter</label>
+        <select class="form-select" id="vSetter">
+          <option value="Natalia">Natalia</option>
+          <option value="Laura">Laura</option>
+          <option value="Daniel">Daniel</option>
+          <option value="Sofía Constanza">Sofía Constanza</option>
+          <option value="Francisco">Francisco</option>
+          <option value="Paula">Paula</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Fecha cobro prevista</label><input type="date" class="form-input" id="vFechaCobro"></div>
+      <!-- CALCULADORA COMISIONES -->
+      <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:14px;" id="calcComis">
+        <div style="font-size:11px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Comisiones calculadas</div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--negro-borde);font-size:12px;"><span style="color:var(--gris)">CDV by JCerezo (5%)</span><span id="comCDV" style="color:var(--dorado);font-weight:700;">0€</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--negro-borde);font-size:12px;"><span style="color:var(--gris)">Closer (8%)</span><span id="comCloser" style="color:var(--verde);font-weight:700;">0€</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;"><span style="color:var(--gris)">Setter (2%)</span><span id="comSetter" style="color:var(--azul);font-weight:700;">0€</span></div>
+      </div>
+      <button class="btn-primary" onclick="guardarVenta()">Registrar Venta</button>
+      </div><!-- /el-ventas -->
+      <div id="el-comisiones" style="display:none">
+        <div class="section-title" style="font-size:16px;">Comisiones por persona</div>
+        <div id="comResumen2"></div>
+        <div class="divider"></div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Detalle por persona</div>
+        <div id="comDetalle2"></div>
+      </div>
+    </div>
+
+    <div id="cdv-liga" style="display:none">
+      <div class="section-title" style="font-size:16px;">Liga P&L</div>
+      <div class="stats-grid" id="ligaStats2"></div>
+      <div id="ligaSesiones2"></div>
+    </div>
+
+    <div id="cdv-consultoria" style="display:none">
+      <div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">Sin proyectos de consultoría todavía</div></div>
+    </div>
+
+    <div id="cdv-eventos" style="display:none">
+      <div class="empty-state"><div class="empty-icon">🎵</div><div class="empty-text">Eventos adicionales próximamente</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- EQUIPO -->
+<div class="section" id="section-equipo">
+  <div class="section-title">Equipo CDV by JCerezo</div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-numero" id="statActivos">0</div><div class="stat-label">Activos</div></div>
+    <div class="stat-card"><div class="stat-numero" id="statClosers">0</div><div class="stat-label">Closers</div></div>
+    <div class="stat-card"><div class="stat-numero" id="statSetters">0</div><div class="stat-label">Setters</div></div>
+    <div class="stat-card"><div class="stat-numero" id="statCDVteam">0</div><div class="stat-label">CDV</div></div>
+  </div>
+
+  <button class="btn-primary" onclick="toggleFormEquipo()" id="btnNuevoMiembro" style="margin-bottom:14px;">+ Añadir Miembro</button>
+
+  <!-- FORMULARIO MIEMBRO -->
+  <div id="formEquipo" style="display:none;background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:16px;margin-bottom:14px;">
+    <div class="form-group"><label class="form-label">Nombre completo</label><input type="text" class="form-input" id="eqNombre" placeholder="Nombre y apellidos"></div>
+    <div class="form-group"><label class="form-label">Cargo</label><input type="text" class="form-input" id="eqCargo" placeholder="Ej: Closer, Setter, Asistente..."></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group"><label class="form-label">Rol</label>
+        <select class="form-select" id="eqRol">
+          <option value="cdv">🏢 CDV</option>
+          <option value="closer">🎯 Closer</option>
+          <option value="closer_setter">🎯/📞 Closer-Setter</option>
+          <option value="setter">📞 Setter</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Estado</label>
+        <select class="form-select" id="eqEstado">
+          <option value="activo">✅ Activo</option>
+          <option value="baja">❌ Baja</option>
+          <option value="pausa">⏸ Pausa</option>
+        </select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Teléfono</label><input type="text" class="form-input" id="eqTelefono" placeholder="+34 600 000 000"></div>
+    <div class="form-group"><label class="form-label">Email</label><input type="text" class="form-input" id="eqEmail" placeholder="email@ejemplo.com"></div>
+    <div class="form-group"><label class="form-label">Proyectos asignados</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;" id="eqProyectosCheck">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="elocrea" style="accent-color:var(--dorado)"> Elocrea</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="liga" style="accent-color:var(--dorado)"> Liga DJ</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="consultoria" style="accent-color:var(--dorado)"> Consultoría</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="cdv" style="accent-color:var(--dorado)"> CDV General</label>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Valoración (1-5 ⭐)</label>
+      <select class="form-select" id="eqValoracion">
+        <option value="0">Sin valorar</option>
+        <option value="1">⭐ 1 — Bajo rendimiento</option>
+        <option value="2">⭐⭐ 2 — Regular</option>
+        <option value="3">⭐⭐⭐ 3 — Bien</option>
+        <option value="4">⭐⭐⭐⭐ 4 — Muy bien</option>
+        <option value="5">⭐⭐⭐⭐⭐ 5 — Excelente</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Notas privadas</label><textarea class="form-textarea" id="eqNotas" placeholder="Observaciones, historial, cosas a tener en cuenta..."></textarea></div>
+    <input type="hidden" id="eqEditId">
+    <button class="btn-primary" onclick="guardarMiembro()">Guardar</button>
+    <button class="btn-secondary" onclick="toggleFormEquipo()">Cancelar</button>
+  </div>
+
+  <div id="listaEquipo"></div>
+</div>
+
+<!-- AJUSTES -->
+<div class="section" id="section-ajustes">
+  <div class="section-title">⚙️ Ajustes</div>
+
+  <!-- CAMBIAR CONTRASEÑA -->
+  <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:16px;margin-bottom:14px;">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">🔑 Cambiar contraseña</div>
+    <div class="form-group"><label class="form-label">Usuario</label>
+      <select class="form-select" id="ajUsuario">
+        <option value="javier">Javier Cerezo Martínez (Director)</option>
+        <option value="javierjr">Javier Cerezo Jr. (Asistente)</option>
+        <option value="paula">Paula (Comercial)</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Nueva contraseña</label><input type="password" class="form-input" id="ajPass1" placeholder="Nueva contraseña"></div>
+    <div class="form-group"><label class="form-label">Repetir contraseña</label><input type="password" class="form-input" id="ajPass2" placeholder="Repite la contraseña"></div>
+    <div id="ajMsg" style="font-size:12px;margin-bottom:10px;display:none;padding:8px;border-radius:6px;"></div>
+    <button class="btn-primary" onclick="cambiarPass()">Cambiar contraseña</button>
+  </div>
+
+  <!-- USUARIOS ACTIVOS -->
+  <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:16px;">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">👥 Usuarios con acceso</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--negro);border-radius:8px;">
+        <div><div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">Javier Cerezo Martínez</div><div style="font-size:10px;color:var(--gris);">@javier · 👑 Director</div></div>
+        <span style="font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(81,207,102,0.15);color:var(--verde);">ACTIVO</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--negro);border-radius:8px;">
+        <div><div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">Javier Cerezo Jr.</div><div style="font-size:10px;color:var(--gris);">@javierjr · 🤝 Asistente</div></div>
+        <span style="font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(81,207,102,0.15);color:var(--verde);">ACTIVO</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--negro);border-radius:8px;">
+        <div><div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">Paula</div><div style="font-size:10px;color:var(--gris);">@paula · 💼 Comercial</div></div>
+        <span style="font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(81,207,102,0.15);color:var(--verde);">ACTIVO</span>
+      </div>
+    </div>
+    <div style="margin-top:12px;padding:10px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:8px;font-size:11px;color:var(--gris);">
+      URL de acceso: <span style="color:var(--dorado);font-weight:600;">agenda-central-cdvbyjcerezo.netlify.app</span>
+    </div>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<!-- FOOTER -->
+<div class="footer">
+  <div class="footer-brand">CDV by JCerezo · Agenda Central v1.0</div>
+  <div class="footer-copy">© 2026 Javier Cerezo Martínez · Todos los derechos reservados<br>Desarrollado por JCerezo · CDV by JCerezo</div>
+</div>
+
+<!-- FAB -->
+<button class="fab" onclick="fabAction()">+</button>
+
+</div><!-- /appContent -->
+
+<!-- MODAL TAREA -->
+<div class="modal-overlay" id="modalTarea" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Nueva Tarea</div>
+    <div class="form-group"><label class="form-label">Descripción</label><input type="text" class="form-input" id="ntTexto" placeholder="¿Qué hay que hacer?"></div>
+    <div class="form-group"><label class="form-label">Asignar a</label>
+      <select class="form-select" id="ntAsignado">
+        <option value="todos">👥 Todos</option>
+        <option value="javier">Javier (Director)</option>
+        <option value="javierjr">Javier Jr. (Asistente)</option>
+        <option value="paula">Paula (Comercial)</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Prioridad</label>
+      <select class="form-select" id="ntPrioridad">
+        <option value="urgente">🔴 Urgente</option><option value="importante" selected>🟡 Importante</option>
+        <option value="normal">⚪ Normal</option><option value="estrategico">🔵 Estratégico</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Proyecto</label>
+      <select class="form-select" id="ntProyecto">
+        <option value="cdv">CDV General</option><option value="elocrea">Elocrea</option>
+        <option value="liga">Liga DJ</option><option value="consultoria">Consultoría</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Fecha límite</label><input type="date" class="form-input" id="ntFecha"></div>
+    <button class="btn-primary" onclick="guardarTarea()">Añadir Tarea</button>
+    <button class="btn-secondary" onclick="document.getElementById('modalTarea').classList.remove('open')">Cancelar</button>
+  </div>
+</div>
+
+<!-- MODAL EVENTO -->
+<div class="modal-overlay" id="modalEvento" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Nuevo Evento</div>
+    <div class="form-group"><label class="form-label">Título</label><input type="text" class="form-input" id="neTexto" placeholder="Nombre del evento"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="neFecha"></div>
+      <div class="form-group"><label class="form-label">Hora</label><input type="time" class="form-input" id="neHora"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Visible para</label>
+      <select class="form-select" id="neVisible">
+        <option value="todos">👥 Todos</option>
+        <option value="javier">Solo Javier</option>
+        <option value="javierjr">Solo Javier Jr.</option>
+        <option value="paula">Solo Paula</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Tipo</label>
+      <select class="form-select" id="neTipo">
+        <option value="cdv">CDV General</option><option value="elocrea">Elocrea</option>
+        <option value="liga">Liga DJ</option><option value="personal">Personal</option>
+        <option value="medico">Médico</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Descripción</label><input type="text" class="form-input" id="neDesc" placeholder="Notas adicionales"></div>
+    <button class="btn-primary" onclick="guardarEvento()">Añadir Evento</button>
+    <button class="btn-secondary" onclick="document.getElementById('modalEvento').classList.remove('open')">Cancelar</button>
+  </div>
+</div>
+
+<script>
+// =====================
+// DATOS
+// =====================
+const TARIFAS = {verde:40,azul:90,rojo:150,cero:0};
+const PNOMBRES = {elocrea:'Elocrea',liga:'Liga DJ',cdv:'CDV',consultoria:'Consultoría',personal:'Personal'};
+const SNOMBRES = {'0':'Sesión 0 — Siroco','1':'Sesión 1 — Epoka','2':'Sesión 2 — Hangar48','3':'Sesión 3 — Varvi','4':'Sesión 4 — 27 Jun','general':'General'};
+
+const T0 = [
+  {id:1,texto:"Contratos nuevos: Natalia, Laura, Daniel, Ian, Sofía",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-10",completada:false},
+  {id:2,texto:"Enviar playbooks, demos y dossiers a nuevos comerciales",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-10",completada:false},
+  {id:3,texto:"Dar de alta a nuevos en el CRM de Elocrea",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-10",completada:false},
+  {id:4,texto:"Pasar links cualificador Cerezus a los comerciales",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-10",completada:false},
+  {id:5,texto:"Asignar leads a los nuevos comerciales",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-10",completada:false},
+  {id:6,texto:"Revisar actividad comerciales esta semana",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-10",completada:false},
+  {id:7,texto:"Informe semanal Elocrea — semana 1 al 7 junio",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-10",completada:false},
+  {id:8,texto:"Anunciar ganador sesión 1 Liga (1.1.1)",prioridad:"urgente",proyecto:"liga",fecha:"2026-06-10",completada:false},
+  {id:9,texto:"Anunciar ganador sesión 2 Liga (2.1.1)",prioridad:"urgente",proyecto:"liga",fecha:"2026-06-10",completada:false},
+  {id:10,texto:"Anunciar ganador sesión 3 Liga (3.1.1)",prioridad:"urgente",proyecto:"liga",fecha:"2026-06-10",completada:false},
+  {id:11,texto:"Pasar vídeos Epoka (sesión 1) para valoración jurado",prioridad:"urgente",proyecto:"liga",fecha:"2026-06-10",completada:false},
+  {id:12,texto:"Cartel Varvi — entregar para link de entradas",prioridad:"urgente",proyecto:"liga",fecha:"2026-06-10",completada:false},
+  {id:13,texto:"Contratos Elocrea firmados — seguimiento",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-13",completada:false},
+  {id:14,texto:"Flujo administrativo cobros y comisiones — documentar",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-13",completada:false},
+  {id:15,texto:"Valorar si Juan Antonio necesita contrato",prioridad:"importante",proyecto:"elocrea",fecha:null,completada:false},
+  {id:16,texto:"Cerrar acuerdo director escuela DJ — antes 2ª ronda",prioridad:"urgente",proyecto:"liga",fecha:"2026-06-20",completada:false},
+  {id:17,texto:"AUREA — diseñar concepto jurado IA con personalidades DJ",prioridad:"importante",proyecto:"liga",fecha:"2026-06-16",completada:false},
+  {id:18,texto:"App votaciones Liga — solucionar bots (filtro IP)",prioridad:"importante",proyecto:"liga",fecha:null,completada:false},
+  {id:19,texto:"Cerrar landing page Liga definitivamente",prioridad:"importante",proyecto:"liga",fecha:null,completada:false},
+  {id:20,texto:"Sistema de rankings Liga — definir y publicar",prioridad:"importante",proyecto:"liga",fecha:null,completada:false},
+  {id:21,texto:"Grabación sesiones DJ — evaluar crear vs comprar herramienta",prioridad:"importante",proyecto:"liga",fecha:null,completada:false},
+  {id:22,texto:"Evento Liga New Talent DJ — 27 junio",prioridad:"importante",proyecto:"liga",fecha:"2026-06-27",completada:false},
+  {id:23,texto:"Evento Liga — agosto (presentar propuesta)",prioridad:"importante",proyecto:"liga",fecha:"2026-08-15",completada:false},
+  {id:24,texto:"Plan de comunicación CDV by JCerezo",prioridad:"importante",proyecto:"cdv",fecha:null,completada:false},
+  {id:25,texto:"Protocolo corporativo CDV bien definido",prioridad:"importante",proyecto:"cdv",fecha:null,completada:false},
+  {id:26,texto:"Activar redes sociales — LinkedIn e Instagram CDV",prioridad:"importante",proyecto:"cdv",fecha:null,completada:false},
+  {id:27,texto:"Agenda versión para equipo comercial",prioridad:"estrategico",proyecto:"cdv",fecha:null,completada:false},
+  {id:28,texto:"Buscar 2 setters nuevos — grupos WhatsApp",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-17",completada:false},
+  {id:29,texto:"Dar de baja a Amalia y Nicolás — comunicar",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-17",completada:false},
+  {id:30,texto:"Clasificaciones Liga — ganadores sesiones 1, 2 y 3",prioridad:"urgente",proyecto:"liga",fecha:"2026-06-17",completada:false},
+  {id:31,texto:"Configurar correo Elocrea en móvil — Outlook",prioridad:"urgente",proyecto:"elocrea",fecha:"2026-06-17",completada:false},
+  {id:32,texto:"Estudiar propuesta representación Yvaine",prioridad:"importante",proyecto:"cdv",fecha:null,completada:false},
+  {id:33,texto:"Hablar con Paula — ofrecerle puesto en CDV by JCerezo",prioridad:"importante",proyecto:"cdv",fecha:null,completada:false},
+  {id:34,texto:"Confirmar fecha reunión Logicar Checa — semana que viene",prioridad:"importante",proyecto:"cdv",fecha:null,completada:false},
+  {id:35,texto:"Buscar persona que grabe evento Liga 27 junio",prioridad:"urgente",proyecto:"liga",fecha:"2026-06-20",completada:false},
+  {id:29,texto:"Automatización facturas y correos",prioridad:"estrategico",proyecto:"cdv",fecha:null,completada:false},
+  {id:30,texto:"Coordinador Liga segunda ronda sept-oct",prioridad:"estrategico",proyecto:"liga",fecha:"2026-09-01",completada:false},
+];
+
+const E0 = [
+  {id:1,fecha:"2026-06-15",hora:"09:00",titulo:"Reunión Dirección Elocrea",desc:"Eloy y Jorge — seguimiento semanal",tipo:"elocrea"},
+  {id:2,fecha:"2026-06-15",hora:"10:00",titulo:"Reunión Equipo Comercial",desc:"Closers y setters — KPIs",tipo:"elocrea"},
+  {id:3,fecha:"2026-06-16",hora:"16:00",titulo:"Reunión con Roberto",desc:"Máster — App votaciones, AUREA jurado DJ, cualificador leads",tipo:"cdv"},
+  {id:4,fecha:"2026-06-22",hora:"09:00",titulo:"Reunión Dirección Elocrea",desc:"Eloy y Jorge — seguimiento semanal",tipo:"elocrea"},
+  {id:5,fecha:"2026-06-22",hora:"10:00",titulo:"Reunión Equipo Comercial",desc:"Closers y setters — KPIs",tipo:"elocrea"},
+  {id:6,fecha:"2026-06-27",hora:"20:00",titulo:"Liga New Talent DJ — 4ª Sesión",desc:"Venue por confirmar",tipo:"liga"},
+  {id:7,fecha:"2026-06-29",hora:"09:00",titulo:"Reunión Dirección Elocrea",desc:"Eloy y Jorge — seguimiento semanal",tipo:"elocrea"},
+  {id:8,fecha:"2026-08-15",hora:"18:00",titulo:"Evento Liga DJ",desc:"Presentar propuesta",tipo:"liga"},
+];
+
+let tareas = JSON.parse(localStorage.getItem('cdv_t')) || T0;
+let eventos = JSON.parse(localStorage.getItem('cdv_e')) || E0;
+let notas = JSON.parse(localStorage.getItem('cdv_n')) || [];
+let registros = JSON.parse(localStorage.getItem('cdv_r')) || [];
+let movLiga = JSON.parse(localStorage.getItem('cdv_l')) || [];
+
+// =====================
+// SUPABASE CONFIG
+// =====================
+const SB_URL = 'https://ommgkliegjhmwstitsrr.supabase.co';
+const SB_KEY = 'sb_publishable_85KwgAGAHwC1RGeW-nXYFA_gsB0c4qW';
+
+async function sbGet(tabla) {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/${tabla}?select=*&order=id.desc`, {
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' }
+    });
+    if(!r.ok) return null;
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+async function sbUpsert(tabla, data) {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/${tabla}`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify(Array.isArray(data) ? data : [data])
+    });
+    return r.ok;
+  } catch(e) { return false; }
+}
+
+async function sbDelete(tabla, id) {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/${tabla}?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+    });
+    return r.ok;
+  } catch(e) { return false; }
+}
+
+async function crearTablas() {
+  const tablas = [
+    `CREATE TABLE IF NOT EXISTS tareas (id bigint PRIMARY KEY, texto text, prioridad text, proyecto text, fecha text, completada boolean, datos jsonb)`,
+    `CREATE TABLE IF NOT EXISTS eventos (id bigint PRIMARY KEY, fecha text, hora text, titulo text, desc text, tipo text)`,
+    `CREATE TABLE IF NOT EXISTS notas (id bigint PRIMARY KEY, texto text, proyecto text, fecha text)`,
+    `CREATE TABLE IF NOT EXISTS registros (id bigint PRIMARY KEY, proyecto text, nivel text, horas float, valor int, descripcion text, fecha text, tipo text)`,
+    `CREATE TABLE IF NOT EXISTS mov_liga (id bigint PRIMARY KEY, sesion text, tipo text, concepto text, importe float, fecha text)`,
+    `CREATE TABLE IF NOT EXISTS proyectos (id bigint PRIMARY KEY, nombre text, desc text, estado text, color text, progreso int)`,
+    `CREATE TABLE IF NOT EXISTS incubacion (id bigint PRIMARY KEY, nombre text, desc text, estado text, proyecto text)`,
+    `CREATE TABLE IF NOT EXISTS fin_personal (id bigint PRIMARY KEY, concepto text, tipo text, importe float, fecha text)`,
+    `CREATE TABLE IF NOT EXISTS fin_familiar (id bigint PRIMARY KEY, concepto text, tipo text, importe float, fecha text)`,
+    `CREATE TABLE IF NOT EXISTS ventas (id bigint PRIMARY KEY, cliente text, importe float, closer text, setter text, fecha_cobro text, estado text, com_cdv int, com_closer int, com_setter int, com_jr int)`,
+    `CREATE TABLE IF NOT EXISTS equipo (id bigint PRIMARY KEY, nombre text, cargo text, rol text, estado text, notas text)`,
+  ];
+  for(const sql of tablas) {
+    await fetch(`${SB_URL}/rest/v1/rpc/ejecutar_sql`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: sql })
+    });
+  }
+}
+
+async function syncDesdeSupabase() {
+  mostrarSyncStatus('⟳ Sincronizando...');
+  try {
+    const [t,e,n,r,l,p,inc,fp,ff,v,eq] = await Promise.all([
+      sbGet('tareas'), sbGet('eventos'), sbGet('notas'), sbGet('registros'),
+      sbGet('mov_liga'), sbGet('proyectos'), sbGet('incubacion'),
+      sbGet('fin_personal'), sbGet('fin_familiar'), sbGet('ventas'), sbGet('equipo')
+    ]);
+    if(t&&t.length) { tareas=t; localStorage.setItem('cdv_t',JSON.stringify(t)); }
+    if(e&&e.length) { eventos=e; localStorage.setItem('cdv_e',JSON.stringify(e)); }
+    if(n&&n.length) { notas=n; localStorage.setItem('cdv_n',JSON.stringify(n)); }
+    if(r&&r.length) { registros=r; localStorage.setItem('cdv_r',JSON.stringify(r)); }
+    if(l&&l.length) { movLiga=l; localStorage.setItem('cdv_l',JSON.stringify(l)); }
+    if(p&&p.length) { proyectos=p; localStorage.setItem('cdv_proy',JSON.stringify(p)); }
+    if(inc&&inc.length) { incubacion=inc; localStorage.setItem('cdv_inc',JSON.stringify(inc)); }
+    if(fp&&fp.length) { finPersonal=fp; localStorage.setItem('cdv_fp',JSON.stringify(fp)); }
+    if(ff&&ff.length) { finFamiliar=ff; localStorage.setItem('cdv_ff',JSON.stringify(ff)); }
+    if(v&&v.length) { ventas=v; localStorage.setItem('cdv_v',JSON.stringify(v)); }
+    if(eq&&eq.length) { equipo=eq; localStorage.setItem('cdv_eq',JSON.stringify(eq)); }
+    renderHoy(); renderTareas('todas'); renderProyectos(); renderCal(); renderNotas(); renderRegistros(); renderLiga(); renderIncubacion(); renderEquipo(); renderVentas();
+    mostrarSyncStatus('✅ Sincronizado');
+  } catch(e) {
+    mostrarSyncStatus('⚠️ Sin conexión — datos locales');
+  }
+}
+
+async function syncASupabase() {
+  try {
+    await Promise.all([
+      sbUpsert('tareas', tareas),
+      sbUpsert('eventos', eventos),
+      sbUpsert('notas', notas),
+      sbUpsert('registros', registros),
+      sbUpsert('mov_liga', movLiga),
+      sbUpsert('proyectos', proyectos),
+      sbUpsert('incubacion', incubacion),
+      sbUpsert('fin_personal', finPersonal),
+      sbUpsert('fin_familiar', finFamiliar),
+      sbUpsert('ventas', ventas),
+      sbUpsert('equipo', equipo),
+    ]);
+    mostrarSyncStatus('✅ Guardado en la nube');
+  } catch(e) {
+    mostrarSyncStatus('⚠️ Guardado local');
+  }
+}
+
+function mostrarSyncStatus(msg) {
+  let el = document.getElementById('syncStatus');
+  if(!el) return;
+  el.textContent = msg;
+  setTimeout(()=>{ if(el) el.textContent = ''; }, 3000);
+}
+
+let mesActual = new Date().getMonth();
+let anioActual = new Date().getFullYear();
+let vistaCalActual = 'mes';
+let diaSeleccionado = new Date();
+let nivelActual = 'verde';
+let cronoInterval = null;
+let cronoSeg = 0;
+let cronoActivo = false;
+
+// =====================
+// LOGIN Y USUARIOS
+// =====================
+const USUARIOS = [
+  {usuario:'javier',nombre:'Javier Cerezo Martínez',rol:'director',pass:'cdv2026'},
+  {usuario:'javierjr',nombre:'Javier Cerezo Jr.',rol:'asistente',pass:'jcjr2026'},
+  {usuario:'paula',nombre:'Paula',rol:'comercial',pass:'paula2026'},
+];
+
+// Permisos por rol
+const PERMISOS = {
+  director: ['hoy','tareas','proyectos','calendario','notas','tiempo','finanzas','equipo','ajustes'],
+  asistente: ['hoy','tareas','calendario','notas','tiempo'],
+  comercial: ['hoy','tareas','calendario','tiempo'],
+};
+
+// Pestañas visibles por rol
+const NAV_ROLES = {
+  director: ['hoy','tareas','proyectos','calendario','notas','tiempo','finanzas','equipo','ajustes'],
+  asistente: ['hoy','tareas','calendario','notas','tiempo'],
+  comercial: ['hoy','tareas','calendario','tiempo'],
+};
+
+let usuarioActual = null;
+
+function mostrarApp() {
+  document.getElementById('loginScreen').style.display='none';
+  const main = document.getElementById('mainApp');
+  const app = document.getElementById('appContent');
+  if(main) main.style.display='block';
+  if(app) app.style.display='block';
+  // Aplicar permisos según rol
+  aplicarPermisos();
+}
+
+function aplicarPermisos() {
+  if(!usuarioActual) return;
+  const rol = usuarioActual.rol;
+  const permitidas = NAV_ROLES[rol] || [];
+  // Mostrar/ocultar pestañas nav
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    const onclick = btn.getAttribute('onclick') || '';
+    const match = onclick.match(/nav\('(\w+)'/);
+    if(match) {
+      btn.style.display = permitidas.includes(match[1]) ? 'block' : 'none';
+    }
+  });
+  // Mostrar/ocultar secciones
+  document.querySelectorAll('.section').forEach(sec => {
+    const id = sec.id.replace('section-','');
+    sec.style.display = ''; // reset
+  });
+}
+
+function doLogin() {
+  const u = document.getElementById('loginUser').value.trim().toLowerCase();
+  const p = document.getElementById('loginPass').value;
+  const btn = document.getElementById('btnLogin');
+  btn.textContent = 'Entrando...';
+  const passes = JSON.parse(localStorage.getItem('cdv_passes')) || {};
+  const user = USUARIOS.find(x => x.usuario===u && (passes[x.usuario]||x.pass)===p);
+  if(user) {
+    usuarioActual = user;
+    localStorage.setItem('cdv_session', JSON.stringify({usuario:user.usuario,nombre:user.nombre,rol:user.rol}));
+    document.getElementById('userNombre').textContent=user.nombre;
+    document.getElementById('userRol').textContent=user.rol==='director'?'👑 Director':user.rol==='asistente'?'🤝 Asistente':'💼 Comercial';
+    mostrarApp();
+    iniciarApp();
+  } else {
+    document.getElementById('loginError').style.display='block';
+    btn.textContent='Entrar';
+  }
+}
+
+function cerrarSesion() {
+  localStorage.removeItem('cdv_session');
+  usuarioActual = null;
+  const main = document.getElementById('mainApp');
+  const app = document.getElementById('appContent');
+  if(main) main.style.display='none';
+  if(app) app.style.display='none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+function checkSesion() {
+  const s = localStorage.getItem('cdv_session');
+  if(s) {
+    try {
+      const session = JSON.parse(s);
+      const user = USUARIOS.find(x => x.usuario === session.usuario);
+      if(user) {
+        usuarioActual = user;
+        mostrarApp();
+        document.getElementById('userNombre').textContent = user.nombre;
+        document.getElementById('userRol').textContent = user.rol==='director'?'👑 Director':user.rol==='asistente'?'🤝 Asistente':'💼 Comercial';
+        return true;
+      }
+    } catch(e) {}
+  }
+  return false;
+}
+
+function iniciarApp() {
+  const hoy = new Date();
+  const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  document.getElementById('dayNum').textContent = hoy.getDate();
+  document.getElementById('dayInfo').textContent = `${dias[hoy.getDay()]} · ${meses[hoy.getMonth()]} ${hoy.getFullYear()}`;
+  document.getElementById('manFecha').value = hoy.toISOString().split('T')[0];
+  document.getElementById('fpFecha').value = hoy.toISOString().split('T')[0];
+  document.getElementById('ffFecha').value = hoy.toISOString().split('T')[0];
+  document.getElementById('formIncubacion').style.display = 'none';
+  document.getElementById('formProyecto').style.display = 'none';
+  // Mostrar filtro calendario solo al director
+  const filtroEl = document.getElementById('calFiltroUsuario');
+  if(filtroEl) filtroEl.style.display = (usuarioActual && usuarioActual.rol==='director') ? 'block' : 'none';
+  renderHoy(); renderTareas('todas'); renderProyectos(); renderCal(); renderNotas(); renderRegistros(); renderLiga(); renderIncubacion(); renderEquipo(); renderVentas();
+  syncDesdeSupabase();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  if(!checkSesion()) {
+    document.getElementById('loginScreen').style.display = 'flex';
+  } else {
+    iniciarApp();
+  }
+});
+
+// =====================
+// NAV
+// =====================
+function nav(id, btn) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('section-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(id==='tiempo') renderRegistros();
+  if(id==='liga') renderLiga();
+  if(id==='ajustes') renderComResumen();
+}
+
+function navTiempo(id, btn) {
+  ['crono','manual','registros','glosario'].forEach(s=>{
+    document.getElementById('t-'+s).style.display = s===id?'block':'none';
+  });
+  document.querySelectorAll('#section-tiempo .vista-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(id==='registros') renderRegistros();
+}
+
+function fabAction() {
+  const s = document.querySelector('.section.active')?.id?.replace('section-','');
+  if(s==='calendario') {
+    document.getElementById('neFecha').value = new Date().toISOString().split('T')[0];
+    document.getElementById('modalEvento').classList.add('open');
+  } else {
+    document.getElementById('modalTarea').classList.add('open');
+  }
+}
+
+// =====================
+// HOY
+// =====================
+function renderHoy() {
+  const hoy = new Date().toISOString().split('T')[0];
+  const urgentes = misTareas().filter(t=>!t.completada && t.prioridad==='urgente');
+  const paraHoy = misTareas().filter(t=>!t.completada && t.fecha===hoy);
+  const alertaDiv = document.getElementById('alertaHoy');
+  if(urgentes.length>0){
+    alertaDiv.style.display='flex';
+    document.getElementById('alertaTexto').innerHTML=`<strong>Urgente:</strong> ${urgentes[0].texto}`;
+  } else { alertaDiv.style.display='none'; }
+  document.getElementById('statUrgentes').textContent = urgentes.length;
+  document.getElementById('statHoy').textContent = paraHoy.length;
+  document.getElementById('statCompletadas').textContent = misTareas().filter(t=>t.completada).length;
+  const reun = misEventos().filter(e=>e.fecha===hoy).sort((a,b)=>a.hora.localeCompare(b.hora));
+  document.getElementById('reunionesHoy').innerHTML = reun.length
+    ? reun.map(e=>`<div class="evento-item ${e.tipo}"><div class="evento-hora">${e.hora}</div><div class="evento-info"><div class="evento-titulo">${e.titulo}</div><div class="evento-desc">${e.desc}</div></div></div>`).join('')
+    : '<div style="color:var(--gris);font-size:13px;padding:8px 0;">Sin reuniones hoy.</div>';
+  document.getElementById('tareasHoy').innerHTML = urgentes.length
+    ? urgentes.slice(0,5).map(t=>tareaHTML(t)).join('')
+    : '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin urgentes</div></div>';
+}
+
+// =====================
+// TAREAS
+// =====================
+function tareaHTML(t) {
+  const pmap = {cdv:'ptag-cdv',elocrea:'ptag-elocrea',liga:'ptag-liga',consultoria:'ptag-consultoria',personal:'ptag-personal'};
+  const hoy = new Date().toISOString().split('T')[0];
+  const fechaStr = t.fecha ? `📅 ${fmtFecha(t.fecha)}` : '';
+  return `<div class="tarea-item ${t.completada?'completada':''}" >
+    <div class="prioridad-dot dot-${t.prioridad}"></div>
+    <div class="tarea-check ${t.completada?'checked':''}" onclick="toggleT(${t.id})">${t.completada?'✓':''}</div>
+    <div class="tarea-contenido">
+      <div class="tarea-texto">${t.texto}</div>
+      <div class="tarea-meta">
+        <span class="ptag ${pmap[t.proyecto]||'ptag-cdv'}">${PNOMBRES[t.proyecto]||t.proyecto}</span>
+        ${fechaStr?`<span class="tarea-fecha ${t.fecha===hoy?'hoy':''}">${fechaStr}</span>`:''}
+        <span class="badge badge-${t.prioridad==='estrategico'?'estrategico':t.prioridad}">${t.prioridad.toUpperCase()}</span>
+        <button onclick="editarTarea(${t.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer;">✏️</button>
+        <button onclick="borrarTarea(${t.id})" style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);color:var(--rojo);border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer;">✕</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function fmtFecha(f) {
+  if(!f) return '';
+  const [y,m,d] = f.split('-');
+  const ms=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return `${d} ${ms[parseInt(m)-1]}`;
+}
+
+function misTareas() {
+  if(!usuarioActual) return tareas;
+  if(usuarioActual.rol==='director') return tareas;
+  return tareas.filter(t => !t.asignado || t.asignado==='todos' || t.asignado===usuarioActual.usuario);
+}
+
+function misEventos() {
+  if(!usuarioActual) return eventos;
+  if(usuarioActual.rol==='director') {
+    const filtro = document.getElementById('calUsuarioFiltro');
+    const val = filtro ? filtro.value : 'todos';
+    if(val && val!=='todos') return eventos.filter(e => !e.visible || e.visible==='todos' || e.visible===val);
+    return eventos;
+  }
+  return eventos.filter(e => !e.visible || e.visible==='todos' || e.visible===usuarioActual.usuario);
+}
+
+function renderTareas(filtro) {
+  const orden = {urgente:0,importante:1,normal:2,estrategico:3};
+  let lista = filtro==='todas' ? [...misTareas()] : misTareas().filter(t=>t.prioridad===filtro);
+  lista.sort((a,b)=>{
+    if(a.completada!==b.completada) return a.completada?1:-1;
+    return (orden[a.prioridad]||2)-(orden[b.prioridad]||2);
+  });
+  document.getElementById('listaTareas').innerHTML = lista.length
+    ? lista.map(t=>tareaHTML(t)).join('')
+    : '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sin tareas</div></div>';
+}
+
+function filtrarT(f,btn) {
+  document.querySelectorAll('#section-tareas .vista-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTareas(f);
+}
+
+function toggleT(id) {
+  const i = tareas.findIndex(t=>t.id===id);
+  if(i!==-1){ tareas[i].completada=!tareas[i].completada; save(); renderHoy(); renderTareas('todas'); }
+}
+
+function borrarTarea(id) {
+  if(!confirm('¿Borrar esta tarea?')) return;
+  tareas=tareas.filter(t=>t.id!==id); save(); renderHoy(); renderTareas('todas');
+}
+
+function editarTarea(id) {
+  const t = tareas.find(x=>x.id===id);
+  if(!t) return;
+  document.getElementById('ntTexto').value=t.texto;
+  document.getElementById('ntPrioridad').value=t.prioridad;
+  document.getElementById('ntProyecto').value=t.proyecto;
+  document.getElementById('ntFecha').value=t.fecha||'';
+  // Store edit id
+  document.getElementById('ntTexto').dataset.editId=id;
+  document.getElementById('modalTarea').classList.add('open');
+}
+
+function guardarTarea() {
+  const txt = document.getElementById('ntTexto').value.trim();
+  if(!txt) return;
+  const editId = document.getElementById('ntTexto').dataset.editId;
+  const asignado = document.getElementById('ntAsignado').value;
+  if(editId) {
+    const i=tareas.findIndex(t=>t.id===parseInt(editId));
+    if(i!==-1){
+      tareas[i].texto=txt;
+      tareas[i].prioridad=document.getElementById('ntPrioridad').value;
+      tareas[i].proyecto=document.getElementById('ntProyecto').value;
+      tareas[i].fecha=document.getElementById('ntFecha').value||null;
+      tareas[i].asignado=asignado;
+    }
+    document.getElementById('ntTexto').dataset.editId='';
+  } else {
+    const creador = usuarioActual ? usuarioActual.usuario : 'javier';
+    tareas.unshift({id:Date.now(),texto:txt,prioridad:document.getElementById('ntPrioridad').value,proyecto:document.getElementById('ntProyecto').value,fecha:document.getElementById('ntFecha').value||null,completada:false,asignado,creador});
+  }
+  save(); document.getElementById('ntTexto').value=''; document.getElementById('ntFecha').value='';
+  document.getElementById('modalTarea').classList.remove('open');
+  renderHoy(); renderTareas('todas');
+}
+
+// =====================
+// CALENDARIO
+// =====================
+function renderCal() {
+  if(vistaCalActual==='mes') renderMes();
+  else if(vistaCalActual==='semana') renderSemana();
+  else renderDia(diaSeleccionado);
+}
+
+function cambiarVista(v,btn) {
+  document.querySelectorAll('#section-calendario .vista-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  vistaCalActual=v; renderCal();
+}
+
+function navCal(d) {
+  if(vistaCalActual==='mes'){ mesActual+=d; if(mesActual>11){mesActual=0;anioActual++;} if(mesActual<0){mesActual=11;anioActual--;} renderMes(); }
+  else if(vistaCalActual==='semana'){ diaSeleccionado.setDate(diaSeleccionado.getDate()+(d*7)); renderSemana(); }
+  else { diaSeleccionado.setDate(diaSeleccionado.getDate()+d); renderDia(diaSeleccionado); }
+}
+
+function renderMes() {
+  const ms=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  document.getElementById('calNombre').textContent=`${ms[mesActual]} ${anioActual}`;
+  const hoy=new Date();
+  const primer=new Date(anioActual,mesActual,1);
+  let ds=primer.getDay()-1; if(ds<0)ds=6;
+  const dim=new Date(anioActual,mesActual+1,0).getDate();
+  const dma=new Date(anioActual,mesActual,0).getDate();
+  const nombres=['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+  let html='<div class="cal-grid">';
+  nombres.forEach(n=>html+=`<div class="cal-dia-nombre">${n}</div>`);
+  for(let i=0;i<ds;i++) html+=`<div class="cal-dia otro-mes">${dma-ds+i+1}</div>`;
+  for(let d=1;d<=dim;d++){
+    const fstr=`${anioActual}-${String(mesActual+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const esHoy=d===hoy.getDate()&&mesActual===hoy.getMonth()&&anioActual===hoy.getFullYear();
+    const evs=eventos.filter(e=>e.fecha===fstr);
+    const tieneLiga=evs.some(e=>e.tipo==='liga');
+    const tieneEl=evs.some(e=>e.tipo==='elocrea');
+    let cls='cal-dia';
+    if(esHoy)cls+=' hoy';
+    if(evs.length)cls+=' tiene-eventos';
+    if(tieneLiga)cls+=' evento-liga';
+    else if(tieneEl)cls+=' evento-elocrea';
+    html+=`<div class="${cls}" onclick="abrirDia('${fstr}')">${d}</div>`;
+  }
+  html+='</div>';
+  document.getElementById('calGrid').innerHTML=html;
+  renderEventosMes();
+}
+
+function renderSemana() {
+  const hoy=new Date();
+  const ds=diaSeleccionado.getDay()===0?6:diaSeleccionado.getDay()-1;
+  const lunes=new Date(diaSeleccionado); lunes.setDate(diaSeleccionado.getDate()-ds);
+  const ms=['Ene','Feb','Mar','Abr','May','Jun'];
+  const ns=['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+  document.getElementById('calNombre').textContent=`Semana del ${lunes.getDate()} ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][lunes.getMonth()]}`;
+  let html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:14px;">';
+  for(let i=0;i<7;i++){
+    const dia=new Date(lunes); dia.setDate(lunes.getDate()+i);
+    const fstr=dia.toISOString().split('T')[0];
+    const esHoy=fstr===hoy.toISOString().split('T')[0];
+    const evs=eventos.filter(e=>e.fecha===fstr);
+    html+=`<div onclick="abrirDia('${fstr}')" style="background:${esHoy?'rgba(201,168,76,0.15)':'var(--negro-claro)'};border:1px solid ${esHoy?'rgba(201,168,76,0.4)':'var(--negro-borde)'};border-radius:8px;padding:8px 4px;text-align:center;cursor:pointer;">
+      <div style="font-size:10px;color:var(--gris);text-transform:uppercase;">${ns[i]}</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:${esHoy?'var(--dorado)':'var(--blanco)'};">${dia.getDate()}</div>
+      ${evs.length?`<div style="width:5px;height:5px;border-radius:50%;background:var(--dorado);margin:3px auto 0;"></div>`:''}
+    </div>`;
+  }
+  html+='</div>';
+  let evSem=[];
+  for(let i=0;i<7;i++){const dia=new Date(lunes);dia.setDate(lunes.getDate()+i);evSem=evSem.concat(eventos.filter(e=>e.fecha===dia.toISOString().split('T')[0]));}
+  evSem.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  html+=`<div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Eventos</div>`;
+  html+=evSem.length?evSem.map(e=>`<div class="evento-item ${e.tipo}"><div class="evento-hora">${fmtFecha(e.fecha)}<br>${e.hora}</div><div class="evento-info"><div class="evento-titulo">${e.titulo}</div><div class="evento-desc">${e.desc}</div></div><button class="btn-borrar" onclick="borrarEvento(${e.id})">✕</button></div>`).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos</div></div>';
+  document.getElementById('calGrid').innerHTML=html;
+  document.getElementById('eventosMes').innerHTML='';
+}
+
+function renderDia(fecha) {
+  const fstr=fecha.toISOString().split('T')[0];
+  const ms=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const ns=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  document.getElementById('calNombre').textContent=`${ns[fecha.getDay()]} ${fecha.getDate()} ${ms[fecha.getMonth()]}`;
+  const evs=eventos.filter(e=>e.fecha===fstr).sort((a,b)=>a.hora.localeCompare(b.hora));
+  const tds=tareas.filter(t=>t.fecha===fstr&&!t.completada);
+  let html='';
+  if(tds.length){html+=`<div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Tareas</div>`;html+=tds.map(t=>tareaHTML(t)).join('');}
+  html+=`<div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin:14px 0 10px;">Agenda</div>`;
+  html+=evs.length?evs.map(e=>`<div class="evento-item ${e.tipo}"><div class="evento-hora">${e.hora}</div><div class="evento-info"><div class="evento-titulo">${e.titulo}</div><div class="evento-desc">${e.desc}</div></div><button class="btn-borrar" onclick="borrarEvento(${e.id})">✕</button></div>`).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos — pulsa + para añadir</div></div>';
+  document.getElementById('calGrid').innerHTML=html;
+  document.getElementById('eventosMes').innerHTML='';
+}
+
+function abrirDia(fstr) {
+  diaSeleccionado=new Date(fstr+'T12:00:00');
+  document.querySelectorAll('#section-calendario .vista-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#section-calendario .vista-btn').forEach(b=>{if(b.textContent==='Día')b.classList.add('active');});
+  vistaCalActual='dia'; renderDia(diaSeleccionado);
+}
+
+function renderEventosMes() {
+  const evs=eventos.filter(e=>{const[y,m]=e.fecha.split('-');return parseInt(m)-1===mesActual&&parseInt(y)===anioActual;}).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  document.getElementById('eventosMes').innerHTML=evs.length?evs.map(e=>`<div class="evento-item ${e.tipo}"><div class="evento-hora">${fmtFecha(e.fecha)}<br>${e.hora}</div><div class="evento-info"><div class="evento-titulo">${e.titulo}</div><div class="evento-desc">${e.desc}</div></div><button class="btn-borrar" onclick="borrarEvento(${e.id})">✕</button></div>`).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos este mes</div></div>';
+}
+
+function guardarEvento() {
+  const txt=document.getElementById('neTexto').value.trim();
+  const fecha=document.getElementById('neFecha').value;
+  const hora=document.getElementById('neHora').value;
+  if(!txt||!fecha||!hora){alert('Rellena título, fecha y hora');return;}
+  const visible=document.getElementById('neVisible').value;
+  eventos.push({id:Date.now(),fecha,hora,titulo:txt,desc:document.getElementById('neDesc').value,tipo:document.getElementById('neTipo').value,visible});
+  save(); document.getElementById('neTexto').value=''; document.getElementById('neDesc').value='';
+  document.getElementById('modalEvento').classList.remove('open');
+  renderHoy(); renderCal();
+}
+
+function borrarEvento(id) {
+  if(!confirm('¿Borrar evento?')) return;
+  eventos=eventos.filter(e=>e.id!==id); save(); renderHoy(); renderCal();
+}
+
+// =====================
+// NOTAS
+// =====================
+function guardarNota() {
+  const txt=document.getElementById('notaTexto').value.trim();
+  if(!txt) return;
+  notas.unshift({id:Date.now(),texto:txt,proyecto:document.getElementById('notaProyecto').value,fecha:new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})});
+  save(); document.getElementById('notaTexto').value=''; renderNotas();
+}
+
+function renderNotas() {
+  const pmap={cdv:'ptag-cdv',elocrea:'ptag-elocrea',liga:'ptag-liga',consultoria:'ptag-consultoria',personal:'ptag-personal'};
+  document.getElementById('listaNota').innerHTML=notas.length?notas.map(n=>`<div class="anotacion-item"><div class="anotacion-fecha"><span class="ptag ${pmap[n.proyecto]}">${PNOMBRES[n.proyecto]}</span> &nbsp;${n.fecha}</div><div class="anotacion-texto">${n.texto}</div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">📝</div><div class="empty-text">Sin notas todavía</div></div>';
+}
+
+// =====================
+// TIEMPO - CRONÓMETRO
+// =====================
+function setNivel(n,btn) {
+  document.querySelectorAll('.nivel-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); nivelActual=n;
+}
+
+function toggleCrono() {
+  if(!cronoActivo){
+    cronoActivo=true;
+    document.getElementById('btnCrono').textContent='⏸ Pausar';
+    document.getElementById('btnGuardar').style.display='block';
+    document.getElementById('cronoEstado').textContent='En progreso...';
+    document.getElementById('cronoEstado').className='crono-estado activo';
+    cronoInterval=setInterval(()=>{cronoSeg++;actualizarCrono();},1000);
+  } else {
+    cronoActivo=false; clearInterval(cronoInterval);
+    document.getElementById('btnCrono').textContent='▶ Continuar';
+    document.getElementById('cronoEstado').textContent='Pausado';
+    document.getElementById('cronoEstado').className='crono-estado';
+  }
+}
+
+function actualizarCrono() {
+  const h=Math.floor(cronoSeg/3600),m=Math.floor((cronoSeg%3600)/60),s=cronoSeg%60;
+  document.getElementById('cronoDisplay').textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  const proj=document.getElementById('cronoProyecto').value;
+  const tarifa=proj==='personal'?0:TARIFAS[nivelActual];
+  document.getElementById('cronoValor').textContent=`${Math.round((cronoSeg/3600)*tarifa)}€`;
+}
+
+function guardarCrono() {
+  if(cronoSeg===0) return;
+  clearInterval(cronoInterval); cronoActivo=false;
+  const proj=document.getElementById('cronoProyecto').value;
+  const tarifa=proj==='personal'?0:TARIFAS[nivelActual];
+  const horas=Math.round((cronoSeg/3600)*100)/100;
+  registros.unshift({id:Date.now(),proyecto:proj,nivel:nivelActual,horas,valor:Math.round(horas*tarifa),descripcion:document.getElementById('cronoDesc').value||'Sin descripción',fecha:new Date().toISOString().split('T')[0],tipo:'cronometro'});
+  save(); cronoSeg=0; document.getElementById('cronoDisplay').textContent='00:00:00';
+  document.getElementById('cronoEstado').textContent='Listo para empezar';
+  document.getElementById('cronoEstado').className='crono-estado';
+  document.getElementById('btnCrono').textContent='▶ Iniciar';
+  document.getElementById('btnGuardar').style.display='none';
+  document.getElementById('cronoDesc').value='';
+  document.getElementById('cronoValor').textContent='0€';
+  const horasHoy=registros.filter(r=>r.fecha===new Date().toISOString().split('T')[0]).reduce((a,r)=>a+r.horas,0);
+  document.getElementById('cronoHoy').textContent=`${horasHoy.toFixed(1)}h`;
+  alert(`✅ Guardado — ${horas.toFixed(2)}h · ${Math.round(horas*tarifa)}€`);
+}
+
+function calcManual() {
+  const i=document.getElementById('manInicio').value,f=document.getElementById('manFin').value;
+  if(!i||!f) return;
+  const [h1,m1]=i.split(':').map(Number),[h2,m2]=f.split(':').map(Number);
+  const min=(h2*60+m2)-(h1*60+m1);
+  if(min<=0) return;
+  const proj=document.getElementById('manProyecto').value;
+  const nivel=document.getElementById('manNivel').value;
+  const tarifa=proj==='personal'||nivel==='cero'?0:TARIFAS[nivel];
+  document.getElementById('manValor').textContent=`${Math.round((min/60)*tarifa)}€`;
+}
+
+function guardarManual() {
+  const i=document.getElementById('manInicio').value,f=document.getElementById('manFin').value;
+  const desc=document.getElementById('manDesc').value.trim();
+  if(!i||!f||!desc){alert('Rellena inicio, fin y descripción');return;}
+  const [h1,m1]=i.split(':').map(Number),[h2,m2]=f.split(':').map(Number);
+  const min=(h2*60+m2)-(h1*60+m1);
+  if(min<=0){alert('Hora fin debe ser mayor que inicio');return;}
+  const horas=Math.round((min/60)*100)/100;
+  const proj=document.getElementById('manProyecto').value;
+  const nivel=document.getElementById('manNivel').value;
+  const tarifa=proj==='personal'||nivel==='cero'?0:TARIFAS[nivel];
+  registros.unshift({id:Date.now(),proyecto:proj,nivel,horas,valor:Math.round(horas*tarifa),descripcion:desc,fecha:document.getElementById('manFecha').value,tipo:'manual'});
+  save(); document.getElementById('manDesc').value=''; document.getElementById('manInicio').value=''; document.getElementById('manFin').value='';
+  document.getElementById('manValor').textContent='0€';
+  renderRegistros(); alert(`✅ Guardado — ${horas.toFixed(2)}h · ${Math.round(horas*tarifa)}€`);
+}
+
+function renderRegistros() {
+  const total=registros.reduce((a,r)=>a+r.horas,0);
+  const valor=registros.reduce((a,r)=>a+r.valor,0);
+  document.getElementById('statsRegistros').innerHTML=`
+    <div class="stat-card"><div class="stat-numero">${total.toFixed(1)}h</div><div class="stat-label">Total horas</div></div>
+    <div class="stat-card"><div class="stat-numero">${valor}€</div><div class="stat-label">Valor total</div></div>`;
+  const nmap={verde:'🟢',azul:'🔵',rojo:'🔴',cero:'⚪'};
+  document.getElementById('listaRegistros').innerHTML=registros.length?registros.map(r=>`
+    <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:10px;padding:12px;margin-bottom:8px;border-left:3px solid ${r.nivel==='verde'?'var(--verde)':r.nivel==='azul'?'var(--azul)':r.nivel==='rojo'?'var(--rojo)':'var(--gris)'}">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:600;color:var(--blanco-suave);flex:1;">${r.descripcion}</span>
+        <span style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--dorado);">${r.valor}€</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <span class="ptag ptag-${r.proyecto}">${PNOMBRES[r.proyecto]||r.proyecto}</span>
+        <span style="font-size:10px;color:var(--gris);">${nmap[r.nivel]||''} ${r.horas.toFixed(2)}h</span>
+        <span style="font-size:10px;color:var(--gris);">📅 ${r.fecha}</span>
+      </div>
+    </div>`).join(''):'<div class="empty-state"><div class="empty-icon">⏱</div><div class="empty-text">Sin registros todavía</div></div>';
+}
+
+// =====================
+// LIGA P&L
+// =====================
+function guardarMovLiga() {
+  const c=document.getElementById('plConcepto').value.trim();
+  const i=parseFloat(document.getElementById('plImporte').value);
+  if(!c||isNaN(i)||i<=0){alert('Rellena concepto e importe');return;}
+  movLiga.push({id:Date.now(),sesion:document.getElementById('plSesion').value,tipo:document.getElementById('plTipo').value,concepto:c,importe:i,fecha:new Date().toISOString().split('T')[0]});
+  save(); document.getElementById('plConcepto').value=''; document.getElementById('plImporte').value='';
+  renderLiga();
+}
+
+function borrarMovLiga(id) {
+  if(!confirm('¿Borrar este movimiento?')) return;
+  movLiga=movLiga.filter(m=>m.id!==id); save(); renderLiga();
+}
+
+function renderLiga() {
+  const sesiones=['0','1','2','3','4','general'];
+  let tI=0,tG=0;
+  const horasLiga=registros.filter(r=>r.proyecto==='liga').reduce((a,r)=>a+r.valor,0);
+  let html='';
+  sesiones.forEach(s=>{
+    const movs=movLiga.filter(m=>m.sesion===s);
+    const ingresos=movs.filter(m=>m.tipo==='ingreso').reduce((a,m)=>a+m.importe,0);
+    const gastos=movs.filter(m=>m.tipo==='gasto'||m.tipo==='horas').reduce((a,m)=>a+m.importe,0);
+    tI+=ingresos; tG+=gastos;
+    const res=ingresos-gastos;
+    html+=`<div class="pl-card"><div class="pl-sesion">${SNOMBRES[s]}</div>`;
+    if(movs.length){
+      movs.forEach(m=>{html+=`<div class="pl-row"><span class="pl-label">${m.tipo==='ingreso'?'💚':'🔴'} ${m.concepto}</span><div style="display:flex;align-items:center;gap:6px;"><span class="${m.tipo==='ingreso'?'pl-ingreso':'pl-gasto'}">${m.tipo==='ingreso'?'+':'−'}${m.importe}€</span><button class="btn-borrar" onclick="borrarMovLiga(${m.id})">✕</button></div></div>`;});
+    } else {
+      html+=`<div class="pl-row"><span style="color:var(--gris);font-style:italic;font-size:11px;">Sin movimientos — añade abajo</span><span></span></div>`;
+    }
+    html+=`<div class="pl-total"><span>Resultado</span><span class="${res>=0?'pl-pos':'pl-neg'}">${res>=0?'+':''}${res}€</span></div></div>`;
+  });
+  const resGlobal=tI-tG-horasLiga;
+  document.getElementById('ligaStats').innerHTML=`
+    <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${tI}€</div><div class="stat-label">Ingresos</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${tG+horasLiga}€</div><div class="stat-label">Gastos+Horas</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:${resGlobal>=0?'var(--verde)':'var(--rojo)'}">${resGlobal>=0?'+':''}${resGlobal}€</div><div class="stat-label">Resultado</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${horasLiga}€</div><div class="stat-label">Valor horas</div></div>`;
+  document.getElementById('ligaSesiones').innerHTML=html;
+}
+
+// =====================
+// PROYECTOS ACTIVOS
+// =====================
+const PROY0 = [
+  {id:1,nombre:"ELOCREA",desc:"Dirección comercial externa. Equipo en reconstrucción. Cualificador Cerezus v1.1 en desarrollo. 2 contratos pendientes de firma (10K€ + 26K€).",estado:"urgente",color:"elocrea",progreso:40},
+  {id:2,nombre:"LIGA NEW TALENT DJ",desc:"3 sesiones completadas (Epoka, Hangar48, Varvi). Próximo: 27 junio. Segunda ronda: sept-oct. AUREA en desarrollo.",estado:"activo",color:"liga",progreso:60},
+  {id:3,nombre:"CONSULTORÍA ESTRATÉGICA",desc:"Consultoría estratégica de proyectos. 3 proyectos completados con buenos resultados.",estado:"activo",color:"consultoria",progreso:50},
+];
+
+let proyectos = JSON.parse(localStorage.getItem('cdv_proy')) || PROY0;
+
+const PESTADOS = {activo:'✅ Activo',urgente:'🔴 Urgente',pausado:'⏸ Pausado',cerrado:'✔️ Cerrado'};
+const PESTBADGE = {activo:'badge-normal',urgente:'badge-urgente',pausado:'badge-normal',cerrado:'badge-importante'};
+
+function toggleFormProyecto(id) {
+  const f = document.getElementById('formProyecto');
+  const b = document.getElementById('btnNuevoProyecto');
+  const visible = f.style.display === 'block';
+  if(visible) {
+    f.style.display='none'; b.style.display='block';
+    document.getElementById('pEditId').value='';
+    document.getElementById('pNombre').value='';
+    document.getElementById('pDesc').value='';
+    document.getElementById('pProgreso').value='';
+    return;
+  }
+  if(id) {
+    const p = proyectos.find(x=>x.id===id);
+    if(p){
+      document.getElementById('pNombre').value=p.nombre;
+      document.getElementById('pDesc').value=p.desc;
+      document.getElementById('pEstado').value=p.estado;
+      document.getElementById('pProgreso').value=p.progreso;
+      document.getElementById('pColor').value=p.color;
+      document.getElementById('pEditId').value=p.id;
+    }
+  } else {
+    document.getElementById('pEditId').value='';
+  }
+  f.style.display='block'; b.style.display='none';
+  f.scrollIntoView({behavior:'smooth'});
+}
+
+function guardarProyecto() {
+  const nombre = document.getElementById('pNombre').value.trim();
+  if(!nombre){alert('Ponle un nombre');return;}
+  const editId = document.getElementById('pEditId').value;
+  const datos = {
+    nombre, desc:document.getElementById('pDesc').value,
+    estado:document.getElementById('pEstado').value,
+    progreso:parseInt(document.getElementById('pProgreso').value)||0,
+    color:document.getElementById('pColor').value
+  };
+  if(editId){
+    const i=proyectos.findIndex(p=>p.id===parseInt(editId));
+    if(i!==-1) proyectos[i]={...proyectos[i],...datos};
+  } else {
+    proyectos.unshift({id:Date.now(),...datos});
+  }
+  save(); toggleFormProyecto(); renderProyectos();
+}
+
+function borrarProyecto(id) {
+  if(!confirm('¿Borrar este proyecto?')) return;
+  proyectos=proyectos.filter(p=>p.id!==id); save(); renderProyectos();
+}
+
+function renderProyectos() {
+  document.getElementById('listaProyectos').innerHTML = proyectos.length
+    ? proyectos.map(p=>`
+      <div class="proyecto-card ${p.color}">
+        <div class="card-header">
+          <div class="proyecto-nombre">${p.nombre}</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span class="badge ${PESTBADGE[p.estado]}">${PESTADOS[p.estado]}</span>
+            <button onclick="toggleFormProyecto(${p.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:6px;padding:3px 7px;font-size:10px;cursor:pointer;">✏️</button>
+            <button class="btn-borrar" onclick="borrarProyecto(${p.id})">✕</button>
+          </div>
+        </div>
+        <div class="proyecto-desc">${p.desc||'Sin descripción'}</div>
+        <div class="progreso-bar"><div class="progreso-fill" style="width:${p.progreso||0}%"></div></div>
+        <div style="font-size:10px;color:var(--gris);">Progreso: ${p.progreso||0}%</div>
+      </div>`).join('')
+    : '<div class="empty-state"><div class="empty-text">Sin proyectos activos — añade uno arriba</div></div>';
+}
+
+// =====================
+// INCUBACIÓN
+// =====================
+const INC0 = [
+  {id:1,nombre:"AUREA · Jurado IA",desc:"Jurado IA para Liga25DJ con personalidades DJ. Análisis automático. Votaciones integradas. Reunión Roberto 16 Jun.",estado:"evaluando",proyecto:"liga"},
+  {id:2,nombre:"CEREZUS · Cualificador Leads",desc:"Sistema IA de cualificación de leads para Elocrea. v1.1 en construcción. Pruebas funcionando bien.",estado:"desarrollo",proyecto:"elocrea"},
+  {id:3,nombre:"App Votaciones Liga",desc:"Sistema votaciones Liga. Pendiente solucionar bots con filtro por IP.",estado:"desarrollo",proyecto:"liga"},
+  {id:4,nombre:"Grabación Sesiones DJ",desc:"Herramienta para grabar sesiones DJ. Evaluar crear propio vs comprar solución existente.",estado:"idea",proyecto:"liga"},
+  {id:5,nombre:"Agenda Equipo Comercial",desc:"Versión agenda sin datos privados para regalar a closers y setters.",estado:"idea",proyecto:"cdv"},
+];
+
+let incubacion = JSON.parse(localStorage.getItem('cdv_inc')) || INC0;
+
+const ESTADOS = {idea:'💡 Idea',evaluando:'🔍 Evaluando',desarrollo:'⚙️ Desarrollo',pausado:'⏸ Pausado'};
+const EBADGE = {idea:'badge-normal',evaluando:'badge-importante',desarrollo:'badge-urgente',pausado:'badge-normal'};
+
+function toggleFormIncubacion(id) {
+  const f = document.getElementById('formIncubacion');
+  const b = document.getElementById('btnNuevaIdea');
+  const visible = f.style.display === 'block';
+  if(visible && !id) {
+    f.style.display='none'; b.style.display='block';
+    document.getElementById('incNombre').value='';
+    document.getElementById('incDesc').value='';
+    document.getElementById('incNombre').dataset.editId='';
+    return;
+  }
+  if(id) {
+    const inc = incubacion.find(x=>x.id===id);
+    if(inc){
+      document.getElementById('incNombre').value=inc.nombre;
+      document.getElementById('incDesc').value=inc.desc||'';
+      document.getElementById('incEstado').value=inc.estado;
+      document.getElementById('incProyecto').value=inc.proyecto;
+      document.getElementById('incNombre').dataset.editId=id;
+    }
+  } else {
+    document.getElementById('incNombre').dataset.editId='';
+  }
+  f.style.display='block'; b.style.display='none';
+  f.scrollIntoView({behavior:'smooth'});
+}
+
+function guardarIncubacion() {
+  const n = document.getElementById('incNombre').value.trim();
+  const d = document.getElementById('incDesc').value.trim();
+  if(!n) { alert('Ponle un nombre'); return; }
+  const editId = document.getElementById('incNombre').dataset.editId;
+  if(editId) {
+    const i=incubacion.findIndex(x=>x.id===parseInt(editId));
+    if(i!==-1){
+      incubacion[i].nombre=n; incubacion[i].desc=d;
+      incubacion[i].estado=document.getElementById('incEstado').value;
+      incubacion[i].proyecto=document.getElementById('incProyecto').value;
+    }
+    document.getElementById('incNombre').dataset.editId='';
+  } else {
+    incubacion.unshift({id:Date.now(),nombre:n,desc:d,estado:document.getElementById('incEstado').value,proyecto:document.getElementById('incProyecto').value});
+  }
+  save();
+  document.getElementById('incNombre').value='';
+  document.getElementById('incDesc').value='';
+  document.getElementById('formIncubacion').style.display='none';
+  document.getElementById('btnNuevaIdea').style.display='block';
+  renderIncubacion();
+}
+
+function borrarIncubacion(id) {
+  if(!confirm('¿Borrar esta idea?')) return;
+  incubacion = incubacion.filter(i=>i.id!==id); save(); renderIncubacion();
+}
+
+function cambiarEstadoInc(id, nuevoEstado) {
+  const i = incubacion.findIndex(x=>x.id===id);
+  if(i!==-1){ incubacion[i].estado=nuevoEstado; save(); renderIncubacion(); }
+}
+
+function renderIncubacion() {
+  const pmap={cdv:'ptag-cdv',elocrea:'ptag-elocrea',liga:'ptag-liga',consultoria:'ptag-consultoria'};
+  document.getElementById('listaIncubacion').innerHTML = incubacion.length
+    ? incubacion.map(i=>`
+      <div class="proyecto-card incubacion">
+        <div class="card-header">
+          <div class="proyecto-nombre" style="font-size:16px;">${i.nombre}</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span class="badge ${EBADGE[i.estado]}">${ESTADOS[i.estado]}</span>
+            <button onclick="toggleFormIncubacion(${i.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:6px;padding:3px 7px;font-size:10px;cursor:pointer;">✏️</button>
+            <button class="btn-borrar" onclick="borrarIncubacion(${i.id})">✕</button>
+          </div>
+        </div>
+        <div class="proyecto-desc">${i.desc||'Sin descripción'}</div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+          <span class="ptag ${pmap[i.proyecto]||'ptag-cdv'}">${PNOMBRES[i.proyecto]||i.proyecto}</span>
+          <select onchange="cambiarEstadoInc(${i.id},this.value)" style="background:var(--negro);border:1px solid var(--negro-borde);color:var(--gris);border-radius:6px;padding:2px 6px;font-size:10px;cursor:pointer;">
+            ${Object.entries(ESTADOS).map(([k,v])=>`<option value="${k}" ${k===i.estado?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </div>
+      </div>`).join('')
+    : '<div class="empty-state"><div class="empty-icon">💡</div><div class="empty-text">Sin ideas todavía.<br>Pulsa el botón para añadir.</div></div>';
+}
+
+// =====================
+// FINANZAS
+// =====================
+let finPersonal = JSON.parse(localStorage.getItem('cdv_fp')) || [];
+let finFamiliar = JSON.parse(localStorage.getItem('cdv_ff')) || [];
+let ventas = JSON.parse(localStorage.getItem('cdv_v')) || [];
+
+function navElocrea(id, btn) {
+  document.getElementById('el-ventas').style.display = id==='ventas'?'block':'none';
+  document.getElementById('el-comisiones').style.display = id==='comisiones'?'block':'none';
+  document.querySelectorAll('#cdv-elocrea .cal-vistas .vista-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(id==='comisiones') renderComisiones();
+}
+
+function renderComisiones() {
+  const esDirector = usuarioActual && usuarioActual.rol==='director';
+  const miUsuario = usuarioActual ? usuarioActual.nombre : '';
+
+  // Si no es director, mostrar solo sus comisiones
+  if(!esDirector) {
+    const misVentas = ventas.filter(v => v.closer===miUsuario || v.setter===miUsuario);
+    const totalMio = misVentas.reduce((a,v)=> a + (v.closer===miUsuario ? v.com_closer : v.com_setter), 0);
+    const cobradoMio = misVentas.filter(v=>v.estado==='cobrado').reduce((a,v)=> a + (v.closer===miUsuario ? v.com_closer : v.com_setter), 0);
+    document.getElementById('comResumen2').innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalMio}€</div><div class="stat-label">Tu comisión total</div></div>
+        <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobradoMio}€</div><div class="stat-label">Cobrado</div></div>
+        <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${totalMio-cobradoMio}€</div><div class="stat-label">Pendiente</div></div>
+        <div class="stat-card"><div class="stat-numero">${misVentas.length}</div><div class="stat-label">Tus ventas</div></div>
+      </div>`;
+    document.getElementById('comDetalle2').innerHTML = misVentas.length
+      ? misVentas.map(v=>`
+        <div style="background:var(--negro);border:1px solid var(--negro-borde);border-left:3px solid ${v.estado==='cobrado'?'var(--verde)':'var(--dorado)'};border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${v.cliente}</span>
+            <span style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:var(--dorado);">${v.closer===miUsuario?v.com_closer:v.com_setter}€</span>
+          </div>
+          <div style="font-size:10px;color:var(--gris);">📅 Cobro: ${fmtFecha(v.fecha_cobro||v.fechaCobro)} · <span style="color:${v.estado==='cobrado'?'var(--verde)':'var(--rojo)'};">${v.estado==='cobrado'?'✅ Cobrado':'⏳ Pendiente'}</span></div>
+        </div>`).join('')
+      : '<div class="empty-state"><div class="empty-text">Sin ventas asignadas todavía</div></div>';
+    return;
+  }
+
+  // Director ve todo por persona
+  const porPersona = {};
+  ventas.forEach(v => {
+    [v.closer, v.setter].forEach((nombre, idx) => {
+      if(!nombre) return;
+      if(!porPersona[nombre]) porPersona[nombre]={ventas:0,total:0,cobrado:0,detalle:[]};
+      const com = idx===0 ? v.com_closer : v.com_setter;
+      porPersona[nombre].ventas++;
+      porPersona[nombre].total += com;
+      if(v.estado==='cobrado') porPersona[nombre].cobrado += com;
+      porPersona[nombre].detalle.push({...v, miCom: com});
+    });
+  });
+
+  const totalCDV = ventas.reduce((a,v)=>a+(v.com_cdv||0),0);
+  const cobradoCDV = ventas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+(v.com_cdv||0),0);
+
+  document.getElementById('comResumen2').innerHTML = `
+    <div class="stats-grid" style="margin-bottom:14px;">
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV}€</div><div class="stat-label">CDV Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobradoCDV}€</div><div class="stat-label">CDV Cobrado</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${totalCDV-cobradoCDV}€</div><div class="stat-label">CDV Pendiente</div></div>
+      <div class="stat-card"><div class="stat-numero">${ventas.length}</div><div class="stat-label">Ventas total</div></div>
+    </div>`;
+
+  document.getElementById('comDetalle2').innerHTML = Object.keys(porPersona).length
+    ? Object.entries(porPersona).map(([nombre,d])=>`
+      <div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:10px;padding:12px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${nombre}</div>
+          <span style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--dorado);">${d.total}€</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Ventas</div><div style="font-weight:700;color:var(--blanco);">${d.ventas}</div></div>
+          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Cobrado</div><div style="font-weight:700;color:var(--verde);">${d.cobrado}€</div></div>
+          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Pendiente</div><div style="font-weight:700;color:var(--rojo);">${d.total-d.cobrado}€</div></div>
+        </div>
+      </div>`).join('')
+    : '<div class="empty-state"><div class="empty-text">Sin ventas registradas</div></div>';
+}
+
+function navFin(id, btn) {
+  ['personal','familiar','cdv'].forEach(s => document.getElementById('fin-'+s).style.display = s===id?'block':'none');
+  document.querySelectorAll('#section-finanzas .cal-vistas:first-of-type .vista-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(id==='cdv') { renderVentas(); renderLiga(); }
+  if(id==='personal') renderFinPersonal();
+  if(id==='familiar') renderFinFamiliar();
+}
+
+function navCDV(id, btn) {
+  ['elocrea','liga','consultoria','eventos'].forEach(s => document.getElementById('cdv-'+s).style.display = s===id?'block':'none');
+  document.querySelectorAll('#fin-cdv .cal-vistas .vista-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+
+function calcComisiones() {
+  const imp = parseFloat(document.getElementById('vImporte').value) || 0;
+  document.getElementById('comCDV').textContent = Math.round(imp*0.05)+'€';
+  document.getElementById('comCloser').textContent = Math.round(imp*0.08)+'€';
+  document.getElementById('comSetter').textContent = Math.round(imp*0.02)+'€';
+}
+
+function comJrCalc(total) {
+  if(total <= 15000) return Math.round(total*0.005);
+  if(total <= 40000) return Math.round(total*0.01);
+  return Math.round(total*0.02);
+}
+
+function guardarVenta() {
+  const cliente = document.getElementById('vCliente').value.trim();
+  const imp = parseFloat(document.getElementById('vImporte').value);
+  const fecha = document.getElementById('vFechaCobro').value;
+  if(!cliente||!imp||!fecha){alert('Rellena cliente, importe y fecha de cobro');return;}
+  const hoy = new Date().toISOString().split('T')[0];
+  const diasAlerta = Math.floor((new Date(fecha)-new Date(hoy))/(1000*60*60*24));
+  ventas.unshift({
+    id:Date.now(), cliente, importe:imp,
+    closer:document.getElementById('vCloser').value,
+    setter:document.getElementById('vSetter').value,
+    fechaCobro:fecha, estado:'pendiente',
+    comCDV:Math.round(imp*0.05),
+    comCloser:Math.round(imp*0.08),
+    comSetter:Math.round(imp*0.02),
+    comJr:comJrCalc(imp)
+  });
+  save(); document.getElementById('vCliente').value=''; document.getElementById('vImporte').value='';
+  document.getElementById('comCDV').textContent='0€'; document.getElementById('comCloser').textContent='0€'; document.getElementById('comSetter').textContent='0€';
+  renderVentas(); alert('✅ Venta registrada');
+}
+
+function cobrarVenta(id) {
+  const i = ventas.findIndex(v=>v.id===id);
+  if(i!==-1){ ventas[i].estado='cobrado'; save(); renderVentas(); }
+}
+
+function borrarVenta(id) {
+  if(!confirm('¿Borrar esta venta?')) return;
+  ventas=ventas.filter(v=>v.id!==id); save(); renderVentas();
+}
+
+function renderVentas() {
+  const hoy = new Date().toISOString().split('T')[0];
+  const totalCDV = ventas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.comCDV,0);
+  const pendiente = ventas.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.comCDV,0);
+  document.getElementById('statsCDV').innerHTML = `
+    <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalCDV}€</div><div class="stat-label">CDV Cobrado</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${pendiente}€</div><div class="stat-label">CDV Pendiente</div></div>
+    <div class="stat-card"><div class="stat-numero">${ventas.filter(v=>v.estado==='cobrado').length}</div><div class="stat-label">Ventas cobradas</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${ventas.filter(v=>v.estado==='pendiente').length}</div><div class="stat-label">Pendientes</div></div>`;
+  document.getElementById('listaVentas').innerHTML = ventas.length ? ventas.map(v=>{
+    const diasRest = Math.floor((new Date(v.fechaCobro)-new Date())/(1000*60*60*24));
+    const alerta = v.estado==='pendiente' && diasRest<=2;
+    return `<div style="background:var(--negro-claro);border:1px solid ${alerta?'rgba(255,107,107,0.5)':v.estado==='cobrado'?'rgba(81,207,102,0.3)':'var(--negro-borde)'};border-radius:12px;padding:14px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:var(--blanco-suave);">${v.cliente}</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${v.importe.toLocaleString()}€</div>
+      </div>
+      ${alerta?`<div style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--rojo);">⚠️ ${diasRest<=0?'¡VENCIDO HOY!':'Vence en '+diasRest+' días'}</div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+        <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.comCDV}€</div></div>
+        <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.comCloser}€</div></div>
+        <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.comSetter}€</div></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:11px;color:var(--gris);">📅 Cobro: ${fmtFecha(v.fechaCobro)} · <span style="color:${v.estado==='cobrado'?'var(--verde)':'var(--rojo)'};">${v.estado==='cobrado'?'✅ Cobrado':'⏳ Pendiente'}</span></span>
+        <div style="display:flex;gap:6px;">
+          ${v.estado==='pendiente'?`<button onclick="cobrarVenta(${v.id})" style="background:rgba(81,207,102,0.2);border:1px solid rgba(81,207,102,0.4);color:var(--verde);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✅ Cobrar</button>`:''}
+          <button onclick="borrarVenta(${v.id})" class="btn-borrar">✕</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty-state"><div class="empty-icon">💰</div><div class="empty-text">Sin ventas registradas todavía</div></div>';
+}
+
+function guardarFinPersonal() {
+  const c=document.getElementById('fpConcepto').value.trim();
+  const i=parseFloat(document.getElementById('fpImporte').value);
+  if(!c||!i){alert('Rellena concepto e importe');return;}
+  finPersonal.unshift({id:Date.now(),concepto:c,tipo:document.getElementById('fpTipo').value,importe:i,fecha:document.getElementById('fpFecha').value||new Date().toISOString().split('T')[0]});
+  save(); document.getElementById('fpConcepto').value=''; document.getElementById('fpImporte').value=''; renderFinPersonal();
+}
+
+function renderFinPersonal() {
+  const ing=finPersonal.filter(f=>f.tipo==='ingreso').reduce((a,f)=>a+f.importe,0);
+  const gas=finPersonal.filter(f=>f.tipo==='gasto').reduce((a,f)=>a+f.importe,0);
+  document.getElementById('statsPersonal').innerHTML=`
+    <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${ing}€</div><div class="stat-label">Ingresos</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${gas}€</div><div class="stat-label">Gastos</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:${ing-gas>=0?'var(--verde)':'var(--rojo)'}">${ing-gas>=0?'+':''}${ing-gas}€</div><div class="stat-label">Balance</div></div>`;
+  document.getElementById('listaFinPersonal').innerHTML=finPersonal.length?finPersonal.map(f=>`
+    <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-left:3px solid ${f.tipo==='ingreso'?'var(--verde)':'var(--rojo)'};border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+      <div><div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${f.concepto}</div><div style="font-size:10px;color:var(--gris);">📅 ${fmtFecha(f.fecha)}</div></div>
+      <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:${f.tipo==='ingreso'?'var(--verde)':'var(--rojo)'};">${f.tipo==='ingreso'?'+':'−'}${f.importe}€</span>
+      <button onclick="finPersonal=finPersonal.filter(x=>x.id!==${f.id});save();renderFinPersonal();" class="btn-borrar">✕</button></div>
+    </div>`).join(''):'<div class="empty-state"><div class="empty-text">Sin movimientos</div></div>';
+}
+
+function guardarFinFamiliar() {
+  const c=document.getElementById('ffConcepto').value.trim();
+  const i=parseFloat(document.getElementById('ffImporte').value);
+  if(!c||!i){alert('Rellena concepto e importe');return;}
+  finFamiliar.unshift({id:Date.now(),concepto:c,tipo:document.getElementById('ffTipo').value,importe:i,fecha:document.getElementById('ffFecha').value||new Date().toISOString().split('T')[0]});
+  save(); document.getElementById('ffConcepto').value=''; document.getElementById('ffImporte').value=''; renderFinFamiliar();
+}
+
+function renderFinFamiliar() {
+  const ing=finFamiliar.filter(f=>f.tipo==='ingreso').reduce((a,f)=>a+f.importe,0);
+  const gas=finFamiliar.filter(f=>f.tipo==='gasto').reduce((a,f)=>a+f.importe,0);
+  document.getElementById('statsFamiliar').innerHTML=`
+    <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${ing}€</div><div class="stat-label">Ingresos</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${gas}€</div><div class="stat-label">Gastos</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:${ing-gas>=0?'var(--verde)':'var(--rojo)'}">${ing-gas>=0?'+':''}${ing-gas}€</div><div class="stat-label">Balance</div></div>`;
+  document.getElementById('listaFinFamiliar').innerHTML=finFamiliar.length?finFamiliar.map(f=>`
+    <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-left:3px solid ${f.tipo==='ingreso'?'var(--verde)':'var(--rojo)'};border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+      <div><div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${f.concepto}</div><div style="font-size:10px;color:var(--gris);">📅 ${fmtFecha(f.fecha)}</div></div>
+      <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:${f.tipo==='ingreso'?'var(--verde)':'var(--rojo)'};">${f.tipo==='ingreso'?'+':'−'}${f.importe}€</span>
+      <button onclick="finFamiliar=finFamiliar.filter(x=>x.id!==${f.id});save();renderFinFamiliar();" class="btn-borrar">✕</button></div>
+    </div>`).join(''):'<div class="empty-state"><div class="empty-text">Sin movimientos</div></div>';
+}
+
+// =====================
+// EQUIPO
+// =====================
+const EQUIPO0 = [
+  {id:1,nombre:"Javier Cerezo Martínez",cargo:"Director · CEO y Fundador",rol:"cdv",estado:"activo",telefono:"",email:"tfjcerezo@gmail.com",proyectos:["elocrea","liga","consultoria","cdv"],valoracion:5,notas:"CEO y Fundador CDV by JCerezo"},
+  {id:2,nombre:"Javier Cerezo Fernández (Jr.)",cargo:"Asistente de Dirección",rol:"cdv",estado:"activo",telefono:"",email:"",proyectos:["liga","cdv"],valoracion:0,notas:"Incorporación 17 junio 2026. Menor de edad hasta 23 enero 2027."},
+  {id:3,nombre:"Juan Antonio",cargo:"Closer Senior",rol:"closer",estado:"activo",telefono:"",email:"",proyectos:["elocrea"],valoracion:5,notas:"Referencia del equipo. Gestiona contratos verbales 10K€ y 26K€."},
+  {id:4,nombre:"Koenraad",cargo:"Closer",rol:"closer",estado:"activo",telefono:"",email:"",proyectos:["elocrea"],valoracion:4,notas:""},
+  {id:5,nombre:"Francisco",cargo:"Closer / Setter",rol:"closer_setter",estado:"activo",telefono:"",email:"",proyectos:["elocrea"],valoracion:3,notas:"También hace setter. Reunión 18 junio."},
+  {id:6,nombre:"Paula",cargo:"Closer / Setter",rol:"closer_setter",estado:"activo",telefono:"",email:"",proyectos:["elocrea"],valoracion:4,notas:"Valorar puesto en CDV by JCerezo. Respuesta en 2 días."},
+  {id:7,nombre:"Xabat",cargo:"Closer / Setter",rol:"closer_setter",estado:"activo",telefono:"",email:"",proyectos:["elocrea"],valoracion:3,notas:""},
+  {id:8,nombre:"Ian Marcos",cargo:"Closer / Setter",rol:"closer_setter",estado:"activo",telefono:"",email:"",proyectos:["elocrea"],valoracion:0,notas:"Argentina. Nueva incorporación."},
+  {id:9,nombre:"Natalia",cargo:"Setter",rol:"setter",estado:"activo",telefono:"",email:"",proyectos:["elocrea"],valoracion:0,notas:"Nueva incorporación."},
+  {id:10,nombre:"Laura",cargo:"Setter",rol:"setter",estado:"activo",telefono:"",email:"",proyectos:["elocrea"],valoracion:0,notas:"Nueva incorporación."},
+  {id:11,nombre:"Daniel",cargo:"Setter",rol:"setter",estado:"activo",telefono:"",email:"",proyectos:["elocrea"],valoracion:0,notas:"Nueva incorporación."},
+  {id:12,nombre:"Sofía Constanza",cargo:"Setter",rol:"setter",estado:"activo",telefono:"",email:"",proyectos:["elocrea"],valoracion:0,notas:"México. Nueva incorporación."},
+  {id:13,nombre:"Amalia",cargo:"Setter",rol:"setter",estado:"baja",telefono:"",email:"",proyectos:[],valoracion:1,notas:"No realiza llamadas. Baja."},
+  {id:14,nombre:"Nicolás",cargo:"Setter",rol:"setter",estado:"baja",telefono:"",email:"",proyectos:[],valoracion:1,notas:"No realiza llamadas. Baja."},
+];
+
+let equipo = JSON.parse(localStorage.getItem('cdv_eq')) || EQUIPO0;
+
+const ROLES = {cdv:'🏢 CDV',closer:'🎯 Closer',closer_setter:'🎯/📞 Closer-Setter',setter:'📞 Setter'};
+const ROLES_COLOR = {cdv:'var(--dorado)',closer:'var(--verde)',closer_setter:'var(--azul)',setter:'#9B6FD4'};
+const PNOMBRES_EQ = {elocrea:'Elocrea',liga:'Liga DJ',consultoria:'Consultoría',cdv:'CDV'};
+
+function toggleFormEquipo(id) {
+  const f = document.getElementById('formEquipo');
+  const b = document.getElementById('btnNuevoMiembro');
+  const visible = f.style.display === 'block';
+  if(visible && !id) { f.style.display='none'; b.style.display='block'; document.getElementById('eqEditId').value=''; return; }
+  // Reset form
+  document.getElementById('eqNombre').value='';
+  document.getElementById('eqCargo').value='';
+  document.getElementById('eqTelefono').value='';
+  document.getElementById('eqEmail').value='';
+  document.getElementById('eqNotas').value='';
+  document.getElementById('eqValoracion').value='0';
+  document.getElementById('eqRol').value='setter';
+  document.getElementById('eqEstado').value='activo';
+  document.querySelectorAll('#eqProyectosCheck input').forEach(c=>c.checked=false);
+  document.getElementById('eqEditId').value='';
+  if(id) {
+    const m = equipo.find(x=>x.id===id);
+    if(m) {
+      document.getElementById('eqNombre').value=m.nombre;
+      document.getElementById('eqCargo').value=m.cargo;
+      document.getElementById('eqTelefono').value=m.telefono||'';
+      document.getElementById('eqEmail').value=m.email||'';
+      document.getElementById('eqNotas').value=m.notas||'';
+      document.getElementById('eqValoracion').value=m.valoracion||0;
+      document.getElementById('eqRol').value=m.rol;
+      document.getElementById('eqEstado').value=m.estado;
+      document.querySelectorAll('#eqProyectosCheck input').forEach(c=>{ c.checked=(m.proyectos||[]).includes(c.value); });
+      document.getElementById('eqEditId').value=id;
+    }
+  }
+  f.style.display='block'; b.style.display='none';
+  f.scrollIntoView({behavior:'smooth'});
+}
+
+function guardarMiembro() {
+  const nombre = document.getElementById('eqNombre').value.trim();
+  if(!nombre){alert('Pon el nombre');return;}
+  const proyectos = Array.from(document.querySelectorAll('#eqProyectosCheck input:checked')).map(c=>c.value);
+  const datos = {
+    nombre, cargo:document.getElementById('eqCargo').value,
+    rol:document.getElementById('eqRol').value,
+    estado:document.getElementById('eqEstado').value,
+    telefono:document.getElementById('eqTelefono').value,
+    email:document.getElementById('eqEmail').value,
+    proyectos, valoracion:parseInt(document.getElementById('eqValoracion').value)||0,
+    notas:document.getElementById('eqNotas').value
+  };
+  const editId = document.getElementById('eqEditId').value;
+  if(editId) {
+    const i=equipo.findIndex(x=>x.id===parseInt(editId));
+    if(i!==-1) equipo[i]={...equipo[i],...datos};
+  } else {
+    equipo.unshift({id:Date.now(),...datos});
+  }
+  save(); toggleFormEquipo(); renderEquipo();
+}
+
+function cambiarEstadoEq(id, estado) {
+  const i=equipo.findIndex(x=>x.id===id);
+  if(i!==-1){ equipo[i].estado=estado; save(); renderEquipo(); }
+}
+
+function borrarMiembro(id) {
+  if(!confirm('¿Eliminar este miembro del equipo?')) return;
+  equipo=equipo.filter(x=>x.id!==id); save(); renderEquipo();
+}
+
+function renderEquipo() {
+  const activos = equipo.filter(e=>e.estado==='activo');
+  const closers = activos.filter(e=>e.rol==='closer'||e.rol==='closer_setter').length;
+  const setters = activos.filter(e=>e.rol==='setter'||e.rol==='closer_setter').length;
+  const cdvteam = activos.filter(e=>e.rol==='cdv').length;
+  document.getElementById('statActivos').textContent=activos.length;
+  document.getElementById('statClosers').textContent=closers;
+  document.getElementById('statSetters').textContent=setters;
+  document.getElementById('statCDVteam').textContent=cdvteam;
+
+  const grupos = [
+    {titulo:'🏢 CDV by JCerezo',items:equipo.filter(e=>e.rol==='cdv'&&e.estado!=='baja')},
+    {titulo:'🎯 Closers',items:equipo.filter(e=>e.rol==='closer'&&e.estado!=='baja')},
+    {titulo:'🎯/📞 Closer / Setter',items:equipo.filter(e=>e.rol==='closer_setter'&&e.estado!=='baja')},
+    {titulo:'📞 Setters',items:equipo.filter(e=>e.rol==='setter'&&e.estado!=='baja')},
+    {titulo:'❌ Bajas',items:equipo.filter(e=>e.estado==='baja')},
+  ];
+
+  const estrellas = n => n>0 ? '⭐'.repeat(n) : '';
+
+  document.getElementById('listaEquipo').innerHTML = grupos.map(g=>
+    g.items.length ? `
+    <div style="margin-bottom:16px;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--negro-borde);">${g.titulo}</div>
+      ${g.items.map(p=>`
+      <div style="background:var(--negro-claro);border:1px solid ${p.estado==='baja'?'rgba(255,107,107,0.2)':'var(--negro-borde)'};border-left:3px solid ${p.estado==='baja'?'var(--rojo)':ROLES_COLOR[p.rol]};border-radius:10px;padding:12px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:${p.estado==='baja'?'var(--gris)':'var(--blanco-suave)'};">${p.nombre}</div>
+            <div style="font-size:11px;color:var(--gris);">${p.cargo}</div>
+            ${p.valoracion>0?`<div style="font-size:11px;margin-top:2px;">${estrellas(p.valoracion)}</div>`:''}
+          </div>
+          <div style="display:flex;gap:5px;align-items:center;">
+            <span style="font-size:9px;padding:2px 7px;border-radius:10px;background:${p.estado==='baja'?'rgba(255,107,107,0.15)':p.estado==='pausa'?'rgba(201,168,76,0.15)':'rgba(81,207,102,0.15)'};color:${p.estado==='baja'?'var(--rojo)':p.estado==='pausa'?'var(--dorado)':'var(--verde)'};">${p.estado.toUpperCase()}</span>
+            <button onclick="toggleFormEquipo(${p.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:6px;padding:3px 6px;font-size:10px;cursor:pointer;">✏️</button>
+            <button onclick="borrarMiembro(${p.id})" class="btn-borrar">✕</button>
+          </div>
+        </div>
+        ${p.telefono?`<div style="font-size:11px;color:var(--gris);">📞 ${p.telefono}</div>`:''}
+        ${p.email?`<div style="font-size:11px;color:var(--gris);">✉️ ${p.email}</div>`:''}
+        ${p.proyectos&&p.proyectos.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${p.proyectos.map(pr=>`<span class="ptag ptag-${pr}">${PNOMBRES_EQ[pr]||pr}</span>`).join('')}</div>`:''}
+        ${p.notas?`<div style="font-size:10px;color:var(--gris);margin-top:6px;font-style:italic;border-top:1px solid var(--negro-borde);padding-top:6px;">${p.notas}</div>`:''}
+      </div>`).join('')}
+    </div>` : '').join('');
+}
+
+// =====================
+// AJUSTES — CONTRASEÑAS
+// =====================
+let PASS_STORE = JSON.parse(localStorage.getItem('cdv_passes')) || {javier:'cdv2026',javierjr:'jcjr2026'};
+
+function cambiarPass() {
+  const u = document.getElementById('ajUsuario').value;
+  const p1 = document.getElementById('ajPass1').value;
+  const p2 = document.getElementById('ajPass2').value;
+  const msg = document.getElementById('ajMsg');
+  if(!p1||p1.length<4){msg.style.display='block';msg.style.background='rgba(255,107,107,0.1)';msg.style.color='var(--rojo)';msg.textContent='Mínimo 4 caracteres';return;}
+  if(p1!==p2){msg.style.display='block';msg.style.background='rgba(255,107,107,0.1)';msg.style.color='var(--rojo)';msg.textContent='Las contraseñas no coinciden';return;}
+  const passes = JSON.parse(localStorage.getItem('cdv_passes')) || {};
+  passes[u]=p1;
+  localStorage.setItem('cdv_passes',JSON.stringify(passes));
+  msg.style.display='block';msg.style.background='rgba(81,207,102,0.1)';msg.style.color='var(--verde)';msg.textContent='✅ Contraseña actualizada';
+  document.getElementById('ajPass1').value='';
+  document.getElementById('ajPass2').value='';
+  setTimeout(()=>msg.style.display='none',3000);
+}
+
+function navComisiones(id, btn) {
+  document.getElementById('comResumen').style.display = id==='resumen'?'block':'none';
+  document.getElementById('comDetalle').style.display = id==='detalle'?'block':'none';
+  document.querySelectorAll('#section-ajustes .cal-vistas .vista-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(id==='resumen') renderComResumen();
+  if(id==='detalle') renderComDetalle();
+}
+
+function renderComResumen() {
+  const totalCDV = ventas.reduce((a,v)=>a+v.com_cdv,0);
+  const totalClosers = ventas.reduce((a,v)=>a+v.com_closer,0);
+  const totalSetters = ventas.reduce((a,v)=>a+v.com_setter,0);
+  const cobradas = ventas.filter(v=>v.estado==='cobrado');
+  const pendientes = ventas.filter(v=>v.estado==='pendiente');
+  document.getElementById('comResumen').innerHTML = `
+    <div class="stats-grid" style="margin-bottom:14px;">
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV}€</div><div class="stat-label">CDV Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalClosers}€</div><div class="stat-label">Closers Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--azul)">${totalSetters}€</div><div class="stat-label">Setters Total</div></div>
+      <div class="stat-card"><div class="stat-numero">${ventas.length}</div><div class="stat-label">Ventas totales</div></div>
+    </div>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Estado de pagos</div>
+    <div style="display:flex;justify-content:space-between;padding:10px;background:rgba(81,207,102,0.08);border:1px solid rgba(81,207,102,0.2);border-radius:8px;margin-bottom:8px;">
+      <span style="font-size:12px;color:var(--gris);">✅ Cobradas</span>
+      <span style="font-size:14px;font-weight:700;color:var(--verde);">${cobradas.length} ventas · ${cobradas.reduce((a,v)=>a+v.importe,0).toLocaleString()}€</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:10px;background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.2);border-radius:8px;">
+      <span style="font-size:12px;color:var(--gris);">⏳ Pendientes</span>
+      <span style="font-size:14px;font-weight:700;color:var(--rojo);">${pendientes.length} ventas · ${pendientes.reduce((a,v)=>a+v.importe,0).toLocaleString()}€</span>
+    </div>`;
+}
+
+function renderComDetalle() {
+  // Agrupar por closer y setter
+  const porPersona = {};
+  ventas.forEach(v => {
+    if(!porPersona[v.closer]) porPersona[v.closer]={ventas:0,comision:0,cobrado:0};
+    if(!porPersona[v.setter]) porPersona[v.setter]={ventas:0,comision:0,cobrado:0};
+    porPersona[v.closer].ventas++;
+    porPersona[v.closer].comision += v.com_closer;
+    if(v.estado==='cobrado') porPersona[v.closer].cobrado += v.com_closer;
+    porPersona[v.setter].comision += v.com_setter;
+    if(v.estado==='cobrado') porPersona[v.setter].cobrado += v.com_setter;
+  });
+  document.getElementById('comDetalle').innerHTML = Object.keys(porPersona).length
+    ? Object.entries(porPersona).map(([nombre,d])=>`
+      <div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:10px;padding:12px;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:600;color:var(--blanco-suave);margin-bottom:8px;">${nombre}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Ventas</div><div style="font-size:16px;font-weight:700;color:var(--blanco);">${d.ventas}</div></div>
+          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Comisión total</div><div style="font-size:16px;font-weight:700;color:var(--dorado);">${d.comision}€</div></div>
+          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Pendiente</div><div style="font-size:16px;font-weight:700;color:var(--rojo);">${d.comision-d.cobrado}€</div></div>
+        </div>
+      </div>`).join('')
+    : '<div class="empty-state"><div class="empty-text">Sin ventas registradas todavía</div></div>';
+}
+function save() {
+  localStorage.setItem('cdv_t',JSON.stringify(tareas));
+  localStorage.setItem('cdv_e',JSON.stringify(eventos));
+  localStorage.setItem('cdv_n',JSON.stringify(notas));
+  localStorage.setItem('cdv_r',JSON.stringify(registros));
+  localStorage.setItem('cdv_l',JSON.stringify(movLiga));
+  localStorage.setItem('cdv_inc',JSON.stringify(incubacion));
+  localStorage.setItem('cdv_proy',JSON.stringify(proyectos));
+  localStorage.setItem('cdv_fp',JSON.stringify(finPersonal));
+  localStorage.setItem('cdv_ff',JSON.stringify(finFamiliar));
+  localStorage.setItem('cdv_v',JSON.stringify(ventas));
+  localStorage.setItem('cdv_eq',JSON.stringify(equipo));
+  syncASupabase();
+}
+</script>
+</body>
+</html>
