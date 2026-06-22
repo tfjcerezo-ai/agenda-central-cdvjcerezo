@@ -1015,7 +1015,7 @@ async function syncDesdeSupabase() {
     if(ff&&ff.length) { finFamiliar=ff; localStorage.setItem('cdv_ff',JSON.stringify(ff)); }
     if(v&&v.length) { ventas=v; localStorage.setItem('cdv_v',JSON.stringify(v)); }
     if(eq&&eq.length) { equipo=eq; localStorage.setItem('cdv_eq',JSON.stringify(eq)); }
-    renderHoy(); renderTareas('todas'); renderProyectos(); renderCal(); renderNotas(); renderRegistros(); renderLiga(); renderIncubacion(); renderEquipo(); renderVentas();
+    renderHoy(); renderTareas('todas'); renderProyectos(); renderCal(); renderNotas(); renderRegistros(); renderLiga(); renderIncubacion(); renderEquipo(); renderVentas(); renderMisComisiones();
     mostrarSyncStatus('✅ Sincronizado');
   } catch(e) {
     mostrarSyncStatus('⚠️ Sin conexión — datos locales');
