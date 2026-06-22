@@ -819,13 +819,14 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
     <div class="modal-handle"></div>
     <div class="modal-title">Nueva Tarea</div>
     <div class="form-group"><label class="form-label">Descripción</label><input type="text" class="form-input" id="ntTexto" placeholder="¿Qué hay que hacer?"></div>
-    <div class="form-group"><label class="form-label">Asignar a</label>
-      <select class="form-select" id="ntAsignado">
-        <option value="todos">👥 Todos</option>
-        <option value="javier">Javier (Director)</option>
-        <option value="javierjr">Javier Jr. (Asistente)</option>
-        <option value="paula">Paula (Comercial)</option>
-      </select></div>
+    <div class="form-group" id="asignadoGroup"><label class="form-label">Asignar a</label>
+      <div id="ntAsignadoChk" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" name="asignado_chk" value="javier" style="accent-color:var(--dorado)" checked> Javier</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" name="asignado_chk" value="javierjr" style="accent-color:var(--dorado)"> Javier Jr.</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" name="asignado_chk" value="paula" style="accent-color:var(--dorado)"> Paula</label>
+      </div>
+      <input type="hidden" id="ntAsignado" value="javier">
+    </div>
     <div class="form-group"><label class="form-label">Prioridad</label>
       <select class="form-select" id="ntPrioridad">
         <option value="urgente">🔴 Urgente</option><option value="importante" selected>🟡 Importante</option>
@@ -1108,12 +1109,13 @@ function aplicarPermisos() {
   const permitidas = personalizado || NAV_ROLES[rol] || [];
   // Si no es director, ocultar campos de asignación y auto-asignarse
   const esDir = rol === 'director';
-  const camposAsignacion = ['ntAsignado','neVisible'].map(id => document.getElementById(id)?.closest('.form-group'));
-  camposAsignacion.forEach(el => { if(el) el.style.display = esDir ? '' : 'none'; });
+  const asignadoGroupEl = document.getElementById('asignadoGroup');
+  if(asignadoGroupEl) asignadoGroupEl.style.display = esDir ? '' : 'none';
+  const visGroupEl = document.getElementById('neVisible')?.closest('.form-group');
+  if(visGroupEl) visGroupEl.style.display = esDir ? '' : 'none';
   if(!esDir) {
-    const selAsig = document.getElementById('ntAsignado');
+    setAsignado(usuarioActual.usuario);
     const selVis = document.getElementById('neVisible');
-    if(selAsig) selAsig.value = usuarioActual.usuario;
     if(selVis) selVis.value = usuarioActual.usuario;
   }
   // Mostrar panel gestión solo al director
@@ -1277,6 +1279,13 @@ function tareaHTML(t) {
   const pmap = {cdv:'ptag-cdv',elocrea:'ptag-elocrea',liga:'ptag-liga',consultoria:'ptag-consultoria',personal:'ptag-personal'};
   const hoy = new Date().toISOString().split('T')[0];
   const fechaStr = t.fecha ? `📅 ${fmtFecha(t.fecha)}` : '';
+  // Mostrar quién creó la tarea (para Director, cuando no la creó él)
+  const esDir = usuarioActual?.rol==='director';
+  const creadorDistinto = esDir && t.creador && t.creador !== 'javier';
+  const nombreCreador = creadorDistinto ? (USUARIOS.find(u=>u.usuario===t.creador)?.nombreEquipo || t.creador) : '';
+  const creadorBadge = creadorDistinto ? `<span style="background:rgba(74,158,232,0.15);border:1px solid rgba(74,158,232,0.3);color:var(--azul);border-radius:4px;padding:2px 6px;font-size:9px;">👤 ${nombreCreador}</span>` : '';
+  // Mostrar a quién está asignada (para Director)
+  const asignadoBadge = esDir && t.asignado && t.asignado !== 'javier' ? `<span style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.25);color:var(--gris);border-radius:4px;padding:2px 6px;font-size:9px;">→${t.asignado.split(',').map(a=>{ const u=USUARIOS.find(x=>x.usuario===a.trim()); return u?u.nombreEquipo:a; }).join(', ')}</span>` : '';
   return `<div class="tarea-item ${t.completada?'completada':''}" >
     <div class="prioridad-dot dot-${t.prioridad}"></div>
     <div class="tarea-check ${t.completada?'checked':''}" onclick="toggleT(${t.id})">${t.completada?'✓':''}</div>
@@ -1286,6 +1295,7 @@ function tareaHTML(t) {
         <span class="ptag ${pmap[t.proyecto]||'ptag-cdv'}">${PNOMBRES[t.proyecto]||t.proyecto}</span>
         ${fechaStr?`<span class="tarea-fecha ${t.fecha===hoy?'hoy':''}">${fechaStr}</span>`:''}
         <span class="badge badge-${t.prioridad==='estrategico'?'estrategico':t.prioridad}">${t.prioridad.toUpperCase()}</span>
+        ${creadorBadge}${asignadoBadge}
         <button onclick="editarTarea(${t.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer;">✏️</button>
         <button onclick="borrarTarea(${t.id})" style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);color:var(--rojo);border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer;">✕</button>
       </div>
@@ -1300,11 +1310,33 @@ function fmtFecha(f) {
   return `${d} ${ms[parseInt(m)-1]}`;
 }
 
+// Helper para leer checkboxes de asignación
+function getAsignado() {
+  if(usuarioActual && usuarioActual.rol==='director') {
+    const chks = document.querySelectorAll('#ntAsignadoChk input[type=checkbox]:checked');
+    const vals = Array.from(chks).map(c=>c.value);
+    return vals.length ? vals.join(',') : 'javier';
+  }
+  return document.getElementById('ntAsignado')?.value || usuarioActual?.usuario || 'javier';
+}
+
+function setAsignado(val) {
+  const hidden = document.getElementById('ntAsignado');
+  if(hidden) hidden.value = val || '';
+  const asignados = val ? val.split(',').map(a=>a.trim()) : [];
+  document.querySelectorAll('#ntAsignadoChk input[type=checkbox]').forEach(c => {
+    c.checked = asignados.includes(c.value);
+  });
+}
+
 function misTareas() {
   if(!usuarioActual) return tareas;
   if(usuarioActual.rol==='director') return tareas;
-  // No-directores: solo ven tareas asignadas a ellos o a todos
-  return tareas.filter(t => t.asignado==='todos' || t.asignado===usuarioActual.usuario);
+  // No-directores: solo ven tareas con su usuario en asignado (soporte multi: "paula,javierjr")
+  return tareas.filter(t => {
+    if(!t.asignado) return false;
+    return t.asignado.split(',').map(a=>a.trim()).includes(usuarioActual.usuario);
+  });
 }
 
 function misEventos() {
@@ -1356,6 +1388,7 @@ function editarTarea(id) {
   document.getElementById('ntFecha').value=t.fecha||'';
   // Store edit id
   document.getElementById('ntTexto').dataset.editId=id;
+  setAsignado(t.asignado || 'javier');
   document.getElementById('modalTarea').classList.add('open');
 }
 
@@ -1363,7 +1396,7 @@ function guardarTarea() {
   const txt = document.getElementById('ntTexto').value.trim();
   if(!txt) return;
   const editId = document.getElementById('ntTexto').dataset.editId;
-  const asignado = document.getElementById('ntAsignado').value;
+  const asignado = getAsignado();
   if(editId) {
     const i=tareas.findIndex(t=>t.id===parseInt(editId));
     if(i!==-1){
@@ -1876,9 +1909,9 @@ function renderComisiones() {
 
   // Si no es director, mostrar solo sus comisiones
   if(!esDirector) {
-    const misVentas = ventas.filter(v => v.closer===miUsuario || v.setter===miUsuario);
-    const totalMio = misVentas.reduce((a,v)=> a + (v.closer===miUsuario ? v.com_closer : v.com_setter), 0);
-    const cobradoMio = misVentas.filter(v=>v.estado==='cobrado').reduce((a,v)=> a + (v.closer===miUsuario ? v.com_closer : v.com_setter), 0);
+    const misVentas = ventas.map(normVenta).filter(v => v.closer===miUsuario || v.setter===miUsuario);
+    const totalMio = misVentas.reduce((a,v)=> a + (v.closer===miUsuario ? (v.com_closer||0) : (v.com_setter||0)), 0);
+    const cobradoMio = misVentas.filter(v=>v.estado==='cobrado').reduce((a,v)=> a + (v.closer===miUsuario ? (v.com_closer||0) : (v.com_setter||0)), 0);
     document.getElementById('comResumen2').innerHTML = `
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalMio}€</div><div class="stat-label">Tu comisión total</div></div>
@@ -1901,11 +1934,11 @@ function renderComisiones() {
 
   // Director ve todo por persona
   const porPersona = {};
-  ventas.forEach(v => {
+  ventas.map(normVenta).forEach(v => {
     [v.closer, v.setter].forEach((nombre, idx) => {
       if(!nombre) return;
       if(!porPersona[nombre]) porPersona[nombre]={ventas:0,total:0,cobrado:0,detalle:[]};
-      const com = idx===0 ? v.com_closer : v.com_setter;
+      const com = idx===0 ? (v.com_closer||0) : (v.com_setter||0);
       porPersona[nombre].ventas++;
       porPersona[nombre].total += com;
       if(v.estado==='cobrado') porPersona[nombre].cobrado += com;
@@ -1913,8 +1946,9 @@ function renderComisiones() {
     });
   });
 
-  const totalCDV = ventas.reduce((a,v)=>a+(v.com_cdv||0),0);
-  const cobradoCDV = ventas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+(v.com_cdv||0),0);
+  const ventasN2 = ventas.map(normVenta);
+  const totalCDV = ventasN2.reduce((a,v)=>a+(v.com_cdv||0),0);
+  const cobradoCDV = ventasN2.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+(v.com_cdv||0),0);
 
   document.getElementById('comResumen2').innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
@@ -1979,11 +2013,11 @@ function guardarVenta() {
     id:Date.now(), cliente, importe:imp,
     closer:document.getElementById('vCloser').value,
     setter:document.getElementById('vSetter').value,
-    fechaCobro:fecha, estado:'pendiente',
-    comCDV:Math.round(imp*0.05),
-    comCloser:Math.round(imp*0.08),
-    comSetter:Math.round(imp*0.02),
-    comJr:comJrCalc(imp)
+    fecha_cobro:fecha, estado:'pendiente',
+    com_cdv:Math.round(imp*0.05),
+    com_closer:Math.round(imp*0.08),
+    com_setter:Math.round(imp*0.02),
+    com_jr:comJrCalc(imp)
   });
   save(); document.getElementById('vCliente').value=''; document.getElementById('vImporte').value='';
   document.getElementById('comCDV').textContent='0€'; document.getElementById('comCloser').textContent='0€'; document.getElementById('comSetter').textContent='0€';
@@ -2000,17 +2034,30 @@ function borrarVenta(id) {
   ventas=ventas.filter(v=>v.id!==id); save(); renderVentas();
 }
 
+// Helper: normaliza una venta para que siempre use snake_case (compatibilidad con datos viejos)
+function normVenta(v) {
+  return {
+    ...v,
+    com_cdv: v.com_cdv ?? v.comCDV ?? 0,
+    com_closer: v.com_closer ?? v.comCloser ?? 0,
+    com_setter: v.com_setter ?? v.comSetter ?? 0,
+    com_jr: v.com_jr ?? v.comJr ?? 0,
+    fecha_cobro: v.fecha_cobro || v.fechaCobro || '',
+  };
+}
+
 function renderVentas() {
   const hoy = new Date().toISOString().split('T')[0];
-  const totalCDV = ventas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.comCDV,0);
-  const pendiente = ventas.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.comCDV,0);
+  const nv = ventas.map(normVenta);
+  const totalCDV = nv.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0);
+  const pendiente = nv.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.com_cdv,0);
   document.getElementById('statsCDV').innerHTML = `
     <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalCDV}€</div><div class="stat-label">CDV Cobrado</div></div>
     <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${pendiente}€</div><div class="stat-label">CDV Pendiente</div></div>
-    <div class="stat-card"><div class="stat-numero">${ventas.filter(v=>v.estado==='cobrado').length}</div><div class="stat-label">Ventas cobradas</div></div>
-    <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${ventas.filter(v=>v.estado==='pendiente').length}</div><div class="stat-label">Pendientes</div></div>`;
-  document.getElementById('listaVentas').innerHTML = ventas.length ? ventas.map(v=>{
-    const diasRest = Math.floor((new Date(v.fechaCobro)-new Date())/(1000*60*60*24));
+    <div class="stat-card"><div class="stat-numero">${nv.filter(v=>v.estado==='cobrado').length}</div><div class="stat-label">Ventas cobradas</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${nv.filter(v=>v.estado==='pendiente').length}</div><div class="stat-label">Pendientes</div></div>`;
+  document.getElementById('listaVentas').innerHTML = nv.length ? nv.map(v=>{
+    const diasRest = Math.floor((new Date(v.fecha_cobro)-new Date())/(1000*60*60*24));
     const alerta = v.estado==='pendiente' && diasRest<=2;
     return `<div style="background:var(--negro-claro);border:1px solid ${alerta?'rgba(255,107,107,0.5)':v.estado==='cobrado'?'rgba(81,207,102,0.3)':'var(--negro-borde)'};border-radius:12px;padding:14px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -2019,12 +2066,12 @@ function renderVentas() {
       </div>
       ${alerta?`<div style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--rojo);">⚠️ ${diasRest<=0?'¡VENCIDO HOY!':'Vence en '+diasRest+' días'}</div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
-        <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.comCDV}€</div></div>
-        <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.comCloser}€</div></div>
-        <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.comSetter}€</div></div>
+        <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.com_cdv}€</div></div>
+        <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.com_closer}€</div></div>
+        <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.com_setter}€</div></div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:11px;color:var(--gris);">📅 Cobro: ${fmtFecha(v.fechaCobro)} · <span style="color:${v.estado==='cobrado'?'var(--verde)':'var(--rojo)'};">${v.estado==='cobrado'?'✅ Cobrado':'⏳ Pendiente'}</span></span>
+        <span style="font-size:11px;color:var(--gris);">📅 Cobro: ${fmtFecha(v.fecha_cobro)} · <span style="color:${v.estado==='cobrado'?'var(--verde)':'var(--rojo)'};">${v.estado==='cobrado'?'✅ Cobrado':'⏳ Pendiente'}</span></span>
         <div style="display:flex;gap:6px;">
           ${v.estado==='pendiente'?`<button onclick="cobrarVenta(${v.id})" style="background:rgba(81,207,102,0.2);border:1px solid rgba(81,207,102,0.4);color:var(--verde);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✅ Cobrar</button>`:''}
           <button onclick="borrarVenta(${v.id})" class="btn-borrar">✕</button>
@@ -2251,9 +2298,10 @@ function navComisiones(id, btn) {
 }
 
 function renderComResumen() {
-  const totalCDV = ventas.reduce((a,v)=>a+v.com_cdv,0);
-  const totalClosers = ventas.reduce((a,v)=>a+v.com_closer,0);
-  const totalSetters = ventas.reduce((a,v)=>a+v.com_setter,0);
+  const vn = ventas.map(normVenta);
+  const totalCDV = vn.reduce((a,v)=>a+(v.com_cdv||0),0);
+  const totalClosers = vn.reduce((a,v)=>a+(v.com_closer||0),0);
+  const totalSetters = vn.reduce((a,v)=>a+(v.com_setter||0),0);
   const cobradas = ventas.filter(v=>v.estado==='cobrado');
   const pendientes = ventas.filter(v=>v.estado==='pendiente');
   document.getElementById('comResumen').innerHTML = `
@@ -2277,14 +2325,14 @@ function renderComResumen() {
 function renderComDetalle() {
   // Agrupar por closer y setter
   const porPersona = {};
-  ventas.forEach(v => {
+  ventas.map(normVenta).forEach(v => {
     if(!porPersona[v.closer]) porPersona[v.closer]={ventas:0,comision:0,cobrado:0};
     if(!porPersona[v.setter]) porPersona[v.setter]={ventas:0,comision:0,cobrado:0};
     porPersona[v.closer].ventas++;
-    porPersona[v.closer].comision += v.com_closer;
-    if(v.estado==='cobrado') porPersona[v.closer].cobrado += v.com_closer;
-    porPersona[v.setter].comision += v.com_setter;
-    if(v.estado==='cobrado') porPersona[v.setter].cobrado += v.com_setter;
+    porPersona[v.closer].comision += (v.com_closer||0);
+    if(v.estado==='cobrado') porPersona[v.closer].cobrado += (v.com_closer||0);
+    porPersona[v.setter].comision += (v.com_setter||0);
+    if(v.estado==='cobrado') porPersona[v.setter].cobrado += (v.com_setter||0);
   });
   document.getElementById('comDetalle').innerHTML = Object.keys(porPersona).length
     ? Object.entries(porPersona).map(([nombre,d])=>`
@@ -2319,12 +2367,14 @@ function save() {
 function renderMisComisiones() {
   if(!usuarioActual) return;
   const nombreEquipo = usuarioActual.nombreEquipo || usuarioActual.nombre;
-  const misVentas = ventas.filter(v => v.closer===nombreEquipo || v.setter===nombreEquipo);
+  // Normalizar ventas para compatibilidad camelCase/snake_case
+  const ventasNorm = ventas.map(normVenta);
+  const misVentas = ventasNorm.filter(v => v.closer===nombreEquipo || v.setter===nombreEquipo);
 
   const calcMiCom = (v) => {
     const esCloser = v.closer === nombreEquipo;
     const esSetter = v.setter === nombreEquipo;
-    if(esCloser && esSetter) return v.com_closer + v.com_setter;
+    if(esCloser && esSetter) return (v.com_closer||0) + (v.com_setter||0);
     if(esCloser) return v.com_closer || 0;
     if(esSetter) return v.com_setter || 0;
     return 0;
