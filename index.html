@@ -1106,6 +1106,16 @@ function aplicarPermisos() {
   // Usar permisos personalizados si existen, si no los del rol
   const personalizado = getPermisos(usuarioActual.usuario);
   const permitidas = personalizado || NAV_ROLES[rol] || [];
+  // Si no es director, ocultar campos de asignación y auto-asignarse
+  const esDir = rol === 'director';
+  const camposAsignacion = ['ntAsignado','neVisible'].map(id => document.getElementById(id)?.closest('.form-group'));
+  camposAsignacion.forEach(el => { if(el) el.style.display = esDir ? '' : 'none'; });
+  if(!esDir) {
+    const selAsig = document.getElementById('ntAsignado');
+    const selVis = document.getElementById('neVisible');
+    if(selAsig) selAsig.value = usuarioActual.usuario;
+    if(selVis) selVis.value = usuarioActual.usuario;
+  }
   // Mostrar panel gestión solo al director
   const panelGestion = document.getElementById('panelGestionUsuarios');
   if(panelGestion) {
@@ -1293,7 +1303,8 @@ function fmtFecha(f) {
 function misTareas() {
   if(!usuarioActual) return tareas;
   if(usuarioActual.rol==='director') return tareas;
-  return tareas.filter(t => !t.asignado || t.asignado==='todos' || t.asignado===usuarioActual.usuario);
+  // No-directores: solo ven tareas asignadas a ellos o a todos
+  return tareas.filter(t => t.asignado==='todos' || t.asignado===usuarioActual.usuario);
 }
 
 function misEventos() {
@@ -1301,10 +1312,11 @@ function misEventos() {
   if(usuarioActual.rol==='director') {
     const filtro = document.getElementById('calUsuarioFiltro');
     const val = filtro ? filtro.value : 'todos';
-    if(val && val!=='todos') return eventos.filter(e => !e.visible || e.visible==='todos' || e.visible===val);
+    if(val && val!=='todos') return eventos.filter(e => e.visible==='todos' || e.visible===val);
     return eventos;
   }
-  return eventos.filter(e => !e.visible || e.visible==='todos' || e.visible===usuarioActual.usuario);
+  // No-directores: solo ven eventos asignados a ellos o a todos
+  return eventos.filter(e => e.visible==='todos' || e.visible===usuarioActual.usuario);
 }
 
 function renderTareas(filtro) {
@@ -1407,7 +1419,7 @@ function renderMes() {
   for(let d=1;d<=dim;d++){
     const fstr=`${anioActual}-${String(mesActual+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const esHoy=d===hoy.getDate()&&mesActual===hoy.getMonth()&&anioActual===hoy.getFullYear();
-    const evs=eventos.filter(e=>e.fecha===fstr);
+    const evs=misEventos().filter(e=>e.fecha===fstr);
     const tieneLiga=evs.some(e=>e.tipo==='liga');
     const tieneEl=evs.some(e=>e.tipo==='elocrea');
     let cls='cal-dia';
@@ -1434,7 +1446,7 @@ function renderSemana() {
     const dia=new Date(lunes); dia.setDate(lunes.getDate()+i);
     const fstr=dia.toISOString().split('T')[0];
     const esHoy=fstr===hoy.toISOString().split('T')[0];
-    const evs=eventos.filter(e=>e.fecha===fstr);
+    const evs=misEventos().filter(e=>e.fecha===fstr);
     html+=`<div onclick="abrirDia('${fstr}')" style="background:${esHoy?'rgba(201,168,76,0.15)':'var(--negro-claro)'};border:1px solid ${esHoy?'rgba(201,168,76,0.4)':'var(--negro-borde)'};border-radius:8px;padding:8px 4px;text-align:center;cursor:pointer;">
       <div style="font-size:10px;color:var(--gris);text-transform:uppercase;">${ns[i]}</div>
       <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:${esHoy?'var(--dorado)':'var(--blanco)'};">${dia.getDate()}</div>
@@ -1443,7 +1455,7 @@ function renderSemana() {
   }
   html+='</div>';
   let evSem=[];
-  for(let i=0;i<7;i++){const dia=new Date(lunes);dia.setDate(lunes.getDate()+i);evSem=evSem.concat(eventos.filter(e=>e.fecha===dia.toISOString().split('T')[0]));}
+  for(let i=0;i<7;i++){const dia=new Date(lunes);dia.setDate(lunes.getDate()+i);evSem=evSem.concat(misEventos().filter(e=>e.fecha===dia.toISOString().split('T')[0]));}
   evSem.sort((a,b)=>a.fecha.localeCompare(b.fecha));
   html+=`<div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Eventos</div>`;
   html+=evSem.length?evSem.map(e=>`<div class="evento-item ${e.tipo}"><div class="evento-hora">${fmtFecha(e.fecha)}<br>${e.hora}</div><div class="evento-info"><div class="evento-titulo">${e.titulo}</div><div class="evento-desc">${e.desc}</div></div><button class="btn-borrar" onclick="borrarEvento(${e.id})">✕</button></div>`).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos</div></div>';
@@ -1456,8 +1468,8 @@ function renderDia(fecha) {
   const ms=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const ns=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
   document.getElementById('calNombre').textContent=`${ns[fecha.getDay()]} ${fecha.getDate()} ${ms[fecha.getMonth()]}`;
-  const evs=eventos.filter(e=>e.fecha===fstr).sort((a,b)=>a.hora.localeCompare(b.hora));
-  const tds=tareas.filter(t=>t.fecha===fstr&&!t.completada);
+  const evs=misEventos().filter(e=>e.fecha===fstr).sort((a,b)=>a.hora.localeCompare(b.hora));
+  const tds=misTareas().filter(t=>t.fecha===fstr&&!t.completada);
   let html='';
   if(tds.length){html+=`<div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Tareas</div>`;html+=tds.map(t=>tareaHTML(t)).join('');}
   html+=`<div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin:14px 0 10px;">Agenda</div>`;
@@ -1474,7 +1486,7 @@ function abrirDia(fstr) {
 }
 
 function renderEventosMes() {
-  const evs=eventos.filter(e=>{const[y,m]=e.fecha.split('-');return parseInt(m)-1===mesActual&&parseInt(y)===anioActual;}).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const evs=misEventos().filter(e=>{const[y,m]=e.fecha.split('-');return parseInt(m)-1===mesActual&&parseInt(y)===anioActual;}).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   document.getElementById('eventosMes').innerHTML=evs.length?evs.map(e=>`<div class="evento-item ${e.tipo}"><div class="evento-hora">${fmtFecha(e.fecha)}<br>${e.hora}</div><div class="evento-info"><div class="evento-titulo">${e.titulo}</div><div class="evento-desc">${e.desc}</div></div><button class="btn-borrar" onclick="borrarEvento(${e.id})">✕</button></div>`).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos este mes</div></div>';
 }
 
