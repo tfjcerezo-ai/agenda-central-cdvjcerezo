@@ -722,12 +722,30 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
   </div>
 </div>
 
-<!-- COMISIONES (vista personal para no-directores) -->
+<!-- COMISIONES -->
 <div class="section" id="section-comisiones">
-  <div class="section-title">💸 Mis Comisiones</div>
-  <div id="misComStats"></div>
-  <div class="divider"></div>
-  <div id="misComDetalle"></div>
+  <!-- Vista Director -->
+  <div id="comisionesDirector" style="display:none;">
+    <div class="section-title">💸 Comisiones CDV by JCerezo</div>
+    <!-- Resumen global CDV -->
+    <div id="comDirResumen"></div>
+    <div class="divider"></div>
+    <!-- Mis comisiones como Closer -->
+    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">👤 Mis comisiones como Closer</div>
+    <div id="comDirMisStats"></div>
+    <div id="comDirMisDetalle"></div>
+    <div class="divider"></div>
+    <!-- Desglose por comercial -->
+    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">👥 Por comercial</div>
+    <div id="comDirDetalle"></div>
+  </div>
+  <!-- Vista comercial/asistente -->
+  <div id="comisionesPersonal" style="display:none;">
+    <div class="section-title">💸 Mis Comisiones</div>
+    <div id="misComStats"></div>
+    <div class="divider"></div>
+    <div id="misComDetalle"></div>
+  </div>
 </div>
 
 <!-- EQUIPO -->
@@ -2730,8 +2748,89 @@ function save() {
 // =====================
 // MIS COMISIONES (vista personal)
 // =====================
+function renderComisionesDirector() {
+  const vn = ventas.map(normVenta);
+  const totalCDV = vn.reduce((a,v)=>a+(v.com_cdv||0),0);
+  const cobradoCDV = vn.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+(v.com_cdv||0),0);
+  const pendienteCDV = totalCDV - cobradoCDV;
+  const totalClosers = vn.reduce((a,v)=>a+(v.com_closer||0),0);
+  const totalSetters = vn.reduce((a,v)=>a+(v.com_setter||0),0);
+  const totalFacturado = vn.reduce((a,v)=>a+(v.importe||0),0);
+  const cobradoFacturado = vn.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+(v.importe||0),0);
+
+  // Resumen global
+  document.getElementById('comDirResumen').innerHTML = `
+    <div class="stats-grid" style="margin-bottom:14px;">
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV.toLocaleString()}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobradoCDV.toLocaleString()}€</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pendienteCDV.toLocaleString()}€</div><div class="stat-label">CDV by JCerezo Pendiente</div></div>
+      <div class="stat-card"><div class="stat-numero">${vn.length}</div><div class="stat-label">Ventas totales</div></div>
+    </div>
+    <div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Facturación clientes</div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--negro-borde);">
+        <span style="font-size:12px;color:var(--gris);">✅ Cobrado a clientes</span>
+        <span style="font-size:13px;font-weight:700;color:var(--verde);">${cobradoFacturado.toLocaleString()}€</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--negro-borde);">
+        <span style="font-size:12px;color:var(--gris);">⏳ Pendiente de clientes</span>
+        <span style="font-size:13px;font-weight:700;color:var(--rojo);">${(totalFacturado-cobradoFacturado).toLocaleString()}€</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;">
+        <span style="font-size:12px;color:var(--gris);">💰 A pagar a equipo</span>
+        <span style="font-size:13px;font-weight:700;color:var(--azul);">${(totalClosers+totalSetters).toLocaleString()}€</span>
+      </div>
+    </div>`;
+
+  // Desglose por comercial
+  const porPersona = {};
+  vn.forEach(v => {
+    ['closer','setter'].forEach(rol => {
+      const nombre = v[rol];
+      const com = rol==='closer' ? (v.com_closer||0) : (v.com_setter||0);
+      if(!nombre || nombre==='-' || nombre==='' || com===0) return;
+      if(!porPersona[nombre]) porPersona[nombre]={ventas:0,total:0,cobrado:0,pendiente:0};
+      porPersona[nombre].ventas++;
+      porPersona[nombre].total += com;
+      if(v.estado==='cobrado') porPersona[nombre].cobrado += com;
+      else porPersona[nombre].pendiente += com;
+    });
+  });
+
+  const filas = Object.entries(porPersona).sort((a,b)=>b[1].total-a[1].total);
+  document.getElementById('comDirDetalle').innerHTML = filas.length
+    ? filas.map(([nombre,d])=>`
+      <div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-size:14px;font-weight:600;color:var(--blanco-suave);">${nombre}</div>
+          <div style="font-size:12px;color:var(--gris);">${d.ventas} venta${d.ventas!==1?'s':''}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div style="text-align:center;background:rgba(201,168,76,0.08);border-radius:8px;padding:8px;">
+            <div style="font-size:10px;color:var(--gris);margin-bottom:4px;">Total</div>
+            <div style="font-size:16px;font-weight:700;color:var(--dorado);">${d.total.toLocaleString()}€</div>
+          </div>
+          <div style="text-align:center;background:rgba(81,207,102,0.08);border-radius:8px;padding:8px;">
+            <div style="font-size:10px;color:var(--gris);margin-bottom:4px;">Cobrado</div>
+            <div style="font-size:16px;font-weight:700;color:var(--verde);">${d.cobrado.toLocaleString()}€</div>
+          </div>
+          <div style="text-align:center;background:rgba(255,107,107,0.08);border-radius:8px;padding:8px;">
+            <div style="font-size:10px;color:var(--gris);margin-bottom:4px;">Pendiente</div>
+            <div style="font-size:16px;font-weight:700;color:var(--rojo);">${d.pendiente.toLocaleString()}€</div>
+          </div>
+        </div>
+      </div>`).join('')
+    : '<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-text">Sin ventas asignadas a comerciales todavía</div></div>';
+}
+
 function renderMisComisiones() {
   if(!usuarioActual) return;
+  const esDir = usuarioActual.rol === 'director';
+  const divDir = document.getElementById('comisionesDirector');
+  const divPer = document.getElementById('comisionesPersonal');
+  if(divDir) divDir.style.display = esDir ? 'block' : 'none';
+  if(divPer) divPer.style.display = esDir ? 'none' : 'block';
+  if(esDir) { renderComisionesDirector(); return; }
   const nombreEquipo = usuarioActual.nombreEquipo || usuarioActual.nombre;
   // Normalizar ventas para compatibilidad camelCase/snake_case
   const ventasNorm = ventas.map(normVenta);
