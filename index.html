@@ -2525,20 +2525,21 @@ function mostrarMensaje(msg) {
 // PROYECTOS Y COLORES (añadido oct. 2026)
 // =====================
 const PROY_AG=[
-  {k:'cdv',nombre:'CDV General',color:'#C9A84C'},
-  {k:'elocrea',nombre:'Elocrea',color:'#4A7ADE'},
-  {k:'zeren',nombre:'Zeren Clinic',color:'#E8C39E'},
-  {k:'lidia',nombre:'Lidia · SAT Inmobiliarias',color:'#F28DB2'},
-  {k:'jbernad',nombre:'José Bernad',color:'#3CC6D8'},
-  {k:'cayfi',nombre:'CAYFI',color:'#F08A3C'},
-  {k:'liga',nombre:'Liga DJ',color:'#B07CFF'},
-  {k:'consultoria',nombre:'Consultoría',color:'#8A8F98'},
-  {k:'incubacion',nombre:'IA / Tech',color:'#D7D7D7'},
-  {k:'personal',nombre:'Personal',color:'#51CF66'},
-  {k:'medico',nombre:'Médico',color:'#FF6B6B'},
+  {k:'blanco',nombre:'Blanco',color:'#F5F5F5'},
+  {k:'azul-oscuro',nombre:'Azul Oscuro',color:'#1F5BA0'},
+  {k:'azul-claro',nombre:'Azul Claro',color:'#4DB8E8'},
+  {k:'verde-claro',nombre:'Verde Claro',color:'#A8D08D'},
+  {k:'morado',nombre:'Morado',color:'#9B59B6'},
+  {k:'marron',nombre:'Marrón',color:'#A0714F'},
   {k:'rojo',nombre:'Rojo',color:'#E63946'},
-  {k:'blanco',nombre:'Blanco',color:'#E8E8E8'},
-  {k:'azul',nombre:'Azul',color:'#0096FF'}
+  {k:'dorado',nombre:'Dorado',color:'#D4AF37'},
+  {k:'verde-oscuro',nombre:'Verde Oscuro',color:'#2D5016'},
+  {k:'rosa',nombre:'Rosa',color:'#E89BB5'},
+  {k:'naranja',nombre:'Naranja',color:'#FF8C42'},
+  {k:'cian',nombre:'Cian',color:'#00CED1'},
+  {k:'gris',nombre:'Gris',color:'#808080'},
+  {k:'violeta',nombre:'Violeta',color:'#7851A9'},
+  {k:'turquesa',nombre:'Turquesa',color:'#40B0A6'}
 ];
 const P_COLOR=Object.fromEntries(PROY_AG.map(p=>[p.k,p.color]));
 function colorProyecto(k){return P_COLOR[k]||'#C9A84C'}
