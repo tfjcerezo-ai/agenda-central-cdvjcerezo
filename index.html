@@ -612,11 +612,19 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
   <!-- CDV -->
   <div id="fin-cdv" style="display:none">
     <div class="stats-grid" id="statsCDV"></div>
-    <div class="cal-vistas" style="margin-bottom:14px;">
+    <div class="cal-vistas" style="margin-bottom:14px;flex-wrap:wrap;">
       <button class="vista-btn active" onclick="navCDV('elocrea',this)">Elocrea</button>
-      <button class="vista-btn" onclick="navCDV('liga',this)">Liga</button>
+      <button class="vista-btn" onclick="navCDV('liga',this)">Liga DJ</button>
       <button class="vista-btn" onclick="navCDV('consultoria',this)">Consultoría</button>
       <button class="vista-btn" onclick="navCDV('eventos',this)">Eventos</button>
+      <button class="vista-btn" onclick="navCDV('cdv',this)">CDV by JCerezo</button>
+      <button class="vista-btn" onclick="navCDV('jbernad',this)">José Bernad</button>
+      <button class="vista-btn" onclick="navCDV('cayfi',this)">CAYFI</button>
+      <button class="vista-btn" onclick="navCDV('yiux',this)">YIUX</button>
+      <button class="vista-btn" onclick="navCDV('zeren',this)">Zeren Clinic</button>
+      <button class="vista-btn" onclick="navCDV('elogistic',this)">Elogistic</button>
+      <button class="vista-btn" onclick="navCDV('deca',this)">DeCA</button>
+      <button class="vista-btn" onclick="navCDV('heru',this)">Heru</button>
     </div>
 
     <!-- ELOCREA VENTAS -->
@@ -655,6 +663,47 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
         <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Detalle por persona</div>
         <div id="comDetalle2"></div>
       </div>
+    </div>
+
+    <!-- CDV by JCerezo VENTAS -->
+    <div id="cdv-cdv" style="display:none">
+      <div class="section-title" style="font-size:16px;">Ventas CDV by JCerezo</div>
+      <div id="listaCDVProy" style="margin-bottom:10px;"></div>
+    </div>
+    <!-- José Bernad VENTAS -->
+    <div id="cdv-jbernad" style="display:none">
+      <div class="section-title" style="font-size:16px;">Ventas José Bernad</div>
+      <div id="listaBernad" style="margin-bottom:10px;"></div>
+    </div>
+    <!-- CAYFI VENTAS -->
+    <div id="cdv-cayfi" style="display:none">
+      <div class="section-title" style="font-size:16px;">Ventas CAYFI</div>
+      <div id="listaCAYFI" style="margin-bottom:10px;"></div>
+    </div>
+    <!-- YIUX VENTAS -->
+    <div id="cdv-yiux" style="display:none">
+      <div class="section-title" style="font-size:16px;">Ventas YIUX</div>
+      <div id="listaYIUX" style="margin-bottom:10px;"></div>
+    </div>
+    <!-- Zeren Clinic VENTAS -->
+    <div id="cdv-zeren" style="display:none">
+      <div class="section-title" style="font-size:16px;">Ventas Zeren Clinic</div>
+      <div id="listaZeren" style="margin-bottom:10px;"></div>
+    </div>
+    <!-- Elogistic VENTAS -->
+    <div id="cdv-elogistic" style="display:none">
+      <div class="section-title" style="font-size:16px;">Ventas Elogistic</div>
+      <div id="listaElogistic" style="margin-bottom:10px;"></div>
+    </div>
+    <!-- DeCA VENTAS -->
+    <div id="cdv-deca" style="display:none">
+      <div class="section-title" style="font-size:16px;">Ventas DeCA</div>
+      <div id="listaDeca" style="margin-bottom:10px;"></div>
+    </div>
+    <!-- Heru VENTAS -->
+    <div id="cdv-heru" style="display:none">
+      <div class="section-title" style="font-size:16px;">Ventas Heru</div>
+      <div id="listaHeru" style="margin-bottom:10px;"></div>
     </div>
 
     <div id="cdv-liga" style="display:none">
@@ -872,7 +921,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 // DATOS
 // =====================
 const TARIFAS = {verde:40,azul:90,rojo:150,cero:0};
-const PNOMBRES = {elocrea:'Elocrea',liga:'Liga DJ',cdv:'CDV',consultoria:'Consultoría',personal:'Personal'};
+const PNOMBRES = {elocrea:'Elocrea',liga:'Liga DJ',cdv:'CDV by JCerezo',consultoria:'Consultoría',personal:'Personal',jbernad:'José Bernad',cayfi:'CAYFI',yiux:'YIUX',zeren:'Zeren Clinic',elogistic:'Elogistic',deca:'DeCA',heru:'Heru'};
 const SNOMBRES = {'0':'Sesión 0 — Siroco','1':'Sesión 1 — Epoka','2':'Sesión 2 — Hangar48','3':'Sesión 3 — Varvi','4':'Sesión 4 — 27 Jun','general':'General'};
 
 const T0 = [
@@ -1818,15 +1867,9 @@ function renderProyectos() {
     return;
   }
   lista.innerHTML = proyectos.map((p, idx)=>`
-    <div class="proyecto-card ${p.color}" draggable="${esDir}" data-pid="${p.id}"
-         style="cursor:${esDir?'grab':'default'};"
-         ondragstart="dragProy(event,${p.id})"
-         ondragover="event.preventDefault();this.style.opacity='0.6'"
-         ondragleave="this.style.opacity='1'"
-         ondrop="dropProy(event,${p.id});this.style.opacity='1'">
+    <div class="proyecto-card ${p.color}" data-pid="${p.id}">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
-          ${esDir?`<span style="color:var(--gris);font-size:16px;cursor:grab;touch-action:none;flex-shrink:0;" title="Arrastrar para reordenar">⠿</span>`:''}
           <div class="proyecto-nombre" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.nombre}</div>
         </div>
         <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
@@ -1844,8 +1887,6 @@ function renderProyectos() {
       <div style="font-size:10px;color:var(--gris);">Progreso: ${p.progreso||0}%</div>
     </div>`).join('');
 
-  // Drag & drop táctil
-  if(esDir) iniciarDragTactil();
 }
 
 // ---- Drag & drop ratón ----
@@ -1863,46 +1904,6 @@ function dropProy(ev, idDest) {
   save(); renderProyectos();
 }
 
-// ---- Drag & drop táctil ----
-function iniciarDragTactil() {
-  const lista = document.getElementById('listaProyectos');
-  let dragEl=null, cloneEl=null, startY=0, startIdx=-1;
-  lista.querySelectorAll('.proyecto-card[draggable]').forEach(card=>{
-    card.addEventListener('touchstart', ev=>{
-      if(!ev.target.closest('button') && !ev.target.closest('select')) {
-        dragEl=card; startY=ev.touches[0].clientY;
-        startIdx=proyectos.findIndex(p=>p.id===parseInt(card.dataset.pid));
-        cloneEl=card.cloneNode(true);
-        cloneEl.style.cssText=`position:fixed;width:${card.offsetWidth}px;opacity:0.85;pointer-events:none;z-index:8888;border:1px solid var(--dorado);border-radius:12px;top:${card.getBoundingClientRect().top}px;left:${card.getBoundingClientRect().left}px;`;
-        document.body.appendChild(cloneEl);
-        card.style.opacity='0.3';
-      }
-    },{passive:true});
-    card.addEventListener('touchmove', ev=>{
-      if(!dragEl||!cloneEl) return;
-      ev.preventDefault();
-      const dy=ev.touches[0].clientY-startY;
-      cloneEl.style.top=(card.getBoundingClientRect().top+dy)+'px';
-    },{passive:false});
-    card.addEventListener('touchend', ev=>{
-      if(!dragEl||!cloneEl) return;
-      cloneEl.remove(); dragEl.style.opacity='1';
-      const dropY=ev.changedTouches[0].clientY;
-      let destIdx=-1;
-      lista.querySelectorAll('.proyecto-card[draggable]').forEach((c,i)=>{
-        const r=c.getBoundingClientRect();
-        if(dropY>=r.top&&dropY<=r.bottom) destIdx=i;
-      });
-      if(destIdx!==-1&&destIdx!==startIdx){
-        const [moved]=proyectos.splice(startIdx,1);
-        proyectos.splice(destIdx,0,moved);
-        localStorage.setItem('cdv_proy_orden',JSON.stringify(proyectos.map(p=>p.id)));
-        save(); renderProyectos();
-      }
-      dragEl=null; cloneEl=null;
-    });
-  });
-}
 
 // =====================
 // INCUBACIÓN
@@ -2102,9 +2103,21 @@ function navFin(id, btn) {
 }
 
 function navCDV(id, btn) {
-  ['elocrea','liga','consultoria','eventos'].forEach(s => document.getElementById('cdv-'+s).style.display = s===id?'block':'none');
+  const todos = ['elocrea','liga','consultoria','eventos','cdv','jbernad','cayfi','yiux','zeren','elogistic','deca','heru'];
+  todos.forEach(s => document.getElementById('cdv-'+s).style.display = s===id?'block':'none');
   document.querySelectorAll('#fin-cdv .cal-vistas .vista-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
+  const proyMap = {
+    cdv: {fn:'renderVentasProyecto', args:['cdv','listaCDVProy']},
+    jbernad: {fn:'renderVentasProyecto', args:['jbernad','listaBernad']},
+    cayfi: {fn:'renderVentasProyecto', args:['cayfi','listaCAYFI']},
+    yiux: {fn:'renderVentasProyecto', args:['yiux','listaYIUX']},
+    zeren: {fn:'renderVentasProyecto', args:['zeren','listaZeren']},
+    elogistic: {fn:'renderVentasProyecto', args:['elogistic','listaElogistic']},
+    deca: {fn:'renderVentasProyecto', args:['deca','listaDeca']},
+    heru: {fn:'renderVentasProyecto', args:['heru','listaHeru']},
+  };
+  if(proyMap[id]) renderVentasProyecto(...proyMap[id].args);
 }
 
 function comJrCalc(total) {
@@ -2192,11 +2205,105 @@ function renderVentas() {
         <span style="font-size:11px;color:var(--gris);">📅 Cobro: ${fmtFecha(v.fecha_cobro)} · <span style="color:${v.estado==='cobrado'?'var(--verde)':'var(--rojo)'};">${v.estado==='cobrado'?'✅ Cobrado':'⏳ Pendiente'}</span></span>
         <div style="display:flex;gap:6px;">
           ${v.estado==='pendiente'?`<button onclick="cobrarVenta(${v.id})" style="background:rgba(81,207,102,0.2);border:1px solid rgba(81,207,102,0.4);color:var(--verde);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✅ Cobrar</button>`:''}
+          <button onclick="editarVenta(${v.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✏️</button>
           <button onclick="borrarVenta(${v.id})" class="btn-borrar">✕</button>
         </div>
       </div>
     </div>`;
   }).join('') : '<div class="empty-state"><div class="empty-icon">💰</div><div class="empty-text">Sin ventas registradas todavía</div></div>';
+}
+
+function editarVenta(id) {
+  const v = ventas.find(x=>x.id===id);
+  if(!v) return;
+  const nv = normVenta(v);
+  const campos = [
+    {key:'cliente', label:'Cliente', type:'text', val: nv.cliente},
+    {key:'importe', label:'Importe venta (€)', type:'number', val: nv.importe},
+    {key:'com_cdv', label:'Comisión CDV (€)', type:'number', val: nv.com_cdv},
+    {key:'com_closer', label:'Comisión Closer (€)', type:'number', val: nv.com_closer},
+    {key:'com_setter', label:'Comisión Setter (€)', type:'number', val: nv.com_setter},
+    {key:'estado', label:'Estado', type:'select', val: nv.estado, opts:['pendiente','cobrado']},
+    {key:'fecha_cobro', label:'Fecha cobro', type:'date', val: nv.fecha_cobro},
+  ];
+  const modal = document.createElement('div');
+  modal.id = 'modalEditVenta';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:#1a1a1a;border:1px solid rgba(201,168,76,0.3);border-radius:16px;padding:24px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--dorado);margin-bottom:16px;">✏️ Editar Venta</div>
+      ${campos.map(c=>`
+        <div style="margin-bottom:12px;">
+          <label style="font-size:11px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">${c.label}</label>
+          ${c.type==='select'
+            ? `<select id="ev_${c.key}" style="background:#2a2a2a;border:1px solid rgba(201,168,76,0.2);border-radius:8px;color:var(--blanco-suave);padding:8px 12px;width:100%;font-size:13px;">${c.opts.map(o=>`<option value="${o}" ${c.val===o?'selected':''}>${o}</option>`).join('')}</select>`
+            : `<input type="${c.type}" id="ev_${c.key}" value="${c.val||''}" style="background:#2a2a2a;border:1px solid rgba(201,168,76,0.2);border-radius:8px;color:var(--blanco-suave);padding:8px 12px;width:100%;font-size:13px;box-sizing:border-box;">`
+          }
+        </div>`).join('')}
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button onclick="guardarEditVenta(${id})" style="flex:1;background:rgba(201,168,76,0.2);border:1px solid rgba(201,168,76,0.4);color:var(--dorado);border-radius:8px;padding:10px;font-size:13px;cursor:pointer;">💾 Guardar</button>
+        <button onclick="document.getElementById('modalEditVenta').remove()" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--gris);border-radius:8px;padding:10px;font-size:13px;cursor:pointer;">Cancelar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function guardarEditVenta(id) {
+  const idx = ventas.findIndex(x=>x.id===id);
+  if(idx===-1) return;
+  const get = key => document.getElementById('ev_'+key)?.value;
+  ventas[idx] = {
+    ...ventas[idx],
+    cliente: get('cliente') || ventas[idx].cliente,
+    importe: parseFloat(get('importe')) || ventas[idx].importe,
+    com_cdv: parseFloat(get('com_cdv')) || 0,
+    com_closer: parseFloat(get('com_closer')) || 0,
+    com_setter: parseFloat(get('com_setter')) || 0,
+    estado: get('estado') || ventas[idx].estado,
+    fecha_cobro: get('fecha_cobro') || ventas[idx].fecha_cobro,
+  };
+  save();
+  document.getElementById('modalEditVenta')?.remove();
+  renderVentas();
+}
+
+function renderVentasProyecto(proyNombre, containerId) {
+  const nv = ventas.map(normVenta);
+  const filtradas = nv.filter(v => (v.proyecto||'').toLowerCase() === proyNombre.toLowerCase());
+  const total = filtradas.reduce((a,v)=>a+v.com_cdv,0);
+  const pend = filtradas.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.com_cdv,0);
+  const cont = document.getElementById(containerId);
+  if(!cont) return;
+  cont.innerHTML = `
+    <div class="stats-grid" style="margin-bottom:14px;">
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${filtradas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0)}€</div><div class="stat-label">CDV Cobrado</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${pend}€</div><div class="stat-label">Pendiente</div></div>
+      <div class="stat-card"><div class="stat-numero">${filtradas.length}</div><div class="stat-label">Ventas</div></div>
+    </div>
+    ${filtradas.length ? filtradas.map(v=>{
+      const diasRest = Math.floor((new Date(v.fecha_cobro)-new Date())/(1000*60*60*24));
+      const alerta = v.estado==='pendiente' && diasRest<=2;
+      return `<div style="background:var(--negro-claro);border:1px solid ${alerta?'rgba(255,107,107,0.5)':v.estado==='cobrado'?'rgba(81,207,102,0.3)':'var(--negro-borde)'};border-radius:12px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:var(--blanco-suave);">${v.cliente}</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${v.importe.toLocaleString()}€</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px;">
+          <span style="color:var(--gris);">${fmtFecha(v.fecha_cobro)}</span>
+          <span style="color:${v.estado==='cobrado'?'var(--verde)':'var(--rojo)'};">${v.estado==='cobrado'?'✅ Cobrado':'⏳ Pendiente'}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+          <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.com_cdv}€</div></div>
+          <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.com_closer}€</div></div>
+          <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.com_setter}€</div></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:6px;">
+          ${v.estado==='pendiente'?`<button onclick="cobrarVenta(${v.id});renderVentasProyecto('${proyNombre}','${containerId}')" style="background:rgba(81,207,102,0.2);border:1px solid rgba(81,207,102,0.4);color:var(--verde);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✅ Cobrar</button>`:''}
+          <button onclick="editarVenta(${v.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✏️</button>
+          <button onclick="borrarVenta(${v.id});renderVentasProyecto('${proyNombre}','${containerId}')" class="btn-borrar">✕</button>
+        </div>
+      </div>`;
+    }).join('') : '<div class="empty-state"><div class="empty-icon">💰</div><div class="empty-text">Sin ventas para este proyecto</div></div>'}`;
 }
 
 function guardarFinPersonal() {
@@ -2269,7 +2376,7 @@ let equipo = JSON.parse(localStorage.getItem('cdv_eq')) || EQUIPO0;
 
 const ROLES = {cdv:'🏢 CDV',closer:'🎯 Closer',closer_setter:'🎯/📞 Closer-Setter',setter:'📞 Setter'};
 const ROLES_COLOR = {cdv:'var(--dorado)',closer:'var(--verde)',closer_setter:'var(--azul)',setter:'#9B6FD4'};
-const PNOMBRES_EQ = {elocrea:'Elocrea',liga:'Liga DJ',consultoria:'Consultoría',cdv:'CDV'};
+const PNOMBRES_EQ = {elocrea:'Elocrea',liga:'Liga DJ',consultoria:'Consultoría',cdv:'CDV by JCerezo',jbernad:'José Bernad',cayfi:'CAYFI',yiux:'YIUX',zeren:'Zeren Clinic',elogistic:'Elogistic',deca:'DeCA',heru:'Heru'};
 
 // Función para obtener opciones de todos los miembros activos (para Closer)
 function getActivoClosersOptions() {
