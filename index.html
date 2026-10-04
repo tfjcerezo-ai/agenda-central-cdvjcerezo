@@ -630,6 +630,8 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
         <div id="listaVentas"></div>
         <div class="divider"></div>
         <div class="section-title" style="font-size:16px;">Nueva Venta</div>
+      <div class="form-group"><label class="form-label">Proyecto</label>
+        <select class="form-select" id="vProyecto" onchange="calcComisiones()"></select></div>
       <div class="form-group"><label class="form-label">Cliente</label><input type="text" class="form-input" id="vCliente" placeholder="Nombre empresa cliente"></div>
       <div class="form-group"><label class="form-label">Importe venta €</label><input type="number" class="form-input" id="vImporte" placeholder="0" oninput="calcComisiones()"></div>
       <div class="form-group"><label class="form-label">Closer</label>
@@ -640,9 +642,9 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
       <!-- CALCULADORA COMISIONES -->
       <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:14px;" id="calcComis">
         <div style="font-size:11px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Comisiones calculadas</div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--negro-borde);font-size:12px;"><span style="color:var(--gris)">CDV by JCerezo (5%)</span><span id="comCDV" style="color:var(--dorado);font-weight:700;">0€</span></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--negro-borde);font-size:12px;"><span style="color:var(--gris)">Closer (8%)</span><span id="comCloser" style="color:var(--verde);font-weight:700;">0€</span></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;"><span style="color:var(--gris)">Setter (2%)</span><span id="comSetter" style="color:var(--azul);font-weight:700;">0€</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--negro-borde);font-size:12px;"><span style="color:var(--gris)"><span id="comCDVLabel">CDV by JCerezo (5%)</span></span><span id="comCDV" style="color:var(--dorado);font-weight:700;">0€</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--negro-borde);font-size:12px;"><span style="color:var(--gris)"><span id="comCloserLabel">Closer (8%)</span></span><span id="comCloser" style="color:var(--verde);font-weight:700;">0€</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;"><span style="color:var(--gris)"><span id="comSetterLabel">Setter (2%)</span></span><span id="comSetter" style="color:var(--azul);font-weight:700;">0€</span></div>
       </div>
       <button class="btn-primary" onclick="guardarVenta()">Registrar Venta</button>
       </div><!-- /el-ventas -->
@@ -2001,22 +2003,24 @@ function comJrCalc(total) {
 
 function guardarVenta() {
   const cliente = document.getElementById('vCliente').value.trim();
+  const proyecto = document.getElementById('vProyecto').value.trim();
   const imp = parseFloat(document.getElementById('vImporte').value);
   const fecha = document.getElementById('vFechaCobro').value;
-  if(!cliente||!imp||!fecha){alert('Rellena cliente, importe y fecha de cobro');return;}
+  if(!cliente||!proyecto||!imp||!fecha){alert('Rellena proyecto, cliente, importe y fecha de cobro');return;}
   const hoy = new Date().toISOString().split('T')[0];
   const diasAlerta = Math.floor((new Date(fecha)-new Date(hoy))/(1000*60*60*24));
+  const com = getProyectoComisiones(proyecto);
   ventas.unshift({
-    id:Date.now(), cliente, importe:imp,
+    id:Date.now(), cliente, proyecto, importe:imp,
     closer:document.getElementById('vCloser').value,
     setter:document.getElementById('vSetter').value,
     fecha_cobro:fecha, estado:'pendiente',
-    com_cdv:Math.round(imp*0.05),
-    com_closer:Math.round(imp*0.08),
-    com_setter:Math.round(imp*0.02),
+    com_cdv:Math.round(imp*(com.comCDV/100)),
+    com_closer:Math.round(imp*(com.comCloser/100)),
+    com_setter:Math.round(imp*(com.comSetter/100)),
     com_jr:comJrCalc(imp)
   });
-  save(); document.getElementById('vCliente').value=''; document.getElementById('vImporte').value='';
+  save(); document.getElementById('vCliente').value=''; document.getElementById('vImporte').value=''; document.getElementById('vProyecto').value='';
   document.getElementById('comCDV').textContent='0€'; document.getElementById('comCloser').textContent='0€'; document.getElementById('comSetter').textContent='0€';
   renderVentas(); alert('✅ Venta registrada');
 }
@@ -2061,6 +2065,10 @@ function renderVentas() {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:var(--blanco-suave);">${v.cliente}</div>
         <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${v.importe.toLocaleString()}€</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px;">
+        <span style="background:rgba(201,168,76,0.15);padding:4px 8px;border-radius:4px;color:var(--dorado);">📁 ${v.proyecto||'Sin proyecto'}</span>
+        <span style="color:var(--gris);">${fmtFecha(v.fecha_cobro)}</span>
       </div>
       ${alerta?`<div style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--rojo);">⚠️ ${diasRest<=0?'¡VENCIDO HOY!':'Vence en '+diasRest+' días'}</div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
@@ -2163,12 +2171,53 @@ function getActivoSettersOptions() {
     .map(e=>`<option value="${e.nombre}">${e.nombre}</option>`).join('');
 }
 
+// PROYECTOS con comisiones
+const PROYECTOS_COMERCIALES = [
+  {nombre:'Elogictic',estado:'Activo',comCloser:8,comSetter:2,comCDV:5},
+  {nombre:'DeCA',estado:'Activo',comCloser:15,comSetter:0,comCDV:10},
+  {nombre:'Heru',estado:'Sin ventas',comCloser:15,comSetter:0,comCDV:10},
+  {nombre:'Kinelia',estado:'Sin arrancar',comCloser:0,comSetter:0,comCDV:0},
+  {nombre:'Zeren Clinic',estado:'Pendiente firma',comCloser:15,comSetter:0,comCDV:15},
+  {nombre:'YIUX',estado:'Propuesta enviada',comCloser:10,comSetter:0,comCDV:8},
+  {nombre:'José Bernad',estado:'Dossier pendiente',comCloser:0,comSetter:0,comCDV:7},
+  {nombre:'CAYFI',estado:'Dossier pendiente',comCloser:0,comSetter:0,comCDV:7},
+];
+
 // Función para actualizar dropdowns de Nueva Venta
 function updateVentasDropdowns() {
   const vCloser = document.getElementById('vCloser');
   const vSetter = document.getElementById('vSetter');
+  const vProyecto = document.getElementById('vProyecto');
   if(vCloser) vCloser.innerHTML = getActivoClosersOptions();
   if(vSetter) vSetter.innerHTML = getActivoSettersOptions();
+  if(vProyecto) vProyecto.innerHTML = '<option value="">Selecciona proyecto...</option>' +
+    PROYECTOS_COMERCIALES.map(p=>`<option value="${p.nombre}">${p.nombre} (${p.estado})</option>`).join('');
+}
+
+// Función para obtener comisiones de un proyecto
+function getProyectoComisiones(nombreProyecto) {
+  const p = PROYECTOS_COMERCIALES.find(x=>x.nombre===nombreProyecto);
+  return p || {comCloser:0,comSetter:0,comCDV:0};
+}
+
+// Función para actualizar comisiones
+function calcComisiones() {
+  const importe = parseFloat(document.getElementById('vImporte').value) || 0;
+  const proyecto = document.getElementById('vProyecto')?.value || '';
+  const com = getProyectoComisiones(proyecto);
+
+  const comCloser = importe * (com.comCloser / 100);
+  const comSetter = importe * (com.comSetter / 100);
+  const comCDV = importe * (com.comCDV / 100);
+
+  document.getElementById('comCloser').textContent = comCloser.toFixed(0)+'€';
+  document.getElementById('comSetter').textContent = comSetter.toFixed(0)+'€';
+  document.getElementById('comCDV').textContent = comCDV.toFixed(0)+'€';
+
+  // Actualizar labels con porcentajes dinámicos
+  document.getElementById('comCDVLabel').textContent = `CDV by JCerezo (${com.comCDV}%)`;
+  document.getElementById('comCloserLabel').textContent = `Closer (${com.comCloser}%)`;
+  document.getElementById('comSetterLabel').textContent = `Setter (${com.comSetter}%)`;
 }
 
 function toggleFormEquipo(id) {
