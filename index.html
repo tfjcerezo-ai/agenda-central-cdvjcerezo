@@ -2592,6 +2592,8 @@ function prepararNuevoEvento(){
   document.getElementById('neTitulo').textContent='Nuevo Evento';
   document.getElementById('neBoton').textContent='Añadir Evento';
   ['neTexto','neDesc','neHora'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('neVisible').value='todos';
+  document.getElementById('neTipo').value='cdv';
 }
 function editarEvento(id){
   const e=eventos.find(x=>x.id===id); if(!e) return;
