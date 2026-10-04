@@ -1005,7 +1005,19 @@ async function syncDesdeSupabase() {
     if(n&&n.length) { notas=n; localStorage.setItem('cdv_n',JSON.stringify(n)); }
     if(r&&r.length) { registros=r; localStorage.setItem('cdv_r',JSON.stringify(r)); }
     if(l&&l.length) { movLiga=l; localStorage.setItem('cdv_l',JSON.stringify(l)); }
-    if(p&&p.length) { proyectos=p; localStorage.setItem('cdv_proy',JSON.stringify(p)); }
+    if(p&&p.length) {
+      // Respetar orden del usuario al recargar desde Supabase
+      const orden = JSON.parse(localStorage.getItem('cdv_proy_orden') || 'null');
+      if(orden && orden.length) {
+        const mapa = Object.fromEntries(p.map(x=>[x.id,x]));
+        const reord = orden.map(id=>mapa[id]).filter(Boolean);
+        p.filter(x=>!orden.includes(x.id)).forEach(x=>reord.push(x));
+        proyectos = reord;
+      } else {
+        proyectos = p;
+      }
+      localStorage.setItem('cdv_proy',JSON.stringify(proyectos));
+    }
     if(inc&&inc.length) { incubacion=inc; localStorage.setItem('cdv_inc',JSON.stringify(inc)); }
     if(fp&&fp.length) { finPersonal=fp; localStorage.setItem('cdv_fp',JSON.stringify(fp)); }
     if(ff&&ff.length) { finFamiliar=ff; localStorage.setItem('cdv_ff',JSON.stringify(ff)); }
@@ -1715,6 +1727,17 @@ const PROY0 = [
 ];
 
 let proyectos = JSON.parse(localStorage.getItem('cdv_proy')) || PROY0;
+// Restaurar orden guardado por el usuario
+(function aplicarOrdenGuardado() {
+  const orden = JSON.parse(localStorage.getItem('cdv_proy_orden') || 'null');
+  if(!orden || !orden.length) return;
+  const mapa = Object.fromEntries(proyectos.map(p=>[p.id, p]));
+  const reordenados = orden.map(id=>mapa[id]).filter(Boolean);
+  // Añadir al final los que no estaban en el orden guardado (proyectos nuevos)
+  const idsOrden = new Set(orden);
+  proyectos.filter(p=>!idsOrden.has(p.id)).forEach(p=>reordenados.push(p));
+  proyectos = reordenados;
+})();
 
 const PESTADOS = {activo:'✅ Activo',urgente:'🔴 Urgente',pausado:'⏸ Pausado',cerrado:'✔️ Cerrado'};
 const PESTBADGE = {activo:'badge-normal',urgente:'badge-urgente',pausado:'badge-normal',cerrado:'badge-importante'};
@@ -1773,23 +1796,112 @@ function borrarProyecto(id) {
   proyectos=proyectos.filter(p=>p.id!==id); save(); renderProyectos();
 }
 
+function moverProyecto(id, dir) {
+  const idx = proyectos.findIndex(p => p.id === id);
+  if(idx === -1) return;
+  const nuevoIdx = idx + dir;
+  if(nuevoIdx < 0 || nuevoIdx >= proyectos.length) return;
+  const tmp = proyectos[idx];
+  proyectos[idx] = proyectos[nuevoIdx];
+  proyectos[nuevoIdx] = tmp;
+  // Guardar orden en localStorage
+  localStorage.setItem('cdv_proy_orden', JSON.stringify(proyectos.map(p=>p.id)));
+  save();
+  renderProyectos();
+}
+
 function renderProyectos() {
-  document.getElementById('listaProyectos').innerHTML = proyectos.length
-    ? proyectos.map(p=>`
-      <div class="proyecto-card ${p.color}">
-        <div class="card-header">
-          <div class="proyecto-nombre">${p.nombre}</div>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <span class="badge ${PESTBADGE[p.estado]}">${PESTADOS[p.estado]}</span>
-            <button onclick="toggleFormProyecto(${p.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:6px;padding:3px 7px;font-size:10px;cursor:pointer;">✏️</button>
-            <button class="btn-borrar" onclick="borrarProyecto(${p.id})">✕</button>
-          </div>
+  const esDir = usuarioActual?.rol === 'director';
+  const lista = document.getElementById('listaProyectos');
+  if(!proyectos.length) {
+    lista.innerHTML = '<div class="empty-state"><div class="empty-text">Sin proyectos activos — añade uno arriba</div></div>';
+    return;
+  }
+  lista.innerHTML = proyectos.map((p, idx)=>`
+    <div class="proyecto-card ${p.color}" draggable="${esDir}" data-pid="${p.id}"
+         style="cursor:${esDir?'grab':'default'};"
+         ondragstart="dragProy(event,${p.id})"
+         ondragover="event.preventDefault();this.style.opacity='0.6'"
+         ondragleave="this.style.opacity='1'"
+         ondrop="dropProy(event,${p.id});this.style.opacity='1'">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+          ${esDir?`<span style="color:var(--gris);font-size:16px;cursor:grab;touch-action:none;flex-shrink:0;" title="Arrastrar para reordenar">⠿</span>`:''}
+          <div class="proyecto-nombre" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.nombre}</div>
         </div>
-        <div class="proyecto-desc">${p.desc||'Sin descripción'}</div>
-        <div class="progreso-bar"><div class="progreso-fill" style="width:${p.progreso||0}%"></div></div>
-        <div style="font-size:10px;color:var(--gris);">Progreso: ${p.progreso||0}%</div>
-      </div>`).join('')
-    : '<div class="empty-state"><div class="empty-text">Sin proyectos activos — añade uno arriba</div></div>';
+        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+          <span class="badge ${PESTBADGE[p.estado]}">${PESTADOS[p.estado]}</span>
+          ${esDir?`
+          <button onclick="moverProyecto(${p.id},-1)" title="Subir" style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.2);color:var(--dorado);border-radius:5px;padding:2px 6px;font-size:11px;cursor:pointer;${idx===0?'opacity:0.3;pointer-events:none':''}">↑</button>
+          <button onclick="moverProyecto(${p.id},1)" title="Bajar" style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.2);color:var(--dorado);border-radius:5px;padding:2px 6px;font-size:11px;cursor:pointer;${idx===proyectos.length-1?'opacity:0.3;pointer-events:none':''}">↓</button>
+          `:''}
+          <button onclick="toggleFormProyecto(${p.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:6px;padding:3px 7px;font-size:10px;cursor:pointer;">✏️</button>
+          <button class="btn-borrar" onclick="borrarProyecto(${p.id})">✕</button>
+        </div>
+      </div>
+      <div class="proyecto-desc">${p.desc||'Sin descripción'}</div>
+      <div class="progreso-bar"><div class="progreso-fill" style="width:${p.progreso||0}%"></div></div>
+      <div style="font-size:10px;color:var(--gris);">Progreso: ${p.progreso||0}%</div>
+    </div>`).join('');
+
+  // Drag & drop táctil
+  if(esDir) iniciarDragTactil();
+}
+
+// ---- Drag & drop ratón ----
+let dragPidSrc = null;
+function dragProy(ev, id) { dragPidSrc = id; ev.dataTransfer.effectAllowed='move'; }
+function dropProy(ev, idDest) {
+  ev.preventDefault();
+  if(dragPidSrc === null || dragPidSrc === idDest) return;
+  const iSrc = proyectos.findIndex(p=>p.id===dragPidSrc);
+  const iDest = proyectos.findIndex(p=>p.id===idDest);
+  if(iSrc===-1||iDest===-1) return;
+  const [moved] = proyectos.splice(iSrc,1);
+  proyectos.splice(iDest,0,moved);
+  localStorage.setItem('cdv_proy_orden', JSON.stringify(proyectos.map(p=>p.id)));
+  save(); renderProyectos();
+}
+
+// ---- Drag & drop táctil ----
+function iniciarDragTactil() {
+  const lista = document.getElementById('listaProyectos');
+  let dragEl=null, cloneEl=null, startY=0, startIdx=-1;
+  lista.querySelectorAll('.proyecto-card[draggable]').forEach(card=>{
+    card.addEventListener('touchstart', ev=>{
+      if(!ev.target.closest('button') && !ev.target.closest('select')) {
+        dragEl=card; startY=ev.touches[0].clientY;
+        startIdx=proyectos.findIndex(p=>p.id===parseInt(card.dataset.pid));
+        cloneEl=card.cloneNode(true);
+        cloneEl.style.cssText=`position:fixed;width:${card.offsetWidth}px;opacity:0.85;pointer-events:none;z-index:8888;border:1px solid var(--dorado);border-radius:12px;top:${card.getBoundingClientRect().top}px;left:${card.getBoundingClientRect().left}px;`;
+        document.body.appendChild(cloneEl);
+        card.style.opacity='0.3';
+      }
+    },{passive:true});
+    card.addEventListener('touchmove', ev=>{
+      if(!dragEl||!cloneEl) return;
+      ev.preventDefault();
+      const dy=ev.touches[0].clientY-startY;
+      cloneEl.style.top=(card.getBoundingClientRect().top+dy)+'px';
+    },{passive:false});
+    card.addEventListener('touchend', ev=>{
+      if(!dragEl||!cloneEl) return;
+      cloneEl.remove(); dragEl.style.opacity='1';
+      const dropY=ev.changedTouches[0].clientY;
+      let destIdx=-1;
+      lista.querySelectorAll('.proyecto-card[draggable]').forEach((c,i)=>{
+        const r=c.getBoundingClientRect();
+        if(dropY>=r.top&&dropY<=r.bottom) destIdx=i;
+      });
+      if(destIdx!==-1&&destIdx!==startIdx){
+        const [moved]=proyectos.splice(startIdx,1);
+        proyectos.splice(destIdx,0,moved);
+        localStorage.setItem('cdv_proy_orden',JSON.stringify(proyectos.map(p=>p.id)));
+        save(); renderProyectos();
+      }
+      dragEl=null; cloneEl=null;
+    });
+  });
 }
 
 // =====================
