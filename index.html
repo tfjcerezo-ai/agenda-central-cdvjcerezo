@@ -2151,15 +2151,15 @@ const ROLES = {cdv:'🏢 CDV',closer:'🎯 Closer',closer_setter:'🎯/📞 Clos
 const ROLES_COLOR = {cdv:'var(--dorado)',closer:'var(--verde)',closer_setter:'var(--azul)',setter:'#9B6FD4'};
 const PNOMBRES_EQ = {elocrea:'Elocrea',liga:'Liga DJ',consultoria:'Consultoría',cdv:'CDV'};
 
-// Función para obtener opciones de closers activos
+// Función para obtener opciones de todos los miembros activos (para Closer)
 function getActivoClosersOptions() {
-  return equipo.filter(e=>e.estado==='activo'&&(e.rol==='closer'||e.rol==='closer_setter'))
+  return equipo.filter(e=>e.estado==='activo')
     .map(e=>`<option value="${e.nombre}">${e.nombre}</option>`).join('');
 }
 
-// Función para obtener opciones de setters activos
+// Función para obtener opciones de todos los miembros activos (para Setter)
 function getActivoSettersOptions() {
-  return equipo.filter(e=>e.estado==='activo'&&(e.rol==='setter'||e.rol==='closer_setter'))
+  return equipo.filter(e=>e.estado==='activo')
     .map(e=>`<option value="${e.nombre}">${e.nombre}</option>`).join('');
 }
 
