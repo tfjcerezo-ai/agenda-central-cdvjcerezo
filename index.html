@@ -3096,6 +3096,10 @@ function asegurarProyectosNuevos(){
 }
 const _syncOriginal=syncDesdeSupabase;
 syncDesdeSupabase=async function(){ await _syncOriginal(); asegurarProyectosNuevos(); };
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+}
 </script>
 </body>
 </html>
