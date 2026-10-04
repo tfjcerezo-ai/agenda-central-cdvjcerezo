@@ -2289,7 +2289,7 @@ function editarVenta(id) {
       <div style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--dorado);margin-bottom:16px;">✏️ Editar Venta</div>
 
       <div style="margin-bottom:12px;"><label style="${labelStyle}">Proyecto</label>
-        <select id="ev_proyecto" style="${inputStyle}">${proyOpts}</select></div>
+        <select id="ev_proyecto" onchange="evRecalcComisiones()" style="${inputStyle}">${proyOpts}</select></div>
 
       <div style="margin-bottom:12px;"><label style="${labelStyle}">Cliente</label>
         <input type="text" id="ev_cliente" value="${nv.cliente||''}" style="${inputStyle}"></div>
@@ -2301,16 +2301,35 @@ function editarVenta(id) {
         </select></div>
 
       <div style="margin-bottom:12px;"><label style="${labelStyle}">Importe venta (€)</label>
-        <input type="number" id="ev_importe" value="${nv.importe||''}" style="${inputStyle}"></div>
+        <input type="number" id="ev_importe" value="${nv.importe||''}" oninput="evRecalcComisiones()" style="${inputStyle}"></div>
 
-      <div style="margin-bottom:12px;"><label style="${labelStyle}">Comisión CDV by JCerezo (€)</label>
-        <input type="number" id="ev_com_cdv" value="${nv.com_cdv||''}" style="${inputStyle}"></div>
+      <div style="margin-bottom:12px;"><label style="${labelStyle}">Closer</label>
+        <select id="ev_closer" onchange="evRecalcComisiones()" style="${inputStyle}">
+          <option value="">— Sin closer —</option>
+          ${equipo.filter(e=>e.estado==='activo').map(e=>`<option value="${e.nombre}" ${(nv.closer||'')=== e.nombre?'selected':''}>${e.nombre}</option>`).join('')}
+          <option value="Javier Cerezo" ${(nv.closer||'')==='Javier Cerezo'?'selected':''}>Javier Cerezo</option>
+        </select></div>
 
-      <div style="margin-bottom:12px;"><label style="${labelStyle}">Comisión Closer (€)</label>
-        <input type="number" id="ev_com_closer" value="${nv.com_closer||''}" style="${inputStyle}"></div>
+      <div style="margin-bottom:12px;"><label style="${labelStyle}">Setter</label>
+        <select id="ev_setter" onchange="evRecalcComisiones()" style="${inputStyle}">
+          <option value="">— Sin setter —</option>
+          ${equipo.filter(e=>e.estado==='activo').map(e=>`<option value="${e.nombre}" ${(nv.setter||'')=== e.nombre?'selected':''}>${e.nombre}</option>`).join('')}
+          <option value="Javier Cerezo" ${(nv.setter||'')==='Javier Cerezo'?'selected':''}>Javier Cerezo</option>
+        </select></div>
 
-      <div style="margin-bottom:12px;"><label style="${labelStyle}">Comisión Setter (€)</label>
-        <input type="number" id="ev_com_setter" value="${nv.com_setter||''}" style="${inputStyle}"></div>
+      <!-- Calculadora comisiones en edición -->
+      <div style="background:#111;border:1px solid rgba(201,168,76,0.2);border-radius:10px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:10px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Comisiones calculadas automáticamente</div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+          <span style="color:var(--gris)" id="ev_lbl_cdv">CDV by JCerezo</span><span id="ev_com_cdv_show" style="color:var(--dorado);font-weight:700;">${nv.com_cdv||0}€</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+          <span style="color:var(--gris)" id="ev_lbl_closer">Closer</span><span id="ev_com_closer_show" style="color:var(--verde);font-weight:700;">${nv.com_closer||0}€</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;">
+          <span style="color:var(--gris)" id="ev_lbl_setter">Setter</span><span id="ev_com_setter_show" style="color:var(--azul);font-weight:700;">${nv.com_setter||0}€</span></div>
+      </div>
+      <input type="hidden" id="ev_com_cdv" value="${nv.com_cdv||0}">
+      <input type="hidden" id="ev_com_closer" value="${nv.com_closer||0}">
+      <input type="hidden" id="ev_com_setter" value="${nv.com_setter||0}">
 
       <div style="margin-bottom:12px;"><label style="${labelStyle}">Estado</label>
         <select id="ev_estado" style="${inputStyle}">
@@ -2327,6 +2346,35 @@ function editarVenta(id) {
       </div>
     </div>`;
   document.body.appendChild(modal);
+}
+
+function evRecalcComisiones() {
+  const proyectoKey = document.getElementById('ev_proyecto')?.value || '';
+  const imp = parseFloat(document.getElementById('ev_importe')?.value) || 0;
+  // Buscar comisiones por nombre del proyecto (PNOMBRES mapea key→nombre)
+  const proyNombre = PNOMBRES[proyectoKey] || proyectoKey;
+  const com = getProyectoComisiones(proyNombre);
+  const cdv = Math.round(imp * (com.comCDV / 100));
+  const closer = Math.round(imp * (com.comCloser / 100));
+  const setter = Math.round(imp * (com.comSetter / 100));
+  const lc = document.getElementById('ev_lbl_closer');
+  const ls = document.getElementById('ev_lbl_setter');
+  const lcdv = document.getElementById('ev_lbl_cdv');
+  if(lcdv) lcdv.textContent = `CDV by JCerezo (${com.comCDV}%)`;
+  if(lc) lc.textContent = `Closer (${com.comCloser}%)`;
+  if(ls) ls.textContent = `Setter (${com.comSetter}%)`;
+  const showCDV = document.getElementById('ev_com_cdv_show');
+  const showC = document.getElementById('ev_com_closer_show');
+  const showS = document.getElementById('ev_com_setter_show');
+  if(showCDV) showCDV.textContent = cdv + '€';
+  if(showC) showC.textContent = closer + '€';
+  if(showS) showS.textContent = setter + '€';
+  const hCDV = document.getElementById('ev_com_cdv');
+  const hC = document.getElementById('ev_com_closer');
+  const hS = document.getElementById('ev_com_setter');
+  if(hCDV) hCDV.value = cdv;
+  if(hC) hC.value = closer;
+  if(hS) hS.value = setter;
 }
 
 function evTipoCobroChange() {
@@ -2350,6 +2398,8 @@ function guardarEditVenta(id) {
     cliente: get('cliente') || ventas[idx].cliente,
     tipo_cobro,
     importe: parseFloat(get('importe')) || ventas[idx].importe,
+    closer: get('closer') ?? ventas[idx].closer,
+    setter: get('setter') ?? ventas[idx].setter,
     com_cdv: parseFloat(get('com_cdv')) || 0,
     com_closer: parseFloat(get('com_closer')) || 0,
     com_setter: parseFloat(get('com_setter')) || 0,
@@ -2474,14 +2524,19 @@ const PNOMBRES_EQ = {elocrea:'Elocrea',liga:'Liga DJ',consultoria:'Consultoría'
 
 // Función para obtener opciones de todos los miembros activos (para Closer)
 function getActivoClosersOptions() {
-  return equipo.filter(e=>e.estado==='activo')
+  const opts = equipo.filter(e=>e.estado==='activo')
     .map(e=>`<option value="${e.nombre}">${e.nombre}</option>`).join('');
+  // Javier Cerezo siempre disponible como Closer
+  const tieneJavier = equipo.some(e=>e.nombre==='Javier Cerezo'&&e.estado==='activo');
+  return `<option value="">— Sin closer —</option>${opts}${!tieneJavier?'<option value="Javier Cerezo">Javier Cerezo</option>':''}`;
 }
 
 // Función para obtener opciones de todos los miembros activos (para Setter)
 function getActivoSettersOptions() {
-  return equipo.filter(e=>e.estado==='activo')
+  const opts = equipo.filter(e=>e.estado==='activo')
     .map(e=>`<option value="${e.nombre}">${e.nombre}</option>`).join('');
+  const tieneJavier = equipo.some(e=>e.nombre==='Javier Cerezo'&&e.estado==='activo');
+  return `<option value="">— Sin setter —</option>${opts}${!tieneJavier?'<option value="Javier Cerezo">Javier Cerezo</option>':''}`;
 }
 
 // PROYECTOS con comisiones
