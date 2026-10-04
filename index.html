@@ -2082,7 +2082,7 @@ function renderComisiones() {
   if(!esDirector) {
     const misVentas = ventas.map(normVenta).filter(v => v.closer===miUsuario || v.setter===miUsuario);
     const totalMio = misVentas.reduce((a,v)=> a + (v.closer===miUsuario ? (v.com_closer||0) : (v.com_setter||0)), 0);
-    const cobradoMio = misVentas.filter(v=>v.estado==='cobrado').reduce((a,v)=> a + (v.closer===miUsuario ? (v.com_closer||0) : (v.com_setter||0)), 0);
+    const cobradoMio = misVentas.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=> a + (v.closer===miUsuario ? (v.com_closer||0) : (v.com_setter||0)), 0);
     document.getElementById('comResumen2').innerHTML = `
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalMio}€</div><div class="stat-label">Tu comisión total</div></div>
@@ -2092,12 +2092,12 @@ function renderComisiones() {
       </div>`;
     document.getElementById('comDetalle2').innerHTML = misVentas.length
       ? misVentas.map(v=>`
-        <div style="background:var(--negro);border:1px solid var(--negro-borde);border-left:3px solid ${v.estado==='cobrado'?'var(--verde)':'var(--dorado)'};border-radius:8px;padding:12px;margin-bottom:8px;">
+        <div style="background:var(--negro);border:1px solid ${estadoBorde(v.estado)};border-left:3px solid ${estadoColor(v.estado)};border-radius:8px;padding:12px;margin-bottom:8px;">
           <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
             <span style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${v.cliente}</span>
             <span style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:var(--dorado);">${v.closer===miUsuario?v.com_closer:v.com_setter}€</span>
           </div>
-          <div style="font-size:10px;color:var(--gris);">📅 Cobro: ${fmtFecha(v.fecha_cobro||v.fechaCobro)} · <span style="color:${v.estado==='cobrado'?'var(--verde)':'var(--rojo)'};">${v.estado==='cobrado'?'✅ Cobrado':'⏳ Pendiente'}</span></div>
+          <div style="font-size:10px;color:var(--gris);">📅 Cobro: ${fmtFecha(v.fecha_cobro||v.fechaCobro)} · <span style="color:${estadoColor(v.estado)};">${estadoLabel(v.estado)}</span></div>
         </div>`).join('')
       : '<div class="empty-state"><div class="empty-text">Sin ventas asignadas todavía</div></div>';
     return;
@@ -2112,14 +2112,14 @@ function renderComisiones() {
       const com = idx===0 ? (v.com_closer||0) : (v.com_setter||0);
       porPersona[nombre].ventas++;
       porPersona[nombre].total += com;
-      if(v.estado==='cobrado') porPersona[nombre].cobrado += com;
+      if(estadoEsComisionCobrada(v.estado)) porPersona[nombre].cobrado += com;
       porPersona[nombre].detalle.push({...v, miCom: com});
     });
   });
 
   const ventasN2 = ventas.map(normVenta);
   const totalCDV = ventasN2.reduce((a,v)=>a+(v.com_cdv||0),0);
-  const cobradoCDV = ventasN2.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+(v.com_cdv||0),0);
+  const cobradoCDV = ventasN2.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+(v.com_cdv||0),0);
 
   document.getElementById('comResumen2').innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
@@ -2206,6 +2206,29 @@ function cobrarVenta(id) {
   const i = ventas.findIndex(v=>v.id===id);
   if(i!==-1){ ventas[i].estado='cobrado'; save(); renderVentas(); }
 }
+function cobrarComisionVenta(id) {
+  const i = ventas.findIndex(v=>v.id===id);
+  if(i!==-1){ ventas[i].estado='comision_cobrada'; save(); renderVentas(); }
+}
+
+// Helpers estado venta — 3 niveles
+function estadoEsFacturaCobrada(estado) { return estado==='cobrado'||estado==='comision_cobrada'; }
+function estadoEsComisionCobrada(estado) { return estado==='comision_cobrada'; }
+function estadoLabel(estado) {
+  if(estado==='comision_cobrada') return '✅ Comisión cobrada';
+  if(estado==='cobrado') return '🟡 Factura cobrada';
+  return '🔴 Factura pendiente';
+}
+function estadoColor(estado) {
+  if(estado==='comision_cobrada') return 'var(--verde)';
+  if(estado==='cobrado') return 'var(--dorado)';
+  return 'var(--rojo)';
+}
+function estadoBorde(estado) {
+  if(estado==='comision_cobrada') return 'rgba(81,207,102,0.3)';
+  if(estado==='cobrado') return 'rgba(201,168,76,0.4)';
+  return 'var(--negro-borde)';
+}
 
 function borrarVenta(id) {
   if(!confirm('¿Borrar esta venta?')) return;
@@ -2228,17 +2251,18 @@ function normVenta(v) {
 function renderVentas() {
   const hoy = new Date().toISOString().split('T')[0];
   const nv = ventas.map(normVenta);
-  const totalCDV = nv.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0);
-  const pendiente = nv.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.com_cdv,0);
+  const comisionCobrada = nv.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+v.com_cdv,0);
+  const facturaCobrada = nv.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0);
+  const pendienteCom = nv.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.com_cdv,0);
   document.getElementById('statsCDV').innerHTML = `
-    <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalCDV}€</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
-    <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${pendiente}€</div><div class="stat-label">CDV by JCerezo Pendiente</div></div>
-    <div class="stat-card"><div class="stat-numero">${nv.filter(v=>v.estado==='cobrado').length}</div><div class="stat-label">Ventas cobradas</div></div>
-    <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${nv.filter(v=>v.estado==='pendiente').length}</div><div class="stat-label">Pendientes</div></div>`;
+    <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${comisionCobrada.toLocaleString()}€</div><div class="stat-label">Comisión cobrada</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${facturaCobrada.toLocaleString()}€</div><div class="stat-label">Factura cobrada</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pendienteCom.toLocaleString()}€</div><div class="stat-label">Factura pendiente</div></div>
+    <div class="stat-card"><div class="stat-numero">${nv.length}</div><div class="stat-label">Total ventas</div></div>`;
   document.getElementById('listaVentas').innerHTML = nv.length ? nv.map(v=>{
     const diasRest = Math.floor((new Date(v.fecha_cobro)-new Date())/(1000*60*60*24));
     const alerta = v.estado==='pendiente' && diasRest<=2;
-    return `<div style="background:var(--negro-claro);border:1px solid ${alerta?'rgba(255,107,107,0.5)':v.estado==='cobrado'?'rgba(81,207,102,0.3)':'var(--negro-borde)'};border-radius:12px;padding:14px;margin-bottom:10px;">
+    return `<div style="background:var(--negro-claro);border:1px solid ${alerta?'rgba(255,107,107,0.5)':estadoBorde(v.estado)};border-radius:12px;padding:14px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:var(--blanco-suave);">${v.cliente}</div>
         <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${v.importe.toLocaleString()}€</div>
@@ -2250,13 +2274,14 @@ function renderVentas() {
       ${alerta?`<div style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--rojo);">⚠️ ${diasRest<=0?'¡VENCIDO HOY!':'Vence en '+diasRest+' días'}</div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
         <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV by JCerezo</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.com_cdv}€</div></div>
-        <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.com_closer}€</div></div>
-        <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.com_setter}€</div></div>
+        <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer||'—'}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.com_closer}€</div></div>
+        <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter||'—'}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.com_setter}€</div></div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:11px;color:var(--gris);">📅 Cobro: ${fmtFecha(v.fecha_cobro)} · <span style="color:${v.estado==='cobrado'?'var(--verde)':'var(--rojo)'};">${v.estado==='cobrado'?'✅ Cobrado':'⏳ Pendiente'}</span></span>
+        <span style="font-size:11px;padding:3px 8px;border-radius:10px;background:rgba(0,0,0,0.3);color:${estadoColor(v.estado)};">${estadoLabel(v.estado)}</span>
         <div style="display:flex;gap:6px;">
-          ${v.estado==='pendiente'?`<button onclick="cobrarVenta(${v.id})" style="background:rgba(81,207,102,0.2);border:1px solid rgba(81,207,102,0.4);color:var(--verde);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✅ Cobrar</button>`:''}
+          ${v.estado==='pendiente'?`<button onclick="cobrarVenta(${v.id})" style="background:rgba(201,168,76,0.2);border:1px solid rgba(201,168,76,0.4);color:var(--dorado);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">🟡 Factura cobrada</button>`:''}
+          ${v.estado==='cobrado'?`<button onclick="cobrarComisionVenta(${v.id})" style="background:rgba(81,207,102,0.2);border:1px solid rgba(81,207,102,0.4);color:var(--verde);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✅ Comisión cobrada</button>`:''}
           <button onclick="editarVenta(${v.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✏️</button>
           <button onclick="borrarVenta(${v.id})" class="btn-borrar">✕</button>
         </div>
@@ -2333,8 +2358,9 @@ function editarVenta(id) {
 
       <div style="margin-bottom:12px;"><label style="${labelStyle}">Estado</label>
         <select id="ev_estado" style="${inputStyle}">
-          <option value="pendiente" ${nv.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
-          <option value="cobrado" ${nv.estado==='cobrado'?'selected':''}>✅ Cobrado</option>
+          <option value="pendiente" ${nv.estado==='pendiente'?'selected':''}>🔴 Factura pendiente de cobrar</option>
+          <option value="cobrado" ${nv.estado==='cobrado'?'selected':''}>🟡 Factura cobrada</option>
+          <option value="comision_cobrada" ${nv.estado==='comision_cobrada'?'selected':''}>✅ Comisión cobrada</option>
         </select></div>
 
       <div id="ev_fecha_wrap" style="margin-bottom:12px;"><label style="${labelStyle}">Fecha cobro</label>
@@ -2414,35 +2440,38 @@ function guardarEditVenta(id) {
 function renderVentasProyecto(proyNombre, containerId) {
   const nv = ventas.map(normVenta);
   const filtradas = nv.filter(v => (v.proyecto||'').toLowerCase() === proyNombre.toLowerCase());
-  const total = filtradas.reduce((a,v)=>a+v.com_cdv,0);
+  const comCobrada = filtradas.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+v.com_cdv,0);
+  const factCobrada = filtradas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0);
   const pend = filtradas.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.com_cdv,0);
   const cont = document.getElementById(containerId);
   if(!cont) return;
   cont.innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${filtradas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0)}€</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${pend}€</div><div class="stat-label">Pendiente</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${comCobrada.toLocaleString()}€</div><div class="stat-label">Comisión cobrada</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${factCobrada.toLocaleString()}€</div><div class="stat-label">Factura cobrada</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pend.toLocaleString()}€</div><div class="stat-label">Pendiente</div></div>
       <div class="stat-card"><div class="stat-numero">${filtradas.length}</div><div class="stat-label">Ventas</div></div>
     </div>
     ${filtradas.length ? filtradas.map(v=>{
       const diasRest = Math.floor((new Date(v.fecha_cobro)-new Date())/(1000*60*60*24));
       const alerta = v.estado==='pendiente' && diasRest<=2;
-      return `<div style="background:var(--negro-claro);border:1px solid ${alerta?'rgba(255,107,107,0.5)':v.estado==='cobrado'?'rgba(81,207,102,0.3)':'var(--negro-borde)'};border-radius:12px;padding:14px;margin-bottom:10px;">
+      return `<div style="background:var(--negro-claro);border:1px solid ${alerta?'rgba(255,107,107,0.5)':estadoBorde(v.estado)};border-radius:12px;padding:14px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:var(--blanco-suave);">${v.cliente}</div>
           <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${v.importe.toLocaleString()}€</div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px;">
           <span style="color:var(--gris);">${fmtFecha(v.fecha_cobro)}</span>
-          <span style="color:${v.estado==='cobrado'?'var(--verde)':'var(--rojo)'};">${v.estado==='cobrado'?'✅ Cobrado':'⏳ Pendiente'}</span>
+          <span style="color:${estadoColor(v.estado)};">${estadoLabel(v.estado)}</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
           <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV by JCerezo</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.com_cdv}€</div></div>
-          <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.com_closer}€</div></div>
-          <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.com_setter}€</div></div>
+          <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer||'—'}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.com_closer}€</div></div>
+          <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter||'—'}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.com_setter}€</div></div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:6px;">
-          ${v.estado==='pendiente'?`<button onclick="cobrarVenta(${v.id});renderVentasProyecto('${proyNombre}','${containerId}')" style="background:rgba(81,207,102,0.2);border:1px solid rgba(81,207,102,0.4);color:var(--verde);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✅ Cobrar</button>`:''}
+          ${v.estado==='pendiente'?`<button onclick="cobrarVenta(${v.id});renderVentasProyecto('${proyNombre}','${containerId}')" style="background:rgba(201,168,76,0.2);border:1px solid rgba(201,168,76,0.4);color:var(--dorado);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">🟡 Factura cobrada</button>`:''}
+          ${v.estado==='cobrado'?`<button onclick="cobrarComisionVenta(${v.id});renderVentasProyecto('${proyNombre}','${containerId}')" style="background:rgba(81,207,102,0.2);border:1px solid rgba(81,207,102,0.4);color:var(--verde);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✅ Comisión cobrada</button>`:''}
           <button onclick="editarVenta(${v.id})" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✏️</button>
           <button onclick="borrarVenta(${v.id});renderVentasProyecto('${proyNombre}','${containerId}')" class="btn-borrar">✕</button>
         </div>
@@ -2741,23 +2770,28 @@ function renderComResumen() {
   const totalCDV = vn.reduce((a,v)=>a+(v.com_cdv||0),0);
   const totalClosers = vn.reduce((a,v)=>a+(v.com_closer||0),0);
   const totalSetters = vn.reduce((a,v)=>a+(v.com_setter||0),0);
-  const cobradas = ventas.filter(v=>v.estado==='cobrado');
-  const pendientes = ventas.filter(v=>v.estado==='pendiente');
+  const comisionCobradas = vn.filter(v=>estadoEsComisionCobrada(v.estado));
+  const facturaCobradas = vn.filter(v=>v.estado==='cobrado');
+  const pendientes = vn.filter(v=>v.estado==='pendiente');
   document.getElementById('comResumen').innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalClosers}€</div><div class="stat-label">Closers Total</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--azul)">${totalSetters}€</div><div class="stat-label">Setters Total</div></div>
-      <div class="stat-card"><div class="stat-numero">${ventas.length}</div><div class="stat-label">Ventas totales</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV.toLocaleString()}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalClosers.toLocaleString()}€</div><div class="stat-label">Closers Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--azul)">${totalSetters.toLocaleString()}€</div><div class="stat-label">Setters Total</div></div>
+      <div class="stat-card"><div class="stat-numero">${vn.length}</div><div class="stat-label">Ventas totales</div></div>
     </div>
     <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Estado de pagos</div>
     <div style="display:flex;justify-content:space-between;padding:10px;background:rgba(81,207,102,0.08);border:1px solid rgba(81,207,102,0.2);border-radius:8px;margin-bottom:8px;">
-      <span style="font-size:12px;color:var(--gris);">✅ Cobradas</span>
-      <span style="font-size:14px;font-weight:700;color:var(--verde);">${cobradas.length} ventas · ${cobradas.reduce((a,v)=>a+v.importe,0).toLocaleString()}€</span>
+      <span style="font-size:12px;color:var(--gris);">✅ Comisión cobrada</span>
+      <span style="font-size:14px;font-weight:700;color:var(--verde);">${comisionCobradas.length} ventas · ${comisionCobradas.reduce((a,v)=>a+(v.importe||0),0).toLocaleString()}€</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:10px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:8px;margin-bottom:8px;">
+      <span style="font-size:12px;color:var(--gris);">🟡 Factura cobrada</span>
+      <span style="font-size:14px;font-weight:700;color:var(--dorado);">${facturaCobradas.length} ventas · ${facturaCobradas.reduce((a,v)=>a+(v.importe||0),0).toLocaleString()}€</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:10px;background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.2);border-radius:8px;">
-      <span style="font-size:12px;color:var(--gris);">⏳ Pendientes</span>
-      <span style="font-size:14px;font-weight:700;color:var(--rojo);">${pendientes.length} ventas · ${pendientes.reduce((a,v)=>a+v.importe,0).toLocaleString()}€</span>
+      <span style="font-size:12px;color:var(--gris);">🔴 Factura pendiente</span>
+      <span style="font-size:14px;font-weight:700;color:var(--rojo);">${pendientes.length} ventas · ${pendientes.reduce((a,v)=>a+(v.importe||0),0).toLocaleString()}€</span>
     </div>`;
 }
 
@@ -2769,9 +2803,9 @@ function renderComDetalle() {
     if(!porPersona[v.setter]) porPersona[v.setter]={ventas:0,comision:0,cobrado:0};
     porPersona[v.closer].ventas++;
     porPersona[v.closer].comision += (v.com_closer||0);
-    if(v.estado==='cobrado') porPersona[v.closer].cobrado += (v.com_closer||0);
+    if(estadoEsComisionCobrada(v.estado)) porPersona[v.closer].cobrado += (v.com_closer||0);
     porPersona[v.setter].comision += (v.com_setter||0);
-    if(v.estado==='cobrado') porPersona[v.setter].cobrado += (v.com_setter||0);
+    if(estadoEsComisionCobrada(v.estado)) porPersona[v.setter].cobrado += (v.com_setter||0);
   });
   document.getElementById('comDetalle').innerHTML = Object.keys(porPersona).length
     ? Object.entries(porPersona).map(([nombre,d])=>`
@@ -2806,12 +2840,12 @@ function save() {
 function renderComisionesDirector() {
   const vn = ventas.map(normVenta);
   const totalCDV = vn.reduce((a,v)=>a+(v.com_cdv||0),0);
-  const cobradoCDV = vn.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+(v.com_cdv||0),0);
+  const cobradoCDV = vn.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+(v.com_cdv||0),0);
   const pendienteCDV = totalCDV - cobradoCDV;
   const totalClosers = vn.reduce((a,v)=>a+(v.com_closer||0),0);
   const totalSetters = vn.reduce((a,v)=>a+(v.com_setter||0),0);
   const totalFacturado = vn.reduce((a,v)=>a+(v.importe||0),0);
-  const cobradoFacturado = vn.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+(v.importe||0),0);
+  const cobradoFacturado = vn.filter(v=>estadoEsFacturaCobrada(v.estado)).reduce((a,v)=>a+(v.importe||0),0);
 
   // Resumen global
   document.getElementById('comDirResumen').innerHTML = `
@@ -2847,7 +2881,7 @@ function renderComisionesDirector() {
       if(!porPersona[nombre]) porPersona[nombre]={ventas:0,total:0,cobrado:0,pendiente:0};
       porPersona[nombre].ventas++;
       porPersona[nombre].total += com;
-      if(v.estado==='cobrado') porPersona[nombre].cobrado += com;
+      if(estadoEsComisionCobrada(v.estado)) porPersona[nombre].cobrado += com;
       else porPersona[nombre].pendiente += com;
     });
   });
@@ -2901,7 +2935,7 @@ function renderMisComisiones() {
   };
 
   const total = misVentas.reduce((a,v) => a + calcMiCom(v), 0);
-  const cobrado = misVentas.filter(v=>v.estado==='cobrado').reduce((a,v) => a + calcMiCom(v), 0);
+  const cobrado = misVentas.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v) => a + calcMiCom(v), 0);
   const pendiente = total - cobrado;
 
   document.getElementById('misComStats').innerHTML = `
@@ -2918,9 +2952,8 @@ function renderMisComisiones() {
         const esCloser = v.closer === nombreEquipo;
         const esSetter = v.setter === nombreEquipo;
         const miRol = (esCloser && esSetter) ? 'Closer + Setter' : esCloser ? 'Closer' : 'Setter';
-        const cobrado = v.estado === 'cobrado';
         return `
-        <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-left:3px solid ${cobrado?'var(--verde)':'var(--dorado)'};border-radius:10px;padding:14px;margin-bottom:10px;">
+        <div style="background:var(--negro-claro);border:1px solid ${estadoBorde(v.estado)};border-left:3px solid ${estadoColor(v.estado)};border-radius:10px;padding:14px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <div>
               <div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${v.cliente}</div>
@@ -2928,7 +2961,7 @@ function renderMisComisiones() {
             </div>
             <div style="text-align:right;">
               <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${miCom.toFixed(0)}€</div>
-              <div style="font-size:9px;color:${cobrado?'var(--verde)':'var(--rojo)'};">${cobrado?'✅ Cobrado':'⏳ Pendiente'}</div>
+              <div style="font-size:9px;color:${estadoColor(v.estado)};">${estadoLabel(v.estado)}</div>
             </div>
           </div>
           <div style="font-size:10px;color:var(--gris);">📅 Cobro previsto: ${fmtFecha(v.fecha_cobro||v.fechaCobro||'')}</div>
