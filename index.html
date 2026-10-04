@@ -2036,7 +2036,8 @@ const VENTAS0 = [
   {id:1018,cliente:'Hermanos Rodríguez Parrilla',proyecto:'DeCA',importe:95,closer:'Juan Antonio',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:10,com_closer:10,com_setter:14,com_jr:0},
   {id:1019,cliente:'La Salud Productos',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:24,com_closer:24,com_setter:0,com_jr:0},
 ];
-let ventas = JSON.parse(localStorage.getItem('cdv_v')) || VENTAS0;
+const _ventasGuardadas = JSON.parse(localStorage.getItem('cdv_v'));
+let ventas = (_ventasGuardadas && _ventasGuardadas.length > 0) ? _ventasGuardadas : VENTAS0;
 
 function navElocrea(id, btn) {
   document.getElementById('el-ventas').style.display = id==='ventas'?'block':'none';
