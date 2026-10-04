@@ -633,23 +633,9 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
       <div class="form-group"><label class="form-label">Cliente</label><input type="text" class="form-input" id="vCliente" placeholder="Nombre empresa cliente"></div>
       <div class="form-group"><label class="form-label">Importe venta €</label><input type="number" class="form-input" id="vImporte" placeholder="0" oninput="calcComisiones()"></div>
       <div class="form-group"><label class="form-label">Closer</label>
-        <select class="form-select" id="vCloser">
-          <option value="Juan Antonio">Juan Antonio</option>
-          <option value="Koenraad">Koenraad</option>
-          <option value="Francisco">Francisco</option>
-          <option value="Paula">Paula</option>
-          <option value="Xabat">Xabat</option>
-          <option value="Ian Marcos">Ian Marcos</option>
-        </select></div>
+        <select class="form-select" id="vCloser"></select></div>
       <div class="form-group"><label class="form-label">Setter</label>
-        <select class="form-select" id="vSetter">
-          <option value="Natalia">Natalia</option>
-          <option value="Laura">Laura</option>
-          <option value="Daniel">Daniel</option>
-          <option value="Sofía Constanza">Sofía Constanza</option>
-          <option value="Francisco">Francisco</option>
-          <option value="Paula">Paula</option>
-        </select></div>
+        <select class="form-select" id="vSetter"></select></div>
       <div class="form-group"><label class="form-label">Fecha cobro prevista</label><input type="date" class="form-input" id="vFechaCobro"></div>
       <!-- CALCULADORA COMISIONES -->
       <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:14px;" id="calcComis">
@@ -1204,7 +1190,7 @@ function iniciarApp() {
   // Mostrar filtro calendario solo al director
   const filtroEl = document.getElementById('calFiltroUsuario');
   if(filtroEl) filtroEl.style.display = (usuarioActual && usuarioActual.rol==='director') ? 'block' : 'none';
-  renderHoy(); renderTareas('todas'); renderProyectos(); renderCal(); renderNotas(); renderRegistros(); renderLiga(); renderIncubacion(); renderEquipo(); renderVentas();
+  renderHoy(); renderTareas('todas'); renderProyectos(); renderCal(); renderNotas(); renderRegistros(); renderLiga(); renderIncubacion(); renderEquipo(); renderVentas(); updateVentasDropdowns();
   syncDesdeSupabase();
 }
 document.addEventListener('DOMContentLoaded', () => {
@@ -2165,6 +2151,26 @@ const ROLES = {cdv:'🏢 CDV',closer:'🎯 Closer',closer_setter:'🎯/📞 Clos
 const ROLES_COLOR = {cdv:'var(--dorado)',closer:'var(--verde)',closer_setter:'var(--azul)',setter:'#9B6FD4'};
 const PNOMBRES_EQ = {elocrea:'Elocrea',liga:'Liga DJ',consultoria:'Consultoría',cdv:'CDV'};
 
+// Función para obtener opciones de closers activos
+function getActivoClosersOptions() {
+  return equipo.filter(e=>e.estado==='activo'&&(e.rol==='closer'||e.rol==='closer_setter'))
+    .map(e=>`<option value="${e.nombre}">${e.nombre}</option>`).join('');
+}
+
+// Función para obtener opciones de setters activos
+function getActivoSettersOptions() {
+  return equipo.filter(e=>e.estado==='activo'&&(e.rol==='setter'||e.rol==='closer_setter'))
+    .map(e=>`<option value="${e.nombre}">${e.nombre}</option>`).join('');
+}
+
+// Función para actualizar dropdowns de Nueva Venta
+function updateVentasDropdowns() {
+  const vCloser = document.getElementById('vCloser');
+  const vSetter = document.getElementById('vSetter');
+  if(vCloser) vCloser.innerHTML = getActivoClosersOptions();
+  if(vSetter) vSetter.innerHTML = getActivoSettersOptions();
+}
+
 function toggleFormEquipo(id) {
   const f = document.getElementById('formEquipo');
   const b = document.getElementById('btnNuevoMiembro');
@@ -2278,6 +2284,9 @@ function renderEquipo() {
         ${p.notas?`<div style="font-size:10px;color:var(--gris);margin-top:6px;font-style:italic;border-top:1px solid var(--negro-borde);padding-top:6px;">${p.notas}</div>`:''}
       </div>`).join('')}
     </div>` : '').join('');
+
+  // Actualizar dropdowns de Nueva Venta
+  updateVentasDropdowns();
 }
 
 // =====================
