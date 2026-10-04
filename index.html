@@ -720,6 +720,13 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="liga" style="accent-color:var(--dorado)"> Liga DJ</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="consultoria" style="accent-color:var(--dorado)"> Consultoría</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="cdv" style="accent-color:var(--dorado)"> CDV General</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="yiux" style="accent-color:var(--dorado)"> YIUX · Lidia</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="zeren" style="accent-color:var(--dorado)"> Zeren Clinic</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="jbernad" style="accent-color:var(--dorado)"> José Bernad</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="cayfi" style="accent-color:var(--dorado)"> CAYFI</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="elogistic" style="accent-color:var(--dorado)"> Elogistic</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="deca" style="accent-color:var(--dorado)"> DeCA</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" value="heru" style="accent-color:var(--dorado)"> HeRU</label>
       </div>
     </div>
     <div class="form-group"><label class="form-label">Valoración (1-5 ⭐)</label>
@@ -2490,9 +2497,46 @@ const LABELS_TABS = {
   equipo:'Equipo', ajustes:'Ajustes'
 };
 
+function eliminarUsuario(usuarioId) {
+  if(!confirm(`¿Eliminar usuario @${usuarioId}? Esta acción no se puede deshacer.`)) return;
+  const idx = USUARIOS.findIndex(u => u.usuario === usuarioId);
+  if(idx === -1) return;
+  USUARIOS.splice(idx, 1);
+  localStorage.removeItem('cdv_permisos_' + usuarioId);
+  // Limpiar config guardada
+  const config = JSON.parse(localStorage.getItem('cdv_userconfig') || '{}');
+  delete config[usuarioId];
+  localStorage.setItem('cdv_userconfig', JSON.stringify(config));
+  mostrarMensaje('✅ Usuario eliminado');
+  renderGestionUsuarios();
+}
+
 function renderGestionUsuarios() {
   const noDirectores = USUARIOS.filter(u => u.rol !== 'director');
-  document.getElementById('listaGestionUsuarios').innerHTML = noDirectores.map(u => {
+  // Mostrar botón para añadir nuevo usuario
+  const htmlCabecera = `
+    <div style="margin-bottom:12px;">
+      <button onclick="mostrarFormNuevoUsuario()" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:8px;padding:8px 14px;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;width:100%;">+ Añadir nuevo usuario</button>
+    </div>
+    <div id="formNuevoUsuario" style="display:none;background:var(--negro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:600;color:var(--dorado);margin-bottom:10px;">Nuevo usuario</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <input type="text" id="nuNombre" class="form-input" placeholder="Nombre completo" style="font-size:12px;">
+        <input type="text" id="nuUsuario" class="form-input" placeholder="@usuario" style="font-size:12px;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <input type="password" id="nuPass" class="form-input" placeholder="Contraseña" style="font-size:12px;">
+        <select id="nuRol" class="form-select" style="font-size:12px;">
+          <option value="comercial">💼 Comercial</option>
+          <option value="asistente">🤝 Asistente</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="crearNuevoUsuario()" class="btn-primary" style="font-size:11px;padding:8px 12px;flex:1;">Crear usuario</button>
+        <button onclick="document.getElementById('formNuevoUsuario').style.display='none'" class="btn-secondary" style="font-size:11px;padding:8px 12px;">Cancelar</button>
+      </div>
+    </div>`;
+  document.getElementById('listaGestionUsuarios').innerHTML = htmlCabecera + noDirectores.map(u => {
     const permsActuales = getPermisos(u.usuario) || DEFAULT_PERMISOS[u.rol] || [];
     const tabsDisponibles = TODAS_LAS_TABS.filter(t => t !== 'ajustes'); // ajustes siempre oculto para no-directores
     return `
@@ -2502,6 +2546,7 @@ function renderGestionUsuarios() {
           <div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${u.nombre}</div>
           <div style="font-size:10px;color:var(--gris);">@${u.usuario} · ${u.rol} · Comisión: <span style="color:var(--dorado)">${u.comisionPct}%</span></div>
         </div>
+        <button onclick="eliminarUsuario('${u.usuario}')" style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);color:var(--rojo);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;" title="Eliminar usuario">✕ Eliminar</button>
       </div>
       <div style="font-size:10px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Secciones visibles</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
@@ -2543,6 +2588,89 @@ function guardarConfigUsuario(usuarioId) {
   config[usuarioId] = { comisionPct: nuevaCom };
   localStorage.setItem('cdv_userconfig', JSON.stringify(config));
   mostrarMensaje('✅ Configuración guardada para ' + user.nombre);
+}
+
+function mostrarFormNuevoUsuario() {
+  const f = document.getElementById('formNuevoUsuario');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+function crearNuevoUsuario() {
+  const nombre = document.getElementById('nuNombre').value.trim();
+  const usuario = document.getElementById('nuUsuario').value.trim().toLowerCase().replace(/[@\s]/g,'');
+  const pass = document.getElementById('nuPass').value.trim();
+  const rol = document.getElementById('nuRol').value;
+  if(!nombre || !usuario || !pass) { alert('Rellena nombre, usuario y contraseña'); return; }
+  if(USUARIOS.find(u => u.usuario === usuario)) { alert('Ese nombre de usuario ya existe'); return; }
+  const nuevoUser = {usuario, nombre, rol, pass, nombreEquipo: nombre.split(' ')[0], comisionPct: 0};
+  USUARIOS.push(nuevoUser);
+  // Guardar pass en localStorage
+  const passes = JSON.parse(localStorage.getItem('cdv_passes') || '{}');
+  passes[usuario] = pass;
+  localStorage.setItem('cdv_passes', JSON.stringify(passes));
+  mostrarMensaje('✅ Usuario @' + usuario + ' creado correctamente');
+  document.getElementById('formNuevoUsuario').style.display = 'none';
+  renderGestionUsuarios();
+}
+
+// =====================
+// WHATSAPP CONVOCATORIA
+// =====================
+function convocatoriaWhatsApp(eventoId) {
+  const e = eventos.find(x => x.id === eventoId);
+  if(!e) return;
+  // Closers del proyecto correspondiente al tipo de evento
+  const closersPorProyecto = equipo.filter(m =>
+    m.estado === 'activo' &&
+    (m.rol === 'closer' || m.rol === 'closer_setter' || m.rol === 'setter') &&
+    (m.proyectos || []).some(p => p === e.tipo || e.tipo === 'cdv' || e.tipo === 'elocrea')
+  );
+  // Formatear fecha y hora
+  const [y,mo,d] = e.fecha.split('-');
+  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const fechaFmt = `${d} de ${meses[parseInt(mo)-1]}`;
+  const proyecto = PNOMBRES[e.tipo] || e.tipo;
+  // Construir mensaje
+  const lineasEquipo = closersPorProyecto.length
+    ? `\n\nEquipo convocado:\n${closersPorProyecto.map(m=>`• ${m.nombre}`).join('\n')}`
+    : '';
+  const desc = e.desc ? `\n📋 ${e.desc}` : '';
+  const msg = `🔔 *CONVOCATORIA — CDV by JCerezo*\n\n📅 ${fechaFmt} a las ${e.hora}h\n📌 ${e.titulo}\n🏷️ Proyecto: ${proyecto}${desc}${lineasEquipo}\n\nConfirma asistencia respondiendo a este mensaje. ✅`;
+  // Modal de convocatoria
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:0;';
+  modal.innerHTML = `
+    <div style="background:var(--negro-claro);border-radius:16px 16px 0 0;padding:24px 20px 32px;width:100%;max-width:500px;border:1px solid var(--negro-borde);border-bottom:none;">
+      <div style="width:40px;height:4px;background:var(--negro-borde);border-radius:2px;margin:0 auto 20px;"></div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:4px;">📲 Convocatoria por WhatsApp</div>
+      <div style="font-size:11px;color:var(--gris);margin-bottom:16px;text-transform:uppercase;letter-spacing:1px;">${e.titulo} · ${fechaFmt} ${e.hora}h</div>
+      <div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:10px;padding:14px;font-size:12px;color:var(--blanco-suave);line-height:1.6;white-space:pre-wrap;margin-bottom:16px;">${msg}</div>
+      ${closersPorProyecto.length ? `
+      <div style="font-size:11px;color:var(--gris);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">Miembros con teléfono registrado</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+        ${closersPorProyecto.map(m => m.telefono ? `
+          <a href="https://wa.me/${m.telefono.replace(/[^0-9]/g,'')}?text=${encodeURIComponent(msg)}" target="_blank"
+             style="display:flex;align-items:center;gap:10px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:8px;padding:10px 12px;text-decoration:none;">
+            <span style="font-size:18px;">💬</span>
+            <div style="flex:1;">
+              <div style="font-size:12px;font-weight:600;color:var(--blanco-suave);">${m.nombre}</div>
+              <div style="font-size:10px;color:#25d366;">${m.telefono}</div>
+            </div>
+            <span style="font-size:10px;color:#25d366;font-weight:600;letter-spacing:1px;">ABRIR →</span>
+          </a>` : `
+          <div style="display:flex;align-items:center;gap:10px;background:rgba(136,136,136,0.08);border:1px solid rgba(136,136,136,0.2);border-radius:8px;padding:10px 12px;">
+            <span style="font-size:18px;">👤</span>
+            <div style="flex:1;">
+              <div style="font-size:12px;color:var(--gris);">${m.nombre}</div>
+              <div style="font-size:10px;color:var(--gris);">Sin teléfono registrado — añádelo en Equipo</div>
+            </div>
+          </div>`).join('')}
+      </div>` : `<div style="font-size:12px;color:var(--gris);margin-bottom:16px;">No hay equipo activo asignado a este proyecto. Puedes añadir miembros desde la sección Equipo.</div>`}
+      <button onclick="navigator.clipboard.writeText(${JSON.stringify(msg)}).then(()=>mostrarMensaje('✅ Mensaje copiado'))" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:8px;padding:11px;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;width:100%;margin-bottom:8px;">📋 Copiar mensaje</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="background:transparent;border:1px solid var(--negro-borde);color:var(--gris);border-radius:8px;padding:11px;font-size:11px;cursor:pointer;width:100%;">Cerrar</button>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', ev => { if(ev.target === modal) modal.remove(); });
 }
 
 function mostrarMensaje(msg) {
@@ -2632,10 +2760,12 @@ PROY_AG.forEach(p=>{ PNOMBRES[p.k]=p.nombre; if(p.k!=='personal'&&p.k!=='medico'
 function eventoHTML(e,conFecha,soloLectura){
   const hora=conFecha?`${fmtFecha(e.fecha)}<br>${e.hora}`:e.hora;
   const etiqueta=`<span class="ptag ptag-${e.tipo}" style="margin-left:6px;">${PNOMBRES[e.tipo]||e.tipo}</span>`;
+  const esDir = usuarioActual?.rol === 'director';
+  const btnWA = esDir ? `<button class="btn-editar-ev" onclick="event.stopPropagation();convocatoriaWhatsApp(${e.id})" title="Convocar por WhatsApp" style="background:rgba(37,211,102,0.12);border-color:rgba(37,211,102,0.3);color:#25d366;">💬</button>` : '';
   return `<div class="evento-item ${e.tipo}" onclick="if(!event.target.closest('button'))editarEvento(${e.id})">
     <div class="evento-hora">${hora}</div>
     <div class="evento-info"><div class="evento-titulo">${e.titulo}${etiqueta}</div><div class="evento-desc">${e.desc||''}</div></div>
-    <div class="evento-acciones"><button class="btn-editar-ev" onclick="editarEvento(${e.id})" title="Editar">✏️</button>${soloLectura?'':`<button class="btn-borrar" onclick="borrarEvento(${e.id})" title="Borrar">✕</button>`}</div>
+    <div class="evento-acciones">${btnWA}<button class="btn-editar-ev" onclick="editarEvento(${e.id})" title="Editar">✏️</button>${soloLectura?'':`<button class="btn-borrar" onclick="borrarEvento(${e.id})" title="Borrar">✕</button>`}</div>
   </div>`;
 }
 function prepararNuevoEvento(){
