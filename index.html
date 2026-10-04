@@ -1988,13 +1988,6 @@ function navCDV(id, btn) {
   if(btn) btn.classList.add('active');
 }
 
-function calcComisiones() {
-  const imp = parseFloat(document.getElementById('vImporte').value) || 0;
-  document.getElementById('comCDV').textContent = Math.round(imp*0.05)+'€';
-  document.getElementById('comCloser').textContent = Math.round(imp*0.08)+'€';
-  document.getElementById('comSetter').textContent = Math.round(imp*0.02)+'€';
-}
-
 function comJrCalc(total) {
   if(total <= 15000) return Math.round(total*0.005);
   if(total <= 40000) return Math.round(total*0.01);
