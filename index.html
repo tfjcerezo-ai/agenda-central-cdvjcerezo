@@ -737,7 +737,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
     <div class="stat-card"><div class="stat-numero" id="statActivos">0</div><div class="stat-label">Activos</div></div>
     <div class="stat-card"><div class="stat-numero" id="statClosers">0</div><div class="stat-label">Closers</div></div>
     <div class="stat-card"><div class="stat-numero" id="statSetters">0</div><div class="stat-label">Setters</div></div>
-    <div class="stat-card"><div class="stat-numero" id="statCDVteam">0</div><div class="stat-label">CDV</div></div>
+    <div class="stat-card"><div class="stat-numero" id="statCDVteam">0</div><div class="stat-label">CDV by JCerezo</div></div>
   </div>
 
   <button class="btn-primary" onclick="toggleFormEquipo()" id="btnNuevoMiembro" style="margin-bottom:14px;">+ Añadir Miembro</button>
@@ -2105,9 +2105,9 @@ function renderComisiones() {
 
   document.getElementById('comResumen2').innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV}€</div><div class="stat-label">CDV Total</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobradoCDV}€</div><div class="stat-label">CDV Cobrado</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${totalCDV-cobradoCDV}€</div><div class="stat-label">CDV Pendiente</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobradoCDV}€</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${totalCDV-cobradoCDV}€</div><div class="stat-label">CDV by JCerezo Pendiente</div></div>
       <div class="stat-card"><div class="stat-numero">${ventas.length}</div><div class="stat-label">Ventas total</div></div>
     </div>`;
 
@@ -2213,8 +2213,8 @@ function renderVentas() {
   const totalCDV = nv.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0);
   const pendiente = nv.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.com_cdv,0);
   document.getElementById('statsCDV').innerHTML = `
-    <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalCDV}€</div><div class="stat-label">CDV Cobrado</div></div>
-    <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${pendiente}€</div><div class="stat-label">CDV Pendiente</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalCDV}€</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${pendiente}€</div><div class="stat-label">CDV by JCerezo Pendiente</div></div>
     <div class="stat-card"><div class="stat-numero">${nv.filter(v=>v.estado==='cobrado').length}</div><div class="stat-label">Ventas cobradas</div></div>
     <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${nv.filter(v=>v.estado==='pendiente').length}</div><div class="stat-label">Pendientes</div></div>`;
   document.getElementById('listaVentas').innerHTML = nv.length ? nv.map(v=>{
@@ -2231,7 +2231,7 @@ function renderVentas() {
       </div>
       ${alerta?`<div style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--rojo);">⚠️ ${diasRest<=0?'¡VENCIDO HOY!':'Vence en '+diasRest+' días'}</div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
-        <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.com_cdv}€</div></div>
+        <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV by JCerezo</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.com_cdv}€</div></div>
         <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.com_closer}€</div></div>
         <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.com_setter}€</div></div>
       </div>
@@ -2352,7 +2352,7 @@ function renderVentasProyecto(proyNombre, containerId) {
   if(!cont) return;
   cont.innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${filtradas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0)}€</div><div class="stat-label">CDV Cobrado</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${filtradas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0)}€</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
       <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${pend}€</div><div class="stat-label">Pendiente</div></div>
       <div class="stat-card"><div class="stat-numero">${filtradas.length}</div><div class="stat-label">Ventas</div></div>
     </div>
@@ -2369,7 +2369,7 @@ function renderVentasProyecto(proyNombre, containerId) {
           <span style="color:${v.estado==='cobrado'?'var(--verde)':'var(--rojo)'};">${v.estado==='cobrado'?'✅ Cobrado':'⏳ Pendiente'}</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
-          <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.com_cdv}€</div></div>
+          <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV by JCerezo</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.com_cdv}€</div></div>
           <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.com_closer}€</div></div>
           <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.com_setter}€</div></div>
         </div>
@@ -2672,7 +2672,7 @@ function renderComResumen() {
   const pendientes = ventas.filter(v=>v.estado==='pendiente');
   document.getElementById('comResumen').innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV}€</div><div class="stat-label">CDV Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
       <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalClosers}€</div><div class="stat-label">Closers Total</div></div>
       <div class="stat-card"><div class="stat-numero" style="color:var(--azul)">${totalSetters}€</div><div class="stat-label">Setters Total</div></div>
       <div class="stat-card"><div class="stat-numero">${ventas.length}</div><div class="stat-label">Ventas totales</div></div>
