@@ -113,7 +113,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 .proyecto-card.liga{border-left-color:var(--liga);}
 .proyecto-card.consultoria{border-left-color:var(--gris);}
 .proyecto-card.incubacion{border-left-color:var(--incubacion);}
-.proyecto-nombre{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin-bottom:4px;}
+.proyecto-nombre{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin-bottom:4px;white-space:normal;word-break:break-word;}
 .proyecto-card.elocrea .proyecto-nombre{color:var(--elocrea-claro);}
 .proyecto-card.liga .proyecto-nombre{color:var(--liga-claro);}
 .proyecto-card.consultoria .proyecto-nombre{color:var(--gris-claro);}
@@ -1897,7 +1897,7 @@ function renderProyectos() {
     <div class="proyecto-card ${p.color}" data-pid="${p.id}">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
-          <div class="proyecto-nombre" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.nombre}</div>
+          <div class="proyecto-nombre" style="flex:1;word-break:break-word;">${p.nombre}</div>
         </div>
         <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
           <span class="badge ${PESTBADGE[p.estado]}">${PESTADOS[p.estado]}</span>
