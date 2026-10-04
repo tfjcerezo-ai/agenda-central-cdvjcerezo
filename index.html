@@ -2238,33 +2238,62 @@ function renderVentas() {
   }).join('') : '<div class="empty-state"><div class="empty-icon">💰</div><div class="empty-text">Sin ventas registradas todavía</div></div>';
 }
 
+function proximoCobro6() {
+  const hoy = new Date();
+  let y = hoy.getFullYear(), m = hoy.getMonth();
+  // Si hoy es anterior al 6 del mes actual → cobro este mes; si no → mes siguiente
+  if(hoy.getDate() < 6) return `${y}-${String(m+1).padStart(2,'0')}-06`;
+  m++; if(m>11){m=0;y++;}
+  return `${y}-${String(m+1).padStart(2,'0')}-06`;
+}
+
 function editarVenta(id) {
   const v = ventas.find(x=>x.id===id);
   if(!v) return;
   const nv = normVenta(v);
-  const campos = [
-    {key:'cliente', label:'Cliente', type:'text', val: nv.cliente},
-    {key:'importe', label:'Importe venta (€)', type:'number', val: nv.importe},
-    {key:'com_cdv', label:'Comisión CDV (€)', type:'number', val: nv.com_cdv},
-    {key:'com_closer', label:'Comisión Closer (€)', type:'number', val: nv.com_closer},
-    {key:'com_setter', label:'Comisión Setter (€)', type:'number', val: nv.com_setter},
-    {key:'estado', label:'Estado', type:'select', val: nv.estado, opts:['pendiente','cobrado']},
-    {key:'fecha_cobro', label:'Fecha cobro', type:'date', val: nv.fecha_cobro},
-  ];
+  const proyOpts = Object.entries(PNOMBRES).map(([k,n])=>`<option value="${k}" ${(nv.proyecto||'')=== k?'selected':''}>${n}</option>`).join('');
+  const inputStyle = 'background:#2a2a2a;border:1px solid rgba(201,168,76,0.2);border-radius:8px;color:var(--blanco-suave);padding:8px 12px;width:100%;font-size:13px;box-sizing:border-box;';
+  const labelStyle = 'font-size:11px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;';
   const modal = document.createElement('div');
   modal.id = 'modalEditVenta';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
   modal.innerHTML = `
     <div style="background:#1a1a1a;border:1px solid rgba(201,168,76,0.3);border-radius:16px;padding:24px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;">
       <div style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--dorado);margin-bottom:16px;">✏️ Editar Venta</div>
-      ${campos.map(c=>`
-        <div style="margin-bottom:12px;">
-          <label style="font-size:11px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;">${c.label}</label>
-          ${c.type==='select'
-            ? `<select id="ev_${c.key}" style="background:#2a2a2a;border:1px solid rgba(201,168,76,0.2);border-radius:8px;color:var(--blanco-suave);padding:8px 12px;width:100%;font-size:13px;">${c.opts.map(o=>`<option value="${o}" ${c.val===o?'selected':''}>${o}</option>`).join('')}</select>`
-            : `<input type="${c.type}" id="ev_${c.key}" value="${c.val||''}" style="background:#2a2a2a;border:1px solid rgba(201,168,76,0.2);border-radius:8px;color:var(--blanco-suave);padding:8px 12px;width:100%;font-size:13px;box-sizing:border-box;">`
-          }
-        </div>`).join('')}
+
+      <div style="margin-bottom:12px;"><label style="${labelStyle}">Proyecto</label>
+        <select id="ev_proyecto" style="${inputStyle}">${proyOpts}</select></div>
+
+      <div style="margin-bottom:12px;"><label style="${labelStyle}">Cliente</label>
+        <input type="text" id="ev_cliente" value="${nv.cliente||''}" style="${inputStyle}"></div>
+
+      <div style="margin-bottom:12px;"><label style="${labelStyle}">Tipo de cobro</label>
+        <select id="ev_tipo_cobro" onchange="evTipoCobroChange()" style="${inputStyle}">
+          <option value="unico" ${(nv.tipo_cobro||'unico')==='unico'?'selected':''}>💳 Pago único</option>
+          <option value="mensual" ${nv.tipo_cobro==='mensual'?'selected':''}>🔄 Cuota mensual (día 6)</option>
+        </select></div>
+
+      <div style="margin-bottom:12px;"><label style="${labelStyle}">Importe venta (€)</label>
+        <input type="number" id="ev_importe" value="${nv.importe||''}" style="${inputStyle}"></div>
+
+      <div style="margin-bottom:12px;"><label style="${labelStyle}">Comisión CDV by JCerezo (€)</label>
+        <input type="number" id="ev_com_cdv" value="${nv.com_cdv||''}" style="${inputStyle}"></div>
+
+      <div style="margin-bottom:12px;"><label style="${labelStyle}">Comisión Closer (€)</label>
+        <input type="number" id="ev_com_closer" value="${nv.com_closer||''}" style="${inputStyle}"></div>
+
+      <div style="margin-bottom:12px;"><label style="${labelStyle}">Comisión Setter (€)</label>
+        <input type="number" id="ev_com_setter" value="${nv.com_setter||''}" style="${inputStyle}"></div>
+
+      <div style="margin-bottom:12px;"><label style="${labelStyle}">Estado</label>
+        <select id="ev_estado" style="${inputStyle}">
+          <option value="pendiente" ${nv.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
+          <option value="cobrado" ${nv.estado==='cobrado'?'selected':''}>✅ Cobrado</option>
+        </select></div>
+
+      <div id="ev_fecha_wrap" style="margin-bottom:12px;"><label style="${labelStyle}">Fecha cobro</label>
+        <input type="date" id="ev_fecha_cobro" value="${nv.fecha_cobro||''}" style="${inputStyle}"></div>
+
       <div style="display:flex;gap:10px;margin-top:16px;">
         <button onclick="guardarEditVenta(${id})" style="flex:1;background:rgba(201,168,76,0.2);border:1px solid rgba(201,168,76,0.4);color:var(--dorado);border-radius:8px;padding:10px;font-size:13px;cursor:pointer;">💾 Guardar</button>
         <button onclick="document.getElementById('modalEditVenta').remove()" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--gris);border-radius:8px;padding:10px;font-size:13px;cursor:pointer;">Cancelar</button>
@@ -2273,19 +2302,32 @@ function editarVenta(id) {
   document.body.appendChild(modal);
 }
 
+function evTipoCobroChange() {
+  const tipo = document.getElementById('ev_tipo_cobro')?.value;
+  const fechaInput = document.getElementById('ev_fecha_cobro');
+  if(!fechaInput) return;
+  if(tipo === 'mensual') {
+    fechaInput.value = proximoCobro6();
+  }
+}
+
 function guardarEditVenta(id) {
   const idx = ventas.findIndex(x=>x.id===id);
   if(idx===-1) return;
   const get = key => document.getElementById('ev_'+key)?.value;
+  const tipo_cobro = get('tipo_cobro') || 'unico';
+  const fecha_cobro = tipo_cobro === 'mensual' ? proximoCobro6() : (get('fecha_cobro') || ventas[idx].fecha_cobro);
   ventas[idx] = {
     ...ventas[idx],
+    proyecto: get('proyecto') || ventas[idx].proyecto,
     cliente: get('cliente') || ventas[idx].cliente,
+    tipo_cobro,
     importe: parseFloat(get('importe')) || ventas[idx].importe,
     com_cdv: parseFloat(get('com_cdv')) || 0,
     com_closer: parseFloat(get('com_closer')) || 0,
     com_setter: parseFloat(get('com_setter')) || 0,
     estado: get('estado') || ventas[idx].estado,
-    fecha_cobro: get('fecha_cobro') || ventas[idx].fecha_cobro,
+    fecha_cobro,
   };
   save();
   document.getElementById('modalEditVenta')?.remove();
