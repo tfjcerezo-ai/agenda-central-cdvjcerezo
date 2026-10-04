@@ -841,6 +841,14 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
   <div id="panelGestionUsuarios" style="display:none;margin-top:16px;">
     <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">⚙️ Gestión de permisos</div>
     <div id="listaGestionUsuarios"></div>
+    <button onclick="abrirModalNuevoUsuario()" style="width:100%;margin-top:10px;padding:12px;background:rgba(201,168,76,0.1);border:1px dashed rgba(201,168,76,0.4);border-radius:10px;color:var(--dorado);font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">+ AÑADIR NUEVO USUARIO</button>
+  </div>
+
+  <!-- HERRAMIENTAS DIRECTOR (solo Director) -->
+  <div id="panelHerramientasDirector" style="display:none;margin-top:16px;">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">🛠️ Herramientas</div>
+    <button onclick="resetearVentas()" style="width:100%;padding:13px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:10px;color:var(--dorado);font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;margin-bottom:10px;">🔄 CARGAR VENTAS INICIALES (19 CLIENTES)</button>
+    <div style="font-size:10px;color:var(--gris);text-align:center;margin-top:-6px;margin-bottom:10px;">Solo si no hay ventas cargadas</div>
   </div>
 </div>
 
@@ -1180,6 +1188,8 @@ function aplicarPermisos() {
     panelGestion.style.display = rol === 'director' ? 'block' : 'none';
     if(rol === 'director') renderGestionUsuarios();
   }
+  const panelHerr = document.getElementById('panelHerramientasDirector');
+  if(panelHerr) panelHerr.style.display = rol === 'director' ? 'block' : 'none';
   // Mostrar/ocultar pestañas nav
   document.querySelectorAll('.nav-btn').forEach(btn => {
     const onclick = btn.getAttribute('onclick') || '';
@@ -2783,18 +2793,62 @@ const LABELS_TABS = {
   equipo:'Equipo', ajustes:'Ajustes'
 };
 
+function resetearVentas() {
+  abrirModalConfirm(
+    '¿Cargar los 19 clientes iniciales?',
+    'Se borrarán todas las ventas actuales y se cargarán los clientes base de CDV by JCerezo.',
+    function() {
+      localStorage.removeItem('cdv_v');
+      ventas = VENTAS0.map(v => Object.assign({}, v));
+      localStorage.setItem('cdv_v', JSON.stringify(ventas));
+      mostrarMensaje('✅ 19 clientes cargados correctamente');
+    }
+  );
+}
+
+function abrirModalConfirm(titulo, texto, onConfirm) {
+  let modal = document.getElementById('modalConfirmGlobal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modalConfirmGlobal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div style="background:#1a1a1a;border:1px solid rgba(201,168,76,0.3);border-radius:16px;padding:24px;max-width:340px;width:100%;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:10px;">${titulo}</div>
+      <div style="font-size:13px;color:var(--gris);margin-bottom:20px;line-height:1.5;">${texto}</div>
+      <div style="display:flex;gap:10px;">
+        <button id="btnConfirmSi" style="flex:1;padding:12px;background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.4);border-radius:10px;color:var(--dorado);font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">✓ Confirmar</button>
+        <button id="btnConfirmNo" style="flex:1;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:var(--gris);font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">✕ Cancelar</button>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+  document.getElementById('btnConfirmSi').onclick = function() {
+    modal.style.display = 'none';
+    onConfirm();
+  };
+  document.getElementById('btnConfirmNo').onclick = function() {
+    modal.style.display = 'none';
+  };
+}
+
 function eliminarUsuario(usuarioId) {
-  if(!confirm(`¿Eliminar usuario @${usuarioId}? Esta acción no se puede deshacer.`)) return;
-  const idx = USUARIOS.findIndex(u => u.usuario === usuarioId);
-  if(idx === -1) return;
-  USUARIOS.splice(idx, 1);
-  localStorage.removeItem('cdv_permisos_' + usuarioId);
-  // Limpiar config guardada
-  const config = JSON.parse(localStorage.getItem('cdv_userconfig') || '{}');
-  delete config[usuarioId];
-  localStorage.setItem('cdv_userconfig', JSON.stringify(config));
-  mostrarMensaje('✅ Usuario eliminado');
-  renderGestionUsuarios();
+  abrirModalConfirm(
+    `Eliminar @${usuarioId}`,
+    'Esta acción no se puede deshacer. El usuario perderá el acceso permanentemente.',
+    function() {
+      const idx = USUARIOS.findIndex(u => u.usuario === usuarioId);
+      if(idx === -1) return;
+      USUARIOS.splice(idx, 1);
+      localStorage.removeItem('cdv_permisos_' + usuarioId);
+      const config = JSON.parse(localStorage.getItem('cdv_userconfig') || '{}');
+      delete config[usuarioId];
+      localStorage.setItem('cdv_userconfig', JSON.stringify(config));
+      mostrarMensaje('✅ Usuario eliminado');
+      renderGestionUsuarios();
+    }
+  );
 }
 
 function renderGestionUsuarios() {
