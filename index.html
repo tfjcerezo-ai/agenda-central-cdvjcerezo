@@ -393,7 +393,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 <!-- CALENDARIO -->
 <div class="section" id="section-calendario">
   <div class="section-title">Calendario</div>
-  <div class="leyenda">
+  <div class="leyenda" id="leyendaCal">
     <div class="leyenda-item"><div class="leyenda-dot" style="background:var(--dorado)"></div>CDV</div>
     <div class="leyenda-item"><div class="leyenda-dot" style="background:var(--elocrea-claro)"></div>Elocrea</div>
     <div class="leyenda-item"><div class="leyenda-dot" style="background:var(--liga-claro)"></div>Liga</div>
@@ -847,7 +847,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 <div class="modal-overlay" id="modalEvento" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Nuevo Evento</div>
+    <div class="modal-title" id="neTitulo">Nuevo Evento</div><input type="hidden" id="neEditId" value="">
     <div class="form-group"><label class="form-label">Título</label><input type="text" class="form-input" id="neTexto" placeholder="Nombre del evento"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="neFecha"></div>
@@ -867,7 +867,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
         <option value="medico">Médico</option>
       </select></div>
     <div class="form-group"><label class="form-label">Descripción</label><input type="text" class="form-input" id="neDesc" placeholder="Notas adicionales"></div>
-    <button class="btn-primary" onclick="guardarEvento()">Añadir Evento</button>
+    <button class="btn-primary" onclick="guardarEvento()" id="neBoton">Añadir Evento</button>
     <button class="btn-secondary" onclick="document.getElementById('modalEvento').classList.remove('open')">Cancelar</button>
   </div>
 </div>
@@ -1241,6 +1241,7 @@ function navTiempo(id, btn) {
 function fabAction() {
   const s = document.querySelector('.section.active')?.id?.replace('section-','');
   if(s==='calendario') {
+    prepararNuevoEvento();
     document.getElementById('neFecha').value = new Date().toISOString().split('T')[0];
     document.getElementById('modalEvento').classList.add('open');
   } else {
@@ -1265,7 +1266,7 @@ function renderHoy() {
   document.getElementById('statCompletadas').textContent = misTareas().filter(t=>t.completada).length;
   const reun = misEventos().filter(e=>e.fecha===hoy).sort((a,b)=>a.hora.localeCompare(b.hora));
   document.getElementById('reunionesHoy').innerHTML = reun.length
-    ? reun.map(e=>`<div class="evento-item ${e.tipo}"><div class="evento-hora">${e.hora}</div><div class="evento-info"><div class="evento-titulo">${e.titulo}</div><div class="evento-desc">${e.desc}</div></div></div>`).join('')
+    ? reun.map(e=>eventoHTML(e,false,true)).join('')
     : '<div style="color:var(--gris);font-size:13px;padding:8px 0;">Sin reuniones hoy.</div>';
   document.getElementById('tareasHoy').innerHTML = urgentes.length
     ? urgentes.slice(0,5).map(t=>tareaHTML(t)).join('')
@@ -1276,7 +1277,7 @@ function renderHoy() {
 // TAREAS
 // =====================
 function tareaHTML(t) {
-  const pmap = {cdv:'ptag-cdv',elocrea:'ptag-elocrea',liga:'ptag-liga',consultoria:'ptag-consultoria',personal:'ptag-personal'};
+  const pmap=new Proxy({},{get:(o,k)=>'ptag-'+String(k)});
   const hoy = new Date().toISOString().split('T')[0];
   const fechaStr = t.fecha ? `📅 ${fmtFecha(t.fecha)}` : '';
   // Mostrar quién creó la tarea (para Director, cuando no la creó él)
@@ -1376,6 +1377,7 @@ function toggleT(id) {
 
 function borrarTarea(id) {
   if(!confirm('¿Borrar esta tarea?')) return;
+  sbDelete('tareas',id);
   tareas=tareas.filter(t=>t.id!==id); save(); renderHoy(); renderTareas('todas');
 }
 
@@ -1460,7 +1462,8 @@ function renderMes() {
     if(evs.length)cls+=' tiene-eventos';
     if(tieneLiga)cls+=' evento-liga';
     else if(tieneEl)cls+=' evento-elocrea';
-    html+=`<div class="${cls}" onclick="abrirDia('${fstr}')">${d}</div>`;
+    const tiposDia=[...new Set(evs.map(e=>e.tipo))].slice(0,4);
+    html+=`<div class="${cls}" onclick="abrirDia('${fstr}')">${d}${tiposDia.length?`<span class="cal-puntos">${tiposDia.map(t=>`<i style="background:${colorProyecto(t)}"></i>`).join('')}</span>`:''}</div>`;
   }
   html+='</div>';
   document.getElementById('calGrid').innerHTML=html;
@@ -1491,7 +1494,7 @@ function renderSemana() {
   for(let i=0;i<7;i++){const dia=new Date(lunes);dia.setDate(lunes.getDate()+i);evSem=evSem.concat(misEventos().filter(e=>e.fecha===dia.toISOString().split('T')[0]));}
   evSem.sort((a,b)=>a.fecha.localeCompare(b.fecha));
   html+=`<div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Eventos</div>`;
-  html+=evSem.length?evSem.map(e=>`<div class="evento-item ${e.tipo}"><div class="evento-hora">${fmtFecha(e.fecha)}<br>${e.hora}</div><div class="evento-info"><div class="evento-titulo">${e.titulo}</div><div class="evento-desc">${e.desc}</div></div><button class="btn-borrar" onclick="borrarEvento(${e.id})">✕</button></div>`).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos</div></div>';
+  html+=evSem.length?evSem.map(e=>eventoHTML(e,true)).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos</div></div>';
   document.getElementById('calGrid').innerHTML=html;
   document.getElementById('eventosMes').innerHTML='';
 }
@@ -1506,7 +1509,7 @@ function renderDia(fecha) {
   let html='';
   if(tds.length){html+=`<div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Tareas</div>`;html+=tds.map(t=>tareaHTML(t)).join('');}
   html+=`<div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin:14px 0 10px;">Agenda</div>`;
-  html+=evs.length?evs.map(e=>`<div class="evento-item ${e.tipo}"><div class="evento-hora">${e.hora}</div><div class="evento-info"><div class="evento-titulo">${e.titulo}</div><div class="evento-desc">${e.desc}</div></div><button class="btn-borrar" onclick="borrarEvento(${e.id})">✕</button></div>`).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos — pulsa + para añadir</div></div>';
+  html+=evs.length?evs.map(e=>eventoHTML(e,false)).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos — pulsa + para añadir</div></div>';
   document.getElementById('calGrid').innerHTML=html;
   document.getElementById('eventosMes').innerHTML='';
 }
@@ -1520,7 +1523,7 @@ function abrirDia(fstr) {
 
 function renderEventosMes() {
   const evs=misEventos().filter(e=>{const[y,m]=e.fecha.split('-');return parseInt(m)-1===mesActual&&parseInt(y)===anioActual;}).sort((a,b)=>a.fecha.localeCompare(b.fecha));
-  document.getElementById('eventosMes').innerHTML=evs.length?evs.map(e=>`<div class="evento-item ${e.tipo}"><div class="evento-hora">${fmtFecha(e.fecha)}<br>${e.hora}</div><div class="evento-info"><div class="evento-titulo">${e.titulo}</div><div class="evento-desc">${e.desc}</div></div><button class="btn-borrar" onclick="borrarEvento(${e.id})">✕</button></div>`).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos este mes</div></div>';
+  document.getElementById('eventosMes').innerHTML=evs.length?evs.map(e=>eventoHTML(e,true)).join(''):'<div class="empty-state"><div class="empty-text">Sin eventos este mes</div></div>';
 }
 
 function guardarEvento() {
@@ -1529,7 +1532,11 @@ function guardarEvento() {
   const hora=document.getElementById('neHora').value;
   if(!txt||!fecha||!hora){alert('Rellena título, fecha y hora');return;}
   const visible=document.getElementById('neVisible').value;
-  eventos.push({id:Date.now(),fecha,hora,titulo:txt,desc:document.getElementById('neDesc').value,tipo:document.getElementById('neTipo').value,visible});
+  const datosEv={fecha,hora,titulo:txt,desc:document.getElementById('neDesc').value,tipo:document.getElementById('neTipo').value,visible};
+  const editId=parseInt(document.getElementById('neEditId').value)||0;
+  if(editId){ const i=eventos.findIndex(e=>e.id===editId); if(i!==-1) eventos[i]={...eventos[i],...datosEv}; }
+  else eventos.push({id:Date.now(),...datosEv});
+  document.getElementById('neEditId').value='';
   save(); document.getElementById('neTexto').value=''; document.getElementById('neDesc').value='';
   document.getElementById('modalEvento').classList.remove('open');
   renderHoy(); renderCal();
@@ -1537,6 +1544,7 @@ function guardarEvento() {
 
 function borrarEvento(id) {
   if(!confirm('¿Borrar evento?')) return;
+  sbDelete('eventos',id);
   eventos=eventos.filter(e=>e.id!==id); save(); renderHoy(); renderCal();
 }
 
@@ -1551,7 +1559,7 @@ function guardarNota() {
 }
 
 function renderNotas() {
-  const pmap={cdv:'ptag-cdv',elocrea:'ptag-elocrea',liga:'ptag-liga',consultoria:'ptag-consultoria',personal:'ptag-personal'};
+  const pmap=new Proxy({},{get:(o,k)=>'ptag-'+String(k)});
   document.getElementById('listaNota').innerHTML=notas.length?notas.map(n=>`<div class="anotacion-item"><div class="anotacion-fecha"><span class="ptag ${pmap[n.proyecto]}">${PNOMBRES[n.proyecto]}</span> &nbsp;${n.fecha}</div><div class="anotacion-texto">${n.texto}</div></div>`).join(''):'<div class="empty-state"><div class="empty-icon">📝</div><div class="empty-text">Sin notas todavía</div></div>';
 }
 
@@ -1670,6 +1678,7 @@ function guardarMovLiga() {
 
 function borrarMovLiga(id) {
   if(!confirm('¿Borrar este movimiento?')) return;
+  sbDelete('mov_liga',id);
   movLiga=movLiga.filter(m=>m.id!==id); save(); renderLiga();
 }
 
@@ -1765,6 +1774,7 @@ function guardarProyecto() {
 
 function borrarProyecto(id) {
   if(!confirm('¿Borrar este proyecto?')) return;
+  sbDelete('proyectos',id);
   proyectos=proyectos.filter(p=>p.id!==id); save(); renderProyectos();
 }
 
@@ -1856,6 +1866,7 @@ function guardarIncubacion() {
 
 function borrarIncubacion(id) {
   if(!confirm('¿Borrar esta idea?')) return;
+  sbDelete('incubacion',id);
   incubacion = incubacion.filter(i=>i.id!==id); save(); renderIncubacion();
 }
 
@@ -1865,7 +1876,7 @@ function cambiarEstadoInc(id, nuevoEstado) {
 }
 
 function renderIncubacion() {
-  const pmap={cdv:'ptag-cdv',elocrea:'ptag-elocrea',liga:'ptag-liga',consultoria:'ptag-consultoria'};
+  const pmap=new Proxy({},{get:(o,k)=>'ptag-'+String(k)});
   document.getElementById('listaIncubacion').innerHTML = incubacion.length
     ? incubacion.map(i=>`
       <div class="proyecto-card incubacion">
@@ -2031,6 +2042,7 @@ function cobrarVenta(id) {
 
 function borrarVenta(id) {
   if(!confirm('¿Borrar esta venta?')) return;
+  sbDelete('ventas',id);
   ventas=ventas.filter(v=>v.id!==id); save(); renderVentas();
 }
 
@@ -2218,6 +2230,7 @@ function cambiarEstadoEq(id, estado) {
 
 function borrarMiembro(id) {
   if(!confirm('¿Eliminar este miembro del equipo?')) return;
+  sbDelete('equipo',id);
   equipo=equipo.filter(x=>x.id!==id); save(); renderEquipo();
 }
 
@@ -2496,6 +2509,117 @@ function mostrarMensaje(msg) {
     if(config[u.usuario]?.comisionPct !== undefined) u.comisionPct = config[u.usuario].comisionPct;
   });
 })();
+</script>
+<style>
+/* Colores por proyecto (añadido oct. 2026) */
+.cal-dia.tiene-eventos::after{display:none!important}
+.cal-puntos{position:absolute;bottom:3px;left:0;right:0;display:flex;justify-content:center;gap:2px;pointer-events:none}
+.cal-puntos i{width:5px;height:5px;border-radius:50%;display:block}
+.evento-item{cursor:pointer}
+.evento-item:hover{background:#1a1a1a}
+.btn-editar-ev{background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--dorado);border-radius:6px;padding:3px 7px;font-size:10px;cursor:pointer;flex-shrink:0}
+.evento-acciones{display:flex;gap:6px;flex-shrink:0}
+</style>
+<script>
+// =====================
+// PROYECTOS Y COLORES (añadido oct. 2026)
+// =====================
+const PROY_AG=[
+  {k:'cdv',nombre:'CDV General',color:'#C9A84C'},
+  {k:'elocrea',nombre:'Elocrea',color:'#4A7ADE'},
+  {k:'zeren',nombre:'Zeren Clinic',color:'#E8C39E'},
+  {k:'lidia',nombre:'Lidia · SAT Inmobiliarias',color:'#F28DB2'},
+  {k:'jbernad',nombre:'José Bernad',color:'#3CC6D8'},
+  {k:'cayfi',nombre:'CAYFI',color:'#F08A3C'},
+  {k:'liga',nombre:'Liga DJ',color:'#B07CFF'},
+  {k:'consultoria',nombre:'Consultoría',color:'#8A8F98'},
+  {k:'incubacion',nombre:'IA / Tech',color:'#D7D7D7'},
+  {k:'personal',nombre:'Personal',color:'#51CF66'},
+  {k:'medico',nombre:'Médico',color:'#FF6B6B'}
+];
+const P_COLOR=Object.fromEntries(PROY_AG.map(p=>[p.k,p.color]));
+function colorProyecto(k){return P_COLOR[k]||'#C9A84C'}
+function hexRgba(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`}
+
+(function estilosProyectos(){
+  let css='';
+  PROY_AG.forEach(({k,color})=>{
+    css+=`.ptag-${k}{background:${hexRgba(color,.15)};color:${color};border:1px solid ${hexRgba(color,.4)};}
+.evento-item.${k}{border-left-color:${color};}
+.evento-item.${k} .evento-hora{color:${color};}
+.proyecto-card.${k}{border-left-color:${color};}
+.proyecto-card.${k} .proyecto-nombre{color:${color};}
+.proyecto-card.${k} .progreso-fill{background:linear-gradient(90deg,${hexRgba(color,.55)},${color});}
+`;});
+  const s=document.createElement('style'); s.textContent=css; document.head.appendChild(s);
+})();
+
+// Nombres para las etiquetas
+PROY_AG.forEach(p=>{ PNOMBRES[p.k]=p.nombre; if(p.k!=='personal'&&p.k!=='medico') PNOMBRES_EQ[p.k]=p.nombre; });
+
+// Desplegables de proyecto con todas las opciones
+(function rellenarDesplegables(){
+  const sinTipos=PROY_AG.filter(p=>p.k!=='personal'&&p.k!=='medico'&&p.k!=='incubacion');
+  const opts=(lista)=>lista.map(p=>`<option value="${p.k}">${p.nombre}</option>`).join('');
+  const poner=(id,html)=>{const s=document.getElementById(id); if(!s) return; const v=s.value; s.innerHTML=html; if([...s.options].some(o=>o.value===v)) s.value=v;};
+  poner('neTipo',opts(PROY_AG.filter(p=>p.k!=='incubacion')));
+  poner('pColor',PROY_AG.filter(p=>p.k!=='personal'&&p.k!=='medico').map(p=>`<option value="${p.k}">${p.k==='incubacion'?'IA / Tech':p.nombre}</option>`).join(''));
+  poner('incProyecto',opts(sinTipos));
+  poner('notaProyecto',opts(sinTipos)+'<option value="personal">Personal</option>');
+  poner('ntProyecto',opts(sinTipos));
+  poner('cronoProyecto',opts(sinTipos)+'<option value="personal">Personal · 0€/h</option>');
+  poner('manProyecto',opts(sinTipos)+'<option value="personal">Personal · 0€/h</option>');
+  const ley=document.getElementById('leyendaCal');
+  if(ley) ley.innerHTML=PROY_AG.filter(p=>p.k!=='incubacion').map(p=>`<div class="leyenda-item"><div class="leyenda-dot" style="background:${p.color}"></div>${p.nombre}</div>`).join('');
+})();
+
+// Citas: tarjeta con editar y borrar
+function eventoHTML(e,conFecha,soloLectura){
+  const hora=conFecha?`${fmtFecha(e.fecha)}<br>${e.hora}`:e.hora;
+  const etiqueta=`<span class="ptag ptag-${e.tipo}" style="margin-left:6px;">${PNOMBRES[e.tipo]||e.tipo}</span>`;
+  return `<div class="evento-item ${e.tipo}" onclick="if(!event.target.closest('button'))editarEvento(${e.id})">
+    <div class="evento-hora">${hora}</div>
+    <div class="evento-info"><div class="evento-titulo">${e.titulo}${etiqueta}</div><div class="evento-desc">${e.desc||''}</div></div>
+    <div class="evento-acciones"><button class="btn-editar-ev" onclick="editarEvento(${e.id})" title="Editar">✏️</button>${soloLectura?'':`<button class="btn-borrar" onclick="borrarEvento(${e.id})" title="Borrar">✕</button>`}</div>
+  </div>`;
+}
+function prepararNuevoEvento(){
+  document.getElementById('neEditId').value='';
+  document.getElementById('neTitulo').textContent='Nuevo Evento';
+  document.getElementById('neBoton').textContent='Añadir Evento';
+  ['neTexto','neDesc','neHora'].forEach(id=>document.getElementById(id).value='');
+}
+function editarEvento(id){
+  const e=eventos.find(x=>x.id===id); if(!e) return;
+  document.getElementById('neEditId').value=e.id;
+  document.getElementById('neTitulo').textContent='Editar Evento';
+  document.getElementById('neBoton').textContent='Guardar cambios';
+  document.getElementById('neTexto').value=e.titulo||'';
+  document.getElementById('neFecha').value=e.fecha||'';
+  document.getElementById('neHora').value=e.hora||'';
+  document.getElementById('neDesc').value=e.desc||'';
+  const tipo=document.getElementById('neTipo'); tipo.value=e.tipo; if(tipo.value!==e.tipo) tipo.value='cdv';
+  const vis=document.getElementById('neVisible'); vis.value=e.visible||'todos'; if(!vis.value) vis.value='todos';
+  document.getElementById('modalEvento').classList.add('open');
+}
+
+// Tarjetas de proyecto nuevas (ids fijos para no duplicar entre dispositivos)
+const PROY_NUEVOS=[
+  {id:900001,nombre:"ZEREN CLINIC",desc:"Dirección comercial a comisión: 30 % de la clínica (15 % closer, 15 % CDV by JCerezo). Propuesta pendiente de firma.",estado:"activo",color:"zeren",progreso:10},
+  {id:900002,nombre:"SAT INMOBILIARIAS DE LUJO · LIDIA",desc:"Dirección comercial del SAT de Lidia. 20 % de cada venta y cuota; closer 9 % (12 % desde la 3.ª venta).",estado:"activo",color:"lidia",progreso:5},
+  {id:900003,nombre:"JOSÉ BERNAD · KOENRAAD",desc:"Comercialización con Koenraad. Comisión 12 %: 7 % CDV by JCerezo, 5 % Koenraad.",estado:"activo",color:"jbernad",progreso:5},
+  {id:900004,nombre:"CAYFI · KOENRAAD",desc:"Comercialización con Koenraad. Comisión 12 %: 7 % CDV by JCerezo, 5 % Koenraad.",estado:"activo",color:"cayfi",progreso:5}
+];
+function asegurarProyectosNuevos(){
+  const faltan=PROY_NUEVOS.filter(n=>!proyectos.some(p=>p.id===n.id));
+  if(!faltan.length) return;
+  proyectos=proyectos.concat(faltan);
+  localStorage.setItem('cdv_proy',JSON.stringify(proyectos));
+  sbUpsert('proyectos',faltan);
+  renderProyectos();
+}
+const _syncOriginal=syncDesdeSupabase;
+syncDesdeSupabase=async function(){ await _syncOriginal(); asegurarProyectosNuevos(); };
 </script>
 </body>
 </html>
