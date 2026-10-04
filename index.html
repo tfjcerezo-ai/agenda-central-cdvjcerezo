@@ -613,22 +613,22 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
   <div id="fin-cdv" style="display:none">
     <div class="stats-grid" id="statsCDV"></div>
     <div class="cal-vistas" style="margin-bottom:14px;flex-wrap:wrap;">
-      <button class="vista-btn active" onclick="navCDV('elocrea',this)">Elocrea</button>
+      <button class="vista-btn active" onclick="navCDV('cdv',this)">CDV by JCerezo</button>
       <button class="vista-btn" onclick="navCDV('liga',this)">Liga DJ</button>
       <button class="vista-btn" onclick="navCDV('consultoria',this)">Consultoría</button>
       <button class="vista-btn" onclick="navCDV('eventos',this)">Eventos</button>
-      <button class="vista-btn" onclick="navCDV('cdv',this)">CDV by JCerezo</button>
       <button class="vista-btn" onclick="navCDV('jbernad',this)">José Bernad</button>
       <button class="vista-btn" onclick="navCDV('cayfi',this)">CAYFI</button>
       <button class="vista-btn" onclick="navCDV('yiux',this)">YIUX</button>
       <button class="vista-btn" onclick="navCDV('zeren',this)">Zeren Clinic</button>
-      <button class="vista-btn" onclick="navCDV('elogistic',this)">Elogistic</button>
-      <button class="vista-btn" onclick="navCDV('deca',this)">DeCA</button>
-      <button class="vista-btn" onclick="navCDV('heru',this)">Heru</button>
+      <button class="vista-btn" onclick="navCDV('kinelia',this)">Kinelia</button>
+      <button class="vista-btn" onclick="navCDV('elogistic',this)">Elocrea/Elogistic</button>
+      <button class="vista-btn" onclick="navCDV('deca',this)">Elocrea/DeCA</button>
+      <button class="vista-btn" onclick="navCDV('heru',this)">Elocrea/HeRU</button>
     </div>
 
     <!-- ELOCREA VENTAS -->
-    <div id="cdv-elocrea">
+    <div id="cdv-elocrea" style="display:none">
       <div class="cal-vistas" style="margin-bottom:12px;">
         <button class="vista-btn active" onclick="navElocrea('ventas',this)">Ventas</button>
         <button class="vista-btn" onclick="navElocrea('comisiones',this)">💰 Comisiones</button>
@@ -666,7 +666,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
     </div>
 
     <!-- CDV by JCerezo VENTAS -->
-    <div id="cdv-cdv" style="display:none">
+    <div id="cdv-cdv">
       <div class="section-title" style="font-size:16px;">Ventas CDV by JCerezo</div>
       <div id="listaCDVProy" style="margin-bottom:10px;"></div>
     </div>
@@ -692,18 +692,23 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
     </div>
     <!-- Elogistic VENTAS -->
     <div id="cdv-elogistic" style="display:none">
-      <div class="section-title" style="font-size:16px;">Ventas Elogistic</div>
+      <div class="section-title" style="font-size:16px;">Ventas Elocrea / Elogistic</div>
       <div id="listaElogistic" style="margin-bottom:10px;"></div>
     </div>
     <!-- DeCA VENTAS -->
     <div id="cdv-deca" style="display:none">
-      <div class="section-title" style="font-size:16px;">Ventas DeCA</div>
+      <div class="section-title" style="font-size:16px;">Ventas Elocrea / DeCA</div>
       <div id="listaDeca" style="margin-bottom:10px;"></div>
     </div>
     <!-- Heru VENTAS -->
     <div id="cdv-heru" style="display:none">
-      <div class="section-title" style="font-size:16px;">Ventas Heru</div>
+      <div class="section-title" style="font-size:16px;">Ventas Elocrea / HeRU</div>
       <div id="listaHeru" style="margin-bottom:10px;"></div>
+    </div>
+    <!-- Kinelia VENTAS -->
+    <div id="cdv-kinelia" style="display:none">
+      <div class="section-title" style="font-size:16px;">Ventas Kinelia</div>
+      <div id="listaKinelia" style="margin-bottom:10px;"></div>
     </div>
 
     <div id="cdv-liga" style="display:none">
@@ -946,7 +951,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 // DATOS
 // =====================
 const TARIFAS = {verde:40,azul:90,rojo:150,cero:0};
-const PNOMBRES = {elocrea:'Elocrea',liga:'Liga DJ',cdv:'CDV by JCerezo',consultoria:'Consultoría',personal:'Personal',jbernad:'José Bernad',cayfi:'CAYFI',yiux:'YIUX',zeren:'Zeren Clinic',elogistic:'Elogistic',deca:'DeCA',heru:'Heru'};
+const PNOMBRES = {elocrea:'Elocrea',liga:'Liga DJ',cdv:'CDV by JCerezo',consultoria:'Consultoría',personal:'Personal',jbernad:'José Bernad',cayfi:'CAYFI',yiux:'YIUX',zeren:'Zeren Clinic',elogistic:'Elogistic',deca:'DeCA',heru:'Heru',kinelia:'Kinelia'};
 const SNOMBRES = {'0':'Sesión 0 — Siroco','1':'Sesión 1 — Epoka','2':'Sesión 2 — Hangar48','3':'Sesión 3 — Varvi','4':'Sesión 4 — 27 Jun','general':'General'};
 
 const T0 = [
@@ -2155,7 +2160,7 @@ function navFin(id, btn) {
 }
 
 function navCDV(id, btn) {
-  const todos = ['elocrea','liga','consultoria','eventos','cdv','jbernad','cayfi','yiux','zeren','elogistic','deca','heru'];
+  const todos = ['elocrea','liga','consultoria','eventos','cdv','jbernad','cayfi','yiux','zeren','elogistic','deca','heru','kinelia'];
   todos.forEach(s => document.getElementById('cdv-'+s).style.display = s===id?'block':'none');
   document.querySelectorAll('#fin-cdv .cal-vistas .vista-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
@@ -2168,6 +2173,7 @@ function navCDV(id, btn) {
     elogistic: {fn:'renderVentasProyecto', args:['elogistic','listaElogistic']},
     deca: {fn:'renderVentasProyecto', args:['deca','listaDeca']},
     heru: {fn:'renderVentasProyecto', args:['heru','listaHeru']},
+    kinelia: {fn:'renderVentasProyecto', args:['kinelia','listaKinelia']},
   };
   if(proyMap[id]) renderVentasProyecto(...proyMap[id].args);
 }
@@ -2570,7 +2576,7 @@ function getActivoSettersOptions() {
 
 // PROYECTOS con comisiones
 const PROYECTOS_COMERCIALES = [
-  {nombre:'Elogictic',estado:'Activo',comCloser:8,comSetter:2,comCDV:5},
+  {nombre:'Elogistic',estado:'Activo',comCloser:8,comSetter:2,comCDV:5},
   {nombre:'DeCA',estado:'Activo',comCloser:15,comSetter:0,comCDV:10},
   {nombre:'Heru',estado:'Sin ventas',comCloser:15,comSetter:0,comCDV:10},
   {nombre:'Kinelia',estado:'Sin arrancar',comCloser:15,comSetter:0,comCDV:10},
