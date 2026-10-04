@@ -2012,7 +2012,31 @@ function renderIncubacion() {
 // =====================
 let finPersonal = JSON.parse(localStorage.getItem('cdv_fp')) || [];
 let finFamiliar = JSON.parse(localStorage.getItem('cdv_ff')) || [];
-let ventas = JSON.parse(localStorage.getItem('cdv_v')) || [];
+const VENTAS0 = [
+  // ELOGISTIC
+  {id:1001,cliente:'Grupo Logístico Albacete',proyecto:'Elogistic',importe:9300,closer:'Juan Antonio',setter:'Juan Antonio',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:465,com_closer:744,com_setter:186,com_jr:0},
+  {id:1002,cliente:'Cirac Logística',proyecto:'Elogistic',importe:19500,closer:'Juan Antonio',setter:'Koenraad',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:975,com_closer:1560,com_setter:390,com_jr:0},
+  {id:1003,cliente:'Transportes Aurelio Abellán',proyecto:'Elogistic',importe:14500,closer:'Juan Antonio',setter:'Juan Antonio',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:725,com_closer:1160,com_setter:290,com_jr:0},
+  {id:1004,cliente:'Grupo López Hortelano',proyecto:'Elogistic',importe:8648,closer:'Juan Antonio',setter:'Paula',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:432,com_closer:692,com_setter:173,com_jr:0},
+  {id:1005,cliente:'Transportes Santiago Jiménez e Hijos S.L.',proyecto:'Elogistic',importe:17800,closer:'Juan Antonio',setter:'Juan Antonio',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:0,com_closer:1424,com_setter:356,com_jr:0},
+  // DeCA — pago único
+  {id:1006,cliente:'Hormigones Zenit S.L.',proyecto:'DeCA',importe:1950,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:488,com_closer:488,com_setter:0,com_jr:0},
+  {id:1007,cliente:'Transmaba S.L.',proyecto:'DeCA',importe:1950,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:488,com_closer:488,com_setter:0,com_jr:0},
+  {id:1008,cliente:'Transportes Cavero Caballero S.L.',proyecto:'DeCA',importe:1950,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:488,com_closer:488,com_setter:0,com_jr:0},
+  {id:1009,cliente:'Enrique Riaño',proyecto:'DeCA',importe:1852,closer:'Koenraad',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:463,com_closer:185,com_setter:0,com_jr:0},
+  // DeCA — mensual (cuota 95€/mes, 1 cuota liquidada)
+  {id:1010,cliente:'Garrido Mora 2007 S.L.',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:24,com_closer:24,com_setter:0,com_jr:0},
+  {id:1011,cliente:'Hermanos Serrano Muñoz',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:24,com_closer:24,com_setter:0,com_jr:0},
+  {id:1012,cliente:'Trading Sureste',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:24,com_closer:24,com_setter:0,com_jr:0},
+  {id:1013,cliente:'Transporte Varea',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:24,com_closer:24,com_setter:0,com_jr:0},
+  {id:1014,cliente:'Manuel Garrido Fernández (hermano)',proyecto:'DeCA',importe:45,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:11,com_closer:11,com_setter:0,com_jr:0},
+  {id:1015,cliente:'De Pepillo a Miguel',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:24,com_closer:24,com_setter:0,com_jr:0},
+  {id:1016,cliente:'Hijos de Isaías Abad S.L.',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:24,com_closer:24,com_setter:0,com_jr:0},
+  {id:1017,cliente:'P.valiente2012s.l',proyecto:'DeCA',importe:95,closer:'Juan Antonio',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:10,com_closer:10,com_setter:14,com_jr:0},
+  {id:1018,cliente:'Hermanos Rodríguez Parrilla',proyecto:'DeCA',importe:95,closer:'Juan Antonio',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:10,com_closer:10,com_setter:14,com_jr:0},
+  {id:1019,cliente:'La Salud Productos',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:24,com_closer:24,com_setter:0,com_jr:0},
+];
+let ventas = JSON.parse(localStorage.getItem('cdv_v')) || VENTAS0;
 
 function navElocrea(id, btn) {
   document.getElementById('el-ventas').style.display = id==='ventas'?'block':'none';
