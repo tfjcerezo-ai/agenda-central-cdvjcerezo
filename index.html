@@ -1149,11 +1149,25 @@ let cronoActivo = false;
 // =====================
 // LOGIN Y USUARIOS
 // =====================
-const USUARIOS = [
+const USUARIOS_BASE = [
   {usuario:'javier',nombre:'Javier Cerezo Martínez',rol:'director',pass:'cdv2026',nombreEquipo:'Javier',comisionPct:5},
   {usuario:'javierjr',nombre:'Javier Cerezo Jr.',rol:'asistente',pass:'jcjr2026',nombreEquipo:'Javier Cerezo Jr.',comisionPct:0},
   {usuario:'paula',nombre:'Paula',rol:'comercial',pass:'paula2026',nombreEquipo:'Paula',comisionPct:8},
 ];
+// USUARIOS carga desde localStorage para que crear/eliminar persista entre recargas
+function cargarUsuarios() {
+  const guardado = localStorage.getItem('cdv_usuarios');
+  if(guardado) {
+    try { return JSON.parse(guardado); } catch(e) {}
+  }
+  // Primera vez: guardar la lista base en localStorage
+  localStorage.setItem('cdv_usuarios', JSON.stringify(USUARIOS_BASE));
+  return USUARIOS_BASE.map(u => ({...u}));
+}
+function guardarUsuarios() {
+  localStorage.setItem('cdv_usuarios', JSON.stringify(USUARIOS));
+}
+const USUARIOS = cargarUsuarios();
 
 // Pestañas disponibles en la app
 const TODAS_LAS_TABS = ['hoy','tareas','proyectos','calendario','notas','tiempo','finanzas','comisiones','equipo','ajustes'];
@@ -3033,6 +3047,7 @@ function eliminarUsuario(usuarioId) {
       const idx = USUARIOS.findIndex(u => u.usuario === usuarioId);
       if(idx === -1) return;
       USUARIOS.splice(idx, 1);
+      guardarUsuarios();
       localStorage.removeItem('cdv_permisos_' + usuarioId);
       const config = JSON.parse(localStorage.getItem('cdv_userconfig') || '{}');
       delete config[usuarioId];
@@ -3115,6 +3130,7 @@ function guardarConfigUsuario(usuarioId) {
   if(!user) return;
   const nuevaCom = parseFloat(document.getElementById('com_'+usuarioId)?.value) || 0;
   user.comisionPct = nuevaCom;
+  guardarUsuarios();
   // Guardar config extendida en localStorage
   const config = JSON.parse(localStorage.getItem('cdv_userconfig') || '{}');
   config[usuarioId] = { comisionPct: nuevaCom };
@@ -3136,6 +3152,7 @@ function crearNuevoUsuario() {
   if(USUARIOS.find(u => u.usuario === usuario)) { alert('Ese nombre de usuario ya existe'); return; }
   const nuevoUser = {usuario, nombre, rol, pass, nombreEquipo: nombre.split(' ')[0], comisionPct: 0};
   USUARIOS.push(nuevoUser);
+  guardarUsuarios();
   // Guardar pass en localStorage
   const passes = JSON.parse(localStorage.getItem('cdv_passes') || '{}');
   passes[usuario] = pass;
