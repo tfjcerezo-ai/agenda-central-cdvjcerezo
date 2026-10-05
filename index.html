@@ -872,6 +872,22 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
     <button onclick="resetearVentas()" style="width:100%;padding:13px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:10px;color:var(--dorado);font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;margin-bottom:10px;">🔄 CARGAR VENTAS INICIALES (19 CLIENTES)</button>
     <div style="font-size:10px;color:var(--gris);text-align:center;margin-top:-6px;margin-bottom:10px;">Solo si no hay ventas cargadas</div>
   </div>
+
+  <!-- SINCRONIZACIÓN Y NUBE -->
+  <div id="panelSincronizacion" style="display:none;margin-top:16px;background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:16px;">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">☁️ Sincronización con la nube</div>
+    <div id="estadoNube" style="font-size:12px;color:var(--gris);margin-bottom:12px;padding:10px;background:var(--negro);border-radius:8px;">Haz clic en "Diagnosticar" para verificar la conexión</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button onclick="ejecutarDiagnostico()" style="flex:1;min-width:120px;padding:11px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:10px;color:var(--dorado);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">🔍 DIAGNOSTICAR</button>
+      <button onclick="forzarSyncCompleto()" style="flex:1;min-width:120px;padding:11px;background:rgba(81,207,102,0.1);border:1px solid rgba(81,207,102,0.3);border-radius:10px;color:var(--verde);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">⬆️ SUBIR TODO</button>
+      <button onclick="syncDesdeSupabase()" style="flex:1;min-width:120px;padding:11px;background:rgba(99,179,237,0.1);border:1px solid rgba(99,179,237,0.3);border-radius:10px;color:#63b3ed;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">⬇️ BAJAR TODO</button>
+    </div>
+    <div style="font-size:10px;color:var(--gris);margin-top:10px;line-height:1.4;">
+      <b>SUBIR TODO</b> envía los datos actuales del dispositivo a la nube.<br>
+      <b>BAJAR TODO</b> descarga los datos de la nube al dispositivo.<br>
+      Usa "SUBIR TODO" si acabas de editar y quieres asegurar que se guarda.
+    </div>
+  </div>
 </div>
 
 </div><!-- /content -->
@@ -1022,20 +1038,48 @@ async function sbGet(tabla) {
     const r = await fetch(`${SB_URL}/rest/v1/${tabla}?select=*&order=id.desc`, {
       headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' }
     });
-    if(!r.ok) return null;
-    return await r.json();
-  } catch(e) { return null; }
+    if(!r.ok) {
+      console.warn(`[Supabase] sbGet(${tabla}) error ${r.status}: ${r.statusText}`);
+      return null;
+    }
+    const datos = await r.json();
+    return datos;
+  } catch(e) {
+    console.warn(`[Supabase] sbGet(${tabla}) excepción:`, e.message);
+    return null;
+  }
 }
 
 async function sbUpsert(tabla, data) {
   try {
+    const arr = Array.isArray(data) ? data : [data];
+    if(!arr.length) return true; // nada que enviar
     const r = await fetch(`${SB_URL}/rest/v1/${tabla}`, {
       method: 'POST',
       headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
-      body: JSON.stringify(Array.isArray(data) ? data : [data])
+      body: JSON.stringify(arr)
     });
+    if(!r.ok) {
+      console.warn(`[Supabase] sbUpsert(${tabla}) error ${r.status}:`, await r.text().catch(()=>''));
+    }
     return r.ok;
-  } catch(e) { return false; }
+  } catch(e) {
+    console.warn(`[Supabase] sbUpsert(${tabla}) excepción:`, e.message);
+    return false;
+  }
+}
+
+async function diagnosticarSupabase() {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/ventas?select=id&limit=1`, {
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' }
+    });
+    const texto = await r.text();
+    if(r.ok) return { ok: true, msg: `Conexión OK (status ${r.status})` };
+    return { ok: false, msg: `Error ${r.status}: ${texto}` };
+  } catch(e) {
+    return { ok: false, msg: `Sin red: ${e.message}` };
+  }
 }
 
 async function sbDelete(tabla, id) {
@@ -1079,12 +1123,15 @@ async function syncDesdeSupabase() {
       sbGet('mov_liga'), sbGet('proyectos'), sbGet('incubacion'),
       sbGet('fin_personal'), sbGet('fin_familiar'), sbGet('ventas'), sbGet('equipo')
     ]);
-    if(t&&t.length) { tareas=t; localStorage.setItem('cdv_t',JSON.stringify(t)); }
-    if(e&&e.length) { eventos=e; localStorage.setItem('cdv_e',JSON.stringify(e)); }
-    if(n&&n.length) { notas=n; localStorage.setItem('cdv_n',JSON.stringify(n)); }
-    if(r&&r.length) { registros=r; localStorage.setItem('cdv_r',JSON.stringify(r)); }
-    if(l&&l.length) { movLiga=l; localStorage.setItem('cdv_l',JSON.stringify(l)); }
-    if(p&&p.length) {
+    let hayDatos = false;
+    // Solo sobreescribir si Supabase devolvió datos válidos (array con elementos)
+    if(Array.isArray(t)&&t.length) { tareas=t; localStorage.setItem('cdv_t',JSON.stringify(t)); hayDatos=true; }
+    if(Array.isArray(e)&&e.length) { eventos=e; localStorage.setItem('cdv_e',JSON.stringify(e)); hayDatos=true; }
+    if(Array.isArray(n)&&n.length) { notas=n; localStorage.setItem('cdv_n',JSON.stringify(n)); hayDatos=true; }
+    if(Array.isArray(r)&&r.length) { registros=r; localStorage.setItem('cdv_r',JSON.stringify(r)); hayDatos=true; }
+    if(Array.isArray(l)&&l.length) { movLiga=l; localStorage.setItem('cdv_l',JSON.stringify(l)); hayDatos=true; }
+    if(Array.isArray(p)&&p.length) {
+      hayDatos=true;
       // Respetar orden del usuario al recargar desde Supabase
       const orden = JSON.parse(localStorage.getItem('cdv_proy_orden') || 'null');
       if(orden && orden.length) {
@@ -1097,21 +1144,33 @@ async function syncDesdeSupabase() {
       }
       localStorage.setItem('cdv_proy',JSON.stringify(proyectos));
     }
-    if(inc&&inc.length) { incubacion=inc; localStorage.setItem('cdv_inc',JSON.stringify(inc)); }
-    if(fp&&fp.length) { finPersonal=fp; localStorage.setItem('cdv_fp',JSON.stringify(fp)); }
-    if(ff&&ff.length) { finFamiliar=ff; localStorage.setItem('cdv_ff',JSON.stringify(ff)); }
-    if(v&&v.length) { ventas=v; localStorage.setItem('cdv_v',JSON.stringify(v)); }
-    if(eq&&eq.length) { equipo=eq; localStorage.setItem('cdv_eq',JSON.stringify(eq)); }
+    if(Array.isArray(inc)&&inc.length) { incubacion=inc; localStorage.setItem('cdv_inc',JSON.stringify(inc)); hayDatos=true; }
+    if(Array.isArray(fp)&&fp.length) { finPersonal=fp; localStorage.setItem('cdv_fp',JSON.stringify(fp)); hayDatos=true; }
+    if(Array.isArray(ff)&&ff.length) { finFamiliar=ff; localStorage.setItem('cdv_ff',JSON.stringify(ff)); hayDatos=true; }
+    if(Array.isArray(v)&&v.length) { ventas=v; localStorage.setItem('cdv_v',JSON.stringify(v)); hayDatos=true; }
+    if(Array.isArray(eq)&&eq.length) { equipo=eq; localStorage.setItem('cdv_eq',JSON.stringify(eq)); hayDatos=true; }
     renderHoy(); renderTareas('todas'); renderProyectos(); renderCal(); renderNotas(); renderRegistros(); renderLiga(); renderIncubacion(); renderEquipo(); renderVentas(); renderMisComisiones();
-    mostrarSyncStatus('✅ Sincronizado');
+    if(hayDatos) {
+      mostrarSyncStatus('✅ Sincronizado desde nube');
+    } else {
+      // Supabase respondió pero sin datos — puede ser tablas vacías o RLS bloqueando
+      console.warn('[Supabase] Respuestas vacías. Comprueba RLS y permisos de la tabla.');
+      mostrarSyncStatus('⚠️ Nube sin datos — usando local');
+      // Si hay datos en memoria, los subimos para llenar Supabase
+      if(ventas.length||tareas.length||eventos.length) {
+        console.log('[Supabase] Subiendo datos locales a la nube...');
+        syncASupabase();
+      }
+    }
   } catch(e) {
+    console.warn('[Supabase] Error en syncDesdeSupabase:', e.message);
     mostrarSyncStatus('⚠️ Sin conexión — datos locales');
   }
 }
 
 async function syncASupabase() {
   try {
-    await Promise.all([
+    const resultados = await Promise.all([
       sbUpsert('tareas', tareas),
       sbUpsert('eventos', eventos),
       sbUpsert('notas', notas),
@@ -1124,9 +1183,52 @@ async function syncASupabase() {
       sbUpsert('ventas', ventas),
       sbUpsert('equipo', equipo),
     ]);
-    mostrarSyncStatus('✅ Guardado en la nube');
+    const alguno = resultados.some(r=>r);
+    if(alguno) {
+      mostrarSyncStatus('✅ Guardado en la nube');
+    } else {
+      mostrarSyncStatus('⚠️ Sin conexión — solo guardado local');
+    }
+    return alguno;
   } catch(e) {
     mostrarSyncStatus('⚠️ Guardado local');
+    return false;
+  }
+}
+
+async function forzarSyncCompleto() {
+  const el = document.getElementById('estadoNube');
+  if(el) el.textContent = '⬆️ Subiendo todos los datos a la nube...';
+  mostrarSyncStatus('⬆️ Subiendo a la nube...');
+  const ok = await syncASupabase();
+  if(el) {
+    if(ok) {
+      el.innerHTML = '<span style="color:var(--verde)">✅ Datos subidos correctamente a la nube.</span><br><span style="font-size:11px;color:var(--gris)">Ahora tus datos están seguros y disponibles en cualquier dispositivo.</span>';
+    } else {
+      el.innerHTML = '<span style="color:var(--rojo,#e53e3e)">❌ No se pudo subir a la nube. Comprueba tu conexión a internet.</span>';
+    }
+  }
+}
+
+async function ejecutarDiagnostico() {
+  const el = document.getElementById('estadoNube');
+  if(el) el.textContent = '🔍 Diagnosticando conexión con Supabase...';
+  const diag = await diagnosticarSupabase();
+  // Contar datos en memoria
+  const resumen = [
+    `Tareas: ${tareas.length}`,
+    `Ventas: ${ventas.length}`,
+    `Eventos: ${eventos.length}`,
+    `Registros: ${registros.length}`,
+    `Equipo: ${equipo.length}`,
+    `Notas: ${notas.length}`,
+  ].join(' · ');
+  if(el) {
+    if(diag.ok) {
+      el.innerHTML = `<span style="color:var(--verde)">✅ Conexión a la nube: OK</span><br><span style="font-size:11px;color:var(--gris)">${diag.msg}</span><br><br><span style="font-size:11px;color:var(--dorado)">Datos en este dispositivo:</span><br><span style="font-size:11px;color:var(--gris)">${resumen}</span><br><br><span style="font-size:11px;color:var(--gris)">Si los datos son correctos, haz clic en <b style="color:var(--verde)">SUBIR TODO</b> para asegurarlos en la nube.</span>`;
+    } else {
+      el.innerHTML = `<span style="color:var(--rojo,#e53e3e)">❌ Error de conexión con la nube</span><br><span style="font-size:11px;color:var(--gris)">${diag.msg}</span><br><br><span style="font-size:11px;color:var(--gris)">Comprueba que tienes internet. Si el problema persiste, puede ser un problema con las credenciales de Supabase (RLS o clave de API).</span>`;
+    }
   }
 }
 
@@ -1226,6 +1328,8 @@ function aplicarPermisos() {
   }
   const panelHerr = document.getElementById('panelHerramientasDirector');
   if(panelHerr) panelHerr.style.display = rol === 'director' ? 'block' : 'none';
+  const panelSync = document.getElementById('panelSincronizacion');
+  if(panelSync) panelSync.style.display = rol === 'director' ? 'block' : 'none';
   // Mostrar/ocultar pestañas nav
   document.querySelectorAll('.nav-btn').forEach(btn => {
     const onclick = btn.getAttribute('onclick') || '';
