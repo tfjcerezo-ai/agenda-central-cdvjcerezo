@@ -221,6 +221,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 ::-webkit-scrollbar-track{background:var(--negro);}
 ::-webkit-scrollbar-thumb{background:var(--negro-borde);border-radius:2px;}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -233,9 +234,10 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
       <div style="font-size:11px;color:var(--gris);letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Agenda Central</div>
     </div>
     <div id="loginError" style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:var(--rojo);display:none;text-align:center;">Usuario o contraseña incorrectos</div>
-    <div class="form-group"><label class="form-label">Usuario</label><input type="text" class="form-input" id="loginUser" placeholder="Tu usuario" autocomplete="username"></div>
+    <div class="form-group"><label class="form-label">Correo</label><input type="email" class="form-input" id="loginUser" placeholder="javier@cdvbyjcerezo.com" autocomplete="username"></div>
     <div class="form-group"><label class="form-label">Contraseña</label><input type="password" class="form-input" id="loginPass" placeholder="Tu contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn-primary" onclick="doLogin()" id="btnLogin">Entrar</button>
+    <div style="text-align:center;margin-top:12px;font-size:11px;color:var(--gris);"><a href="/crm/" style="color:var(--dorado);">¿Has olvidado la contraseña?</a> · Es la misma cuenta que el CRM</div>
     <div style="text-align:center;margin-top:16px;font-size:10px;color:var(--negro-borde);">© 2026 CDV by JCerezo · Desarrollado por JCerezo</div>
   </div>
 </div>
@@ -405,8 +407,6 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
     <select class="form-select" id="calUsuarioFiltro" onchange="renderCal()" style="font-size:11px;">
       <option value="todos">👥 Ver todos</option>
       <option value="javier">Solo Javier</option>
-      <option value="javierjr">Solo Javier Jr.</option>
-      <option value="paula">Solo Paula</option>
     </select>
   </div>
   <div class="cal-vistas">
@@ -831,8 +831,6 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
     <div class="form-group"><label class="form-label">Usuario</label>
       <select class="form-select" id="ajUsuario">
         <option value="javier">Javier Cerezo Martínez (Director)</option>
-        <option value="javierjr">Javier Cerezo Jr. (Asistente)</option>
-        <option value="paula">Paula (Comercial)</option>
       </select></div>
     <div class="form-group"><label class="form-label">Nueva contraseña</label><input type="password" class="form-input" id="ajPass1" placeholder="Nueva contraseña"></div>
     <div class="form-group"><label class="form-label">Repetir contraseña</label><input type="password" class="form-input" id="ajPass2" placeholder="Repite la contraseña"></div>
@@ -846,14 +844,6 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--negro);border-radius:8px;">
         <div><div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">Javier Cerezo Martínez</div><div style="font-size:10px;color:var(--gris);">@javier · 👑 Director</div></div>
-        <span style="font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(81,207,102,0.15);color:var(--verde);">ACTIVO</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--negro);border-radius:8px;">
-        <div><div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">Javier Cerezo Jr.</div><div style="font-size:10px;color:var(--gris);">@javierjr · 🤝 Asistente</div></div>
-        <span style="font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(81,207,102,0.15);color:var(--verde);">ACTIVO</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--negro);border-radius:8px;">
-        <div><div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">Paula</div><div style="font-size:10px;color:var(--gris);">@paula · 💼 Comercial</div></div>
         <span style="font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(81,207,102,0.15);color:var(--verde);">ACTIVO</span>
       </div>
     </div>
@@ -914,8 +904,6 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
     <div class="form-group" id="asignadoGroup"><label class="form-label">Asignar a</label>
       <div id="ntAsignadoChk" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;">
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" name="asignado_chk" value="javier" style="accent-color:var(--dorado)" checked> Javier</label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" name="asignado_chk" value="javierjr" style="accent-color:var(--dorado)"> Javier Jr.</label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" name="asignado_chk" value="paula" style="accent-color:var(--dorado)"> Paula</label>
       </div>
       <input type="hidden" id="ntAsignado" value="javier">
     </div>
@@ -949,8 +937,6 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
       <select class="form-select" id="neVisible">
         <option value="todos">👥 Todos</option>
         <option value="javier">Solo Javier</option>
-        <option value="javierjr">Solo Javier Jr.</option>
-        <option value="paula">Solo Paula</option>
       </select></div>
     <div class="form-group"><label class="form-label">Tipo</label>
       <select class="form-select" id="neTipo">
@@ -1034,11 +1020,18 @@ let movLiga = JSON.parse(localStorage.getItem('cdv_l')) || [];
 // =====================
 const SB_URL = 'https://ommgkliegjhmwstitsrr.supabase.co';
 const SB_KEY = 'sb_publishable_85KwgAGAHwC1RGeW-nXYFA_gsB0c4qW';
+// Sesión real de Supabase: los datos solo se leen/escriben con la sesión del director
+const sbAuth = (window.supabase && window.supabase.createClient) ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+async function sbToken() {
+  try { const {data:{session}} = await sbAuth.auth.getSession(); return session ? session.access_token : SB_KEY; }
+  catch(e) { return SB_KEY; }
+}
+async function sbHeaders(extra) { return {'apikey': SB_KEY, 'Authorization': `Bearer ${await sbToken()}`, ...(extra||{})}; }
 
 async function sbGet(tabla) {
   try {
     const r = await fetch(`${SB_URL}/rest/v1/${tabla}?select=*&order=id.desc`, {
-      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' }
+      headers: await sbHeaders({ 'Content-Type': 'application/json' })
     });
     if(!r.ok) {
       console.warn(`[Supabase] sbGet(${tabla}) error ${r.status}: ${r.statusText}`);
@@ -1058,7 +1051,7 @@ async function sbUpsert(tabla, data) {
     if(!arr.length) return true; // nada que enviar
     const r = await fetch(`${SB_URL}/rest/v1/${tabla}`, {
       method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+      headers: await sbHeaders({ 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' }),
       body: JSON.stringify(arr)
     });
     if(!r.ok) {
@@ -1074,7 +1067,7 @@ async function sbUpsert(tabla, data) {
 async function diagnosticarSupabase() {
   try {
     const r = await fetch(`${SB_URL}/rest/v1/ventas?select=id&limit=1`, {
-      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' }
+      headers: await sbHeaders({ 'Content-Type': 'application/json' })
     });
     const texto = await r.text();
     if(r.ok) return { ok: true, msg: `Conexión OK (status ${r.status})` };
@@ -1088,7 +1081,7 @@ async function sbDelete(tabla, id) {
   try {
     const r = await fetch(`${SB_URL}/rest/v1/${tabla}?id=eq.${id}`, {
       method: 'DELETE',
-      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+      headers: await sbHeaders()
     });
     return r.ok;
   } catch(e) { return false; }
@@ -1111,7 +1104,7 @@ async function crearTablas() {
   for(const sql of tablas) {
     await fetch(`${SB_URL}/rest/v1/rpc/ejecutar_sql`, {
       method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+      headers: await sbHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ query: sql })
     });
   }
@@ -1254,12 +1247,14 @@ let cronoActivo = false;
 // LOGIN Y USUARIOS
 // =====================
 const USUARIOS_BASE = [
-  {usuario:'javier',nombre:'Javier Cerezo Martínez',rol:'director',pass:'cdv2026',nombreEquipo:'Javier',comisionPct:5},
-  {usuario:'javierjr',nombre:'Javier Cerezo Jr.',rol:'asistente',pass:'jcjr2026',nombreEquipo:'Javier Cerezo Jr.',comisionPct:0},
-  {usuario:'paula',nombre:'Paula',rol:'comercial',pass:'paula2026',nombreEquipo:'Paula',comisionPct:8},
+  {usuario:'javier',nombre:'Javier Cerezo Martínez',rol:'director',nombreEquipo:'Javier',comisionPct:5},
 ];
 // USUARIOS carga desde localStorage para que crear/eliminar persista entre recargas
 function cargarUsuarios() {
+  // Acceso real con Supabase: Agenda Central es solo para el director. Se limpian usuarios y contraseñas antiguas del dispositivo.
+  try { localStorage.removeItem('cdv_passes'); localStorage.removeItem('cdv_permisos_javierjr'); localStorage.removeItem('cdv_permisos_paula'); } catch(e) {}
+  localStorage.setItem('cdv_usuarios', JSON.stringify(USUARIOS_BASE));
+  return USUARIOS_BASE.map(u => ({...u}));
   const guardado = localStorage.getItem('cdv_usuarios');
   if(guardado) {
     try { return JSON.parse(guardado); } catch(e) {}
@@ -1347,27 +1342,52 @@ function aplicarPermisos() {
   });
 }
 
-function doLogin() {
-  const u = document.getElementById('loginUser').value.trim().toLowerCase();
-  const p = document.getElementById('loginPass').value;
-  const btn = document.getElementById('btnLogin');
-  btn.textContent = 'Entrando...';
-  const passes = JSON.parse(localStorage.getItem('cdv_passes')) || {};
-  const user = USUARIOS.find(x => x.usuario===u && (passes[x.usuario]||x.pass)===p);
-  if(user) {
-    usuarioActual = user;
-    localStorage.setItem('cdv_session', JSON.stringify({usuario:user.usuario,nombre:user.nombre,rol:user.rol}));
-    document.getElementById('userNombre').textContent=user.nombre;
-    document.getElementById('userRol').textContent=user.rol==='director'?'👑 Director':user.rol==='asistente'?'🤝 Asistente':'💼 Comercial';
-    mostrarApp();
-    iniciarApp();
-  } else {
-    document.getElementById('loginError').style.display='block';
-    btn.textContent='Entrar';
+async function activarSesion() {
+  // Comprueba que la cuenta conectada es la del director y abre la app
+  if(!sbAuth) return 'sinlib';
+  const {data:{session}} = await sbAuth.auth.getSession();
+  if(!session) return 'nosesion';
+  let perfil = null;
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/crm_perfiles?select=nombre,rol,activo&id=eq.${session.user.id}`, {headers: await sbHeaders()});
+    if(r.ok) perfil = (await r.json())[0] || null;
+    else throw new Error('HTTP ' + r.status);
+  } catch(e) {
+    // Sin conexión: se permite seguir con la última sesión válida guardada en este dispositivo
+    const cache = JSON.parse(localStorage.getItem('cdv_session') || 'null');
+    if(cache && cache.rol === 'director' && cache.uid === session.user.id) perfil = {nombre: cache.nombre, rol: 'director', activo: true};
   }
+  if(!perfil || perfil.rol !== 'director' || !perfil.activo) { await sbAuth.auth.signOut(); return 'noacceso'; }
+  const user = {...USUARIOS_BASE[0], nombre: perfil.nombre || USUARIOS_BASE[0].nombre};
+  usuarioActual = user;
+  localStorage.setItem('cdv_session', JSON.stringify({usuario:user.usuario,nombre:user.nombre,rol:user.rol,uid:session.user.id}));
+  document.getElementById('userNombre').textContent = user.nombre;
+  document.getElementById('userRol').textContent = '👑 Director';
+  mostrarApp();
+  iniciarApp();
+  cargarReunionesCRM();
+  return 'ok';
 }
 
-function cerrarSesion() {
+async function doLogin() {
+  const email = document.getElementById('loginUser').value.trim().toLowerCase();
+  const p = document.getElementById('loginPass').value;
+  const btn = document.getElementById('btnLogin');
+  const err = document.getElementById('loginError');
+  const mostrarError = (t) => { err.textContent = t; err.style.display = 'block'; btn.textContent = 'Entrar'; };
+  if(!email || !p) return mostrarError('Escribe tu correo y tu contraseña');
+  if(!sbAuth) return mostrarError('Sin conexión: no se puede iniciar sesión ahora');
+  btn.textContent = 'Entrando...';
+  const {error} = await sbAuth.auth.signInWithPassword({email, password: p});
+  if(error) return mostrarError(error.message === 'Email not confirmed' ? 'Confirma tu correo: revisa tu bandeja de entrada' : 'Correo o contraseña incorrectos');
+  const r = await activarSesion();
+  if(r === 'noacceso') return mostrarError('Esta cuenta no tiene acceso a Agenda Central');
+  if(r !== 'ok') return mostrarError('No se pudo iniciar sesión');
+  err.style.display = 'none'; btn.textContent = 'Entrar';
+}
+
+async function cerrarSesion() {
+  try { if(sbAuth) await sbAuth.auth.signOut(); } catch(e) {}
   localStorage.removeItem('cdv_session');
   usuarioActual = null;
   const main = document.getElementById('mainApp');
@@ -1380,22 +1400,24 @@ function cerrarSesion() {
   document.getElementById('loginError').style.display = 'none';
 }
 
-function checkSesion() {
-  const s = localStorage.getItem('cdv_session');
-  if(s) {
-    try {
-      const session = JSON.parse(s);
-      const user = USUARIOS.find(x => x.usuario === session.usuario);
-      if(user) {
-        usuarioActual = user;
-        mostrarApp();
-        document.getElementById('userNombre').textContent = user.nombre;
-        document.getElementById('userRol').textContent = user.rol==='director'?'👑 Director':user.rol==='asistente'?'🤝 Asistente':'💼 Comercial';
-        return true;
-      }
-    } catch(e) {}
-  }
-  return false;
+// Reuniones del equipo (CRM) en el calendario de la agenda: solo lectura
+let reunionesCRM = [];
+async function cargarReunionesCRM() {
+  try {
+    const desde = new Date(Date.now() - 60 * 864e5).toISOString();
+    const [rr, rp] = await Promise.all([
+      fetch(`${SB_URL}/rest/v1/crm_reuniones?select=*&estado=neq.cancelada&inicio=gte.${encodeURIComponent(desde)}&order=inicio`, {headers: await sbHeaders()}),
+      fetch(`${SB_URL}/rest/v1/crm_perfiles?select=id,nombre`, {headers: await sbHeaders()})
+    ]);
+    if(!rr.ok || !rp.ok) return;
+    const [rs, ps] = [await rr.json(), await rp.json()];
+    const nombre = (id) => (ps.find(p => p.id === id) || {}).nombre || 'Equipo';
+    const dos = (n) => String(n).padStart(2, '0');
+    reunionesCRM = rs.map(r => { const d = new Date(r.inicio), f = new Date(r.fin);
+      return {id: 'crm' + r.id, crm: true, fecha: `${d.getFullYear()}-${dos(d.getMonth()+1)}-${dos(d.getDate())}`, hora: `${dos(d.getHours())}:${dos(d.getMinutes())}`,
+        titulo: `${r.titulo} · ${nombre(r.responsable_id)}`, desc: `CRM · ${dos(d.getHours())}:${dos(d.getMinutes())}–${dos(f.getHours())}:${dos(f.getMinutes())}${r.lugar ? ' · ' + r.lugar : ''}`, tipo: 'crm', visible: 'todos'}; });
+    renderCal(); renderHoy();
+  } catch(e) { console.warn('[CRM] reuniones no disponibles', e.message); }
 }
 
 function iniciarApp() {
@@ -1415,12 +1437,10 @@ function iniciarApp() {
   renderHoy(); renderTareas('todas'); renderProyectos(); renderCal(); renderNotas(); renderRegistros(); renderLiga(); renderIncubacion(); renderEquipo(); renderVentas(); updateVentasDropdowns();
   syncDesdeSupabase();
 }
-document.addEventListener('DOMContentLoaded', () => {
-  if(!checkSesion()) {
-    document.getElementById('loginScreen').style.display = 'flex';
-  } else {
-    iniciarApp();
-  }
+document.addEventListener('DOMContentLoaded', async () => {
+  let r = 'nosesion';
+  try { r = await activarSesion(); } catch(e) { console.warn('Sesión', e); }
+  if(r !== 'ok') document.getElementById('loginScreen').style.display = 'flex';
 });
 
 // =====================
@@ -1549,6 +1569,9 @@ function misTareas() {
 }
 
 function misEventos() {
+  return misEventosPropios().concat(typeof reunionesCRM !== 'undefined' ? reunionesCRM : []);
+}
+function misEventosPropios() {
   if(!usuarioActual) return eventos;
   if(usuarioActual.rol==='director') {
     const filtro = document.getElementById('calUsuarioFiltro');
@@ -2866,21 +2889,19 @@ function renderEquipo() {
 // =====================
 // AJUSTES — CONTRASEÑAS
 // =====================
-let PASS_STORE = JSON.parse(localStorage.getItem('cdv_passes')) || {javier:'cdv2026',javierjr:'jcjr2026'};
 
-function cambiarPass() {
-  const u = document.getElementById('ajUsuario').value;
+
+async function cambiarPass() {
   const p1 = document.getElementById('ajPass1').value;
   const p2 = document.getElementById('ajPass2').value;
   const msg = document.getElementById('ajMsg');
-  if(!p1||p1.length<4){msg.style.display='block';msg.style.background='rgba(255,107,107,0.1)';msg.style.color='var(--rojo)';msg.textContent='Mínimo 4 caracteres';return;}
-  if(p1!==p2){msg.style.display='block';msg.style.background='rgba(255,107,107,0.1)';msg.style.color='var(--rojo)';msg.textContent='Las contraseñas no coinciden';return;}
-  const passes = JSON.parse(localStorage.getItem('cdv_passes')) || {};
-  passes[u]=p1;
-  localStorage.setItem('cdv_passes',JSON.stringify(passes));
-  msg.style.display='block';msg.style.background='rgba(81,207,102,0.1)';msg.style.color='var(--verde)';msg.textContent='✅ Contraseña actualizada';
-  document.getElementById('ajPass1').value='';
-  document.getElementById('ajPass2').value='';
+  const ver = (ok, t) => { msg.style.display='block'; msg.style.background=ok?'rgba(81,207,102,0.1)':'rgba(255,107,107,0.1)'; msg.style.color=ok?'var(--verde)':'var(--rojo)'; msg.textContent=t; };
+  if(!p1||p1.length<8) return ver(false,'Mínimo 8 caracteres');
+  if(p1!==p2) return ver(false,'Las contraseñas no coinciden');
+  const {error} = await sbAuth.auth.updateUser({password: p1});
+  if(error) return ver(false, 'No se pudo cambiar: ' + error.message);
+  ver(true,'✅ Contraseña actualizada (también para el CRM)');
+  document.getElementById('ajPass1').value=''; document.getElementById('ajPass2').value='';
   setTimeout(()=>msg.style.display='none',3000);
 }
 
@@ -3419,6 +3440,10 @@ PROY_AG.forEach(p=>{ PNOMBRES[p.k]=p.nombre; if(p.k!=='personal'&&p.k!=='medico'
 // Citas: tarjeta con editar y borrar
 function eventoHTML(e,conFecha,soloLectura){
   const hora=conFecha?`${fmtFecha(e.fecha)}<br>${e.hora}`:e.hora;
+  if(e.crm) return `<div class="evento-item" onclick="window.open('/crm/','_blank')" style="border-left:3px solid #7FB3C9;cursor:pointer;" title="Reunión del CRM — se gestiona en el CRM">
+    <div class="evento-hora">${hora}</div>
+    <div class="evento-info"><div class="evento-titulo">${e.titulo}<span class="ptag" style="margin-left:6px;background:rgba(127,179,201,0.15);color:#7FB3C9;">CRM</span></div><div class="evento-desc">${e.desc||''}</div></div>
+  </div>`;
   const etiqueta=`<span class="ptag ptag-${e.tipo}" style="margin-left:6px;">${PNOMBRES[e.tipo]||e.tipo}</span>`;
   const esDir = usuarioActual?.rol === 'director';
   const btnWA = esDir ? `<button class="btn-editar-ev" onclick="event.stopPropagation();convocatoriaWhatsApp(${e.id})" title="Convocar por WhatsApp" style="background:rgba(37,211,102,0.12);border-color:rgba(37,211,102,0.3);color:#25d366;">💬</button>` : '';
