@@ -2296,10 +2296,12 @@ function navCDV(id, btn) {
   if(proyMap[id]) renderVentasProyecto(...proyMap[id].args);
 }
 
+const r2 = n => Math.round((Number(n)||0)*100)/100;
+
 function comJrCalc(total) {
-  if(total <= 15000) return Math.round(total*0.005);
-  if(total <= 40000) return Math.round(total*0.01);
-  return Math.round(total*0.02);
+  if(total <= 15000) return r2(total*0.005);
+  if(total <= 40000) return r2(total*0.01);
+  return r2(total*0.02);
 }
 
 function guardarVenta() {
@@ -2316,9 +2318,9 @@ function guardarVenta() {
     closer:document.getElementById('vCloser').value,
     setter:document.getElementById('vSetter').value,
     fecha_cobro:fecha, estado:'pendiente',
-    com_cdv:Math.round(imp*(com.comCDV/100)),
-    com_closer:Math.round(imp*(com.comCloser/100)),
-    com_setter:Math.round(imp*(com.comSetter/100)),
+    com_cdv:r2(imp*(com.comCDV/100)),
+    com_closer:r2(imp*(com.comCloser/100)),
+    com_setter:r2(imp*(com.comSetter/100)),
     com_jr:comJrCalc(imp)
   });
   save(); document.getElementById('vCliente').value=''; document.getElementById('vImporte').value=''; document.getElementById('vProyecto').value='';
@@ -2379,9 +2381,9 @@ function renderVentas() {
   const facturaCobrada = nv.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0);
   const pendienteCom = nv.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.com_cdv,0);
   document.getElementById('statsCDV').innerHTML = `
-    <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${comisionCobrada.toLocaleString()}€</div><div class="stat-label">Comisión cobrada</div></div>
-    <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${facturaCobrada.toLocaleString()}€</div><div class="stat-label">Factura cobrada</div></div>
-    <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pendienteCom.toLocaleString()}€</div><div class="stat-label">Factura pendiente</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${comisionCobrada.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Comisión cobrada</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${facturaCobrada.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Factura cobrada</div></div>
+    <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pendienteCom.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Factura pendiente</div></div>
     <div class="stat-card"><div class="stat-numero">${nv.length}</div><div class="stat-label">Total ventas</div></div>`;
   document.getElementById('listaVentas').innerHTML = nv.length ? nv.map(v=>{
     const diasRest = Math.floor((new Date(v.fecha_cobro)-new Date())/(1000*60*60*24));
@@ -2389,7 +2391,7 @@ function renderVentas() {
     return `<div style="background:var(--negro-claro);border:1px solid ${alerta?'rgba(255,107,107,0.5)':estadoBorde(v.estado)};border-radius:12px;padding:14px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:var(--blanco-suave);">${v.cliente}</div>
-        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${v.importe.toLocaleString()}€</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${v.importe.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px;">
         <span style="background:rgba(201,168,76,0.15);padding:4px 8px;border-radius:4px;color:var(--dorado);">📁 ${v.proyecto||'Sin proyecto'}</span>
@@ -2504,9 +2506,9 @@ function evRecalcComisiones() {
   // Buscar comisiones por nombre del proyecto (PNOMBRES mapea key→nombre)
   const proyNombre = PNOMBRES[proyectoKey] || proyectoKey;
   const com = getProyectoComisiones(proyNombre);
-  const cdv = Math.round(imp * (com.comCDV / 100));
-  const closer = Math.round(imp * (com.comCloser / 100));
-  const setter = Math.round(imp * (com.comSetter / 100));
+  const cdv = r2(imp*(com.comCDV/100));
+  const closer = r2(imp*(com.comCloser/100));
+  const setter = r2(imp*(com.comSetter/100));
   const lc = document.getElementById('ev_lbl_closer');
   const ls = document.getElementById('ev_lbl_setter');
   const lcdv = document.getElementById('ev_lbl_cdv');
@@ -2571,9 +2573,9 @@ function renderVentasProyecto(proyNombre, containerId) {
   if(!cont) return;
   cont.innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${comCobrada.toLocaleString()}€</div><div class="stat-label">Comisión cobrada</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${factCobrada.toLocaleString()}€</div><div class="stat-label">Factura cobrada</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pend.toLocaleString()}€</div><div class="stat-label">Pendiente</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${comCobrada.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Comisión cobrada</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${factCobrada.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Factura cobrada</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pend.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Pendiente</div></div>
       <div class="stat-card"><div class="stat-numero">${filtradas.length}</div><div class="stat-label">Ventas</div></div>
     </div>
     ${filtradas.length ? filtradas.map(v=>{
@@ -2582,7 +2584,7 @@ function renderVentasProyecto(proyNombre, containerId) {
       return `<div style="background:var(--negro-claro);border:1px solid ${alerta?'rgba(255,107,107,0.5)':estadoBorde(v.estado)};border-radius:12px;padding:14px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:var(--blanco-suave);">${v.cliente}</div>
-          <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${v.importe.toLocaleString()}€</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${v.importe.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px;">
           <span style="color:var(--gris);">${fmtFecha(v.fecha_cobro)}</span>
@@ -2731,9 +2733,9 @@ function calcComisiones() {
   const comSetter = importe * (com.comSetter / 100);
   const comCDV = importe * (com.comCDV / 100);
 
-  document.getElementById('comCloser').textContent = comCloser.toFixed(0)+'€';
-  document.getElementById('comSetter').textContent = comSetter.toFixed(0)+'€';
-  document.getElementById('comCDV').textContent = comCDV.toFixed(0)+'€';
+  document.getElementById('comCloser').textContent = comCloser.toFixed(2)+'€';
+  document.getElementById('comSetter').textContent = comSetter.toFixed(2)+'€';
+  document.getElementById('comCDV').textContent = comCDV.toFixed(2)+'€';
 
   // Actualizar labels con porcentajes dinámicos
   document.getElementById('comCDVLabel').textContent = `CDV by JCerezo (${com.comCDV}%)`;
@@ -2899,23 +2901,23 @@ function renderComResumen() {
   const pendientes = vn.filter(v=>v.estado==='pendiente');
   document.getElementById('comResumen').innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV.toLocaleString()}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalClosers.toLocaleString()}€</div><div class="stat-label">Closers Total</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--azul)">${totalSetters.toLocaleString()}€</div><div class="stat-label">Setters Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalClosers.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Closers Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--azul)">${totalSetters.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Setters Total</div></div>
       <div class="stat-card"><div class="stat-numero">${vn.length}</div><div class="stat-label">Ventas totales</div></div>
     </div>
     <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin-bottom:10px;">Estado de pagos</div>
     <div style="display:flex;justify-content:space-between;padding:10px;background:rgba(81,207,102,0.08);border:1px solid rgba(81,207,102,0.2);border-radius:8px;margin-bottom:8px;">
       <span style="font-size:12px;color:var(--gris);">✅ Comisión cobrada</span>
-      <span style="font-size:14px;font-weight:700;color:var(--verde);">${comisionCobradas.length} ventas · ${comisionCobradas.reduce((a,v)=>a+(v.importe||0),0).toLocaleString()}€</span>
+      <span style="font-size:14px;font-weight:700;color:var(--verde);">${comisionCobradas.length} ventas · ${comisionCobradas.reduce((a,v)=>a+(v.importe||0),0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:10px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:8px;margin-bottom:8px;">
       <span style="font-size:12px;color:var(--gris);">🟡 Factura cobrada</span>
-      <span style="font-size:14px;font-weight:700;color:var(--dorado);">${facturaCobradas.length} ventas · ${facturaCobradas.reduce((a,v)=>a+(v.importe||0),0).toLocaleString()}€</span>
+      <span style="font-size:14px;font-weight:700;color:var(--dorado);">${facturaCobradas.length} ventas · ${facturaCobradas.reduce((a,v)=>a+(v.importe||0),0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:10px;background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.2);border-radius:8px;">
       <span style="font-size:12px;color:var(--gris);">🔴 Factura pendiente</span>
-      <span style="font-size:14px;font-weight:700;color:var(--rojo);">${pendientes.length} ventas · ${pendientes.reduce((a,v)=>a+(v.importe||0),0).toLocaleString()}€</span>
+      <span style="font-size:14px;font-weight:700;color:var(--rojo);">${pendientes.length} ventas · ${pendientes.reduce((a,v)=>a+(v.importe||0),0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</span>
     </div>`;
 }
 
@@ -2974,24 +2976,24 @@ function renderComisionesDirector() {
   // Resumen global
   document.getElementById('comDirResumen').innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV.toLocaleString()}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobradoCDV.toLocaleString()}€</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pendienteCDV.toLocaleString()}€</div><div class="stat-label">CDV by JCerezo Pendiente</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobradoCDV.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pendienteCDV.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">CDV by JCerezo Pendiente</div></div>
       <div class="stat-card"><div class="stat-numero">${vn.length}</div><div class="stat-label">Ventas totales</div></div>
     </div>
     <div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:10px;">
       <div style="font-size:11px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Facturación clientes</div>
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--negro-borde);">
         <span style="font-size:12px;color:var(--gris);">✅ Cobrado a clientes</span>
-        <span style="font-size:13px;font-weight:700;color:var(--verde);">${cobradoFacturado.toLocaleString()}€</span>
+        <span style="font-size:13px;font-weight:700;color:var(--verde);">${cobradoFacturado.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--negro-borde);">
         <span style="font-size:12px;color:var(--gris);">⏳ Pendiente de clientes</span>
-        <span style="font-size:13px;font-weight:700;color:var(--rojo);">${(totalFacturado-cobradoFacturado).toLocaleString()}€</span>
+        <span style="font-size:13px;font-weight:700;color:var(--rojo);">${(totalFacturado-cobradoFacturado).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:8px 0;">
         <span style="font-size:12px;color:var(--gris);">💰 A pagar a equipo</span>
-        <span style="font-size:13px;font-weight:700;color:var(--azul);">${(totalClosers+totalSetters).toLocaleString()}€</span>
+        <span style="font-size:13px;font-weight:700;color:var(--azul);">${(totalClosers+totalSetters).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</span>
       </div>
     </div>`;
 
@@ -3021,15 +3023,15 @@ function renderComisionesDirector() {
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
           <div style="text-align:center;background:rgba(201,168,76,0.08);border-radius:8px;padding:8px;">
             <div style="font-size:10px;color:var(--gris);margin-bottom:4px;">Total</div>
-            <div style="font-size:16px;font-weight:700;color:var(--dorado);">${d.total.toLocaleString()}€</div>
+            <div style="font-size:16px;font-weight:700;color:var(--dorado);">${d.total.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div>
           </div>
           <div style="text-align:center;background:rgba(81,207,102,0.08);border-radius:8px;padding:8px;">
             <div style="font-size:10px;color:var(--gris);margin-bottom:4px;">Cobrado</div>
-            <div style="font-size:16px;font-weight:700;color:var(--verde);">${d.cobrado.toLocaleString()}€</div>
+            <div style="font-size:16px;font-weight:700;color:var(--verde);">${d.cobrado.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div>
           </div>
           <div style="text-align:center;background:rgba(255,107,107,0.08);border-radius:8px;padding:8px;">
             <div style="font-size:10px;color:var(--gris);margin-bottom:4px;">Pendiente</div>
-            <div style="font-size:16px;font-weight:700;color:var(--rojo);">${d.pendiente.toLocaleString()}€</div>
+            <div style="font-size:16px;font-weight:700;color:var(--rojo);">${d.pendiente.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div>
           </div>
         </div>
       </div>`).join('')
@@ -3064,9 +3066,9 @@ function renderMisComisiones() {
 
   document.getElementById('misComStats').innerHTML = `
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${total.toFixed(0)}€</div><div class="stat-label">Total comisiones</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobrado.toFixed(0)}€</div><div class="stat-label">Cobrado</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pendiente.toFixed(0)}€</div><div class="stat-label">Pendiente</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${total.toFixed(2)}€</div><div class="stat-label">Total comisiones</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobrado.toFixed(2)}€</div><div class="stat-label">Cobrado</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pendiente.toFixed(2)}€</div><div class="stat-label">Pendiente</div></div>
       <div class="stat-card"><div class="stat-numero">${misVentas.length}</div><div class="stat-label">Ventas</div></div>
     </div>`;
 
@@ -3084,7 +3086,7 @@ function renderMisComisiones() {
               <div style="font-size:10px;color:var(--gris);margin-top:2px;">Tu rol: ${miRol} · Venta: ${v.importe||0}€</div>
             </div>
             <div style="text-align:right;">
-              <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${miCom.toFixed(0)}€</div>
+              <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${miCom.toFixed(2)}€</div>
               <div style="font-size:9px;color:${estadoColor(v.estado)};">${estadoLabel(v.estado)}</div>
             </div>
           </div>
