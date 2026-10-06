@@ -326,6 +326,7 @@ html,body{height:auto}
       <button data-vista="pipeline">Pipeline <span class="cuenta" id="c-leads"></span></button>
       <button data-vista="calendario">Calendario</button>
       <button data-vista="contactos">Contactos</button>
+      <button data-vista="ventas" data-solo-director hidden>Ventas</button>
       <button data-vista="proyectos">Proyectos</button>
       <button data-vista="equipo" data-solo-director hidden>Equipo <span class="cuenta" id="c-equipo"></span></button>
     </nav>
@@ -338,6 +339,7 @@ html,body{height:auto}
     <button data-vista="calendario">Calendario</button>
     <button data-vista="contactos">Contactos</button>
     <button data-vista="proyectos">Proyectos</button>
+    <button data-vista="ventas" data-solo-director hidden>Ventas</button>
     <button data-vista="equipo" data-solo-director hidden>Equipo</button>
   </div>
   <main class="principal" id="principal"></main>
@@ -365,6 +367,8 @@ let perfiles = [];      // solo director: todos los perfiles
 let miembros = [];      // solo director: todas las asignaciones
 let leads = [];
 let reuniones = [];
+let ventas = [];       // solo director: ventas cerradas (tabla de Agenda Central)
+let filtroVentas = "todos";
 let semana = 0, filtroContProy = "todos", busqContactos = "";
 const TIPOS_REUNION = {reunion: "Reunión", llamada: "Llamada", visita: "Visita", demo: "Demo", otro: "Otro"};
 const COLORES_PERSONA = ["#C9A227","#7FB3C9","#C99AD6","#9DB4E8","#5FA77A","#D9923B","#E2B84A","#C9584E"];
@@ -383,6 +387,23 @@ const rel = (s) => { const n = difDias(s); if (n === null) return "sin fecha"; i
 const estadoPaso = (s) => { const n = difDias(s); return n === null ? "" : n < 0 ? "vencido" : n === 0 ? "hoy" : ""; };
 const iniciales = (s) => String(s || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
 const esDir = () => yo && yo.rol === "director";
+const cuentaDe = (id) => (proyectos.find(p => p.id === id) || {}).cuenta || "Sin cuenta";
+const proyDeVenta = (v) => { const n = String(v.proyecto || "").trim().toLowerCase(); const p = proyectos.find(x => x.id === n || x.nombre.toLowerCase() === n); return p ? p.id : null; };
+function pasaFiltro(proyecto_id, f) { if (f === "todos") return true; if (f.startsWith("cuenta:")) return cuentaDe(proyecto_id) === f.slice(7); return proyecto_id === f; }
+function chipsProyecto(attr, f) {
+  const vis = proyectos.filter(p => misProyectos.includes(p.id));
+  const cuentas = [...new Set(vis.map(p => p.cuenta || "Sin cuenta"))];
+  const cuentaSel = f.startsWith("cuenta:") ? f.slice(7) : f !== "todos" ? cuentaDe(f) : null;
+  const fila1 = `<button class="chip" data-${attr}="todos" aria-pressed="${f === "todos"}">Todos</button>` + cuentas.map(c => {
+    const prods = vis.filter(p => (p.cuenta || "Sin cuenta") === c);
+    const val = prods.length > 1 ? "cuenta:" + c : prods[0].id;
+    return `<button class="chip" data-${attr}="${esc(val)}" aria-pressed="${cuentaSel === c}">${esc(prods.length > 1 ? c : prods[0].nombre)}${prods.length > 1 ? " ▾" : ""}</button>`;
+  }).join("");
+  const prodsSel = cuentaSel ? vis.filter(p => (p.cuenta || "Sin cuenta") === cuentaSel) : [];
+  const fila2 = prodsSel.length > 1 ? `<div class="filtros" style="margin-top:6px;padding-left:10px;border-left:2px solid var(--oro)"><button class="chip" data-${attr}="cuenta:${esc(cuentaSel)}" aria-pressed="${f === "cuenta:" + cuentaSel}">Todo ${esc(cuentaSel)}</button>${prodsSel.map(p => `<button class="chip" data-${attr}="${p.id}" aria-pressed="${f === p.id}">${esc(p.nombre)}</button>`).join("")}</div>` : "";
+  return `<div><div class="filtros" role="group" aria-label="Proyecto">${fila1}</div>${fila2}</div>`;
+}
+const etiquetaProy = (id) => { const c = cuentaDe(id), n = nomProy(id); return c && c !== n && c !== "Sin cuenta" ? `${esc(c)} · ${esc(n)}` : esc(n); };
 const nomProy = (id) => (proyectos.find(p => p.id === id) || {}).nombre || "Sin proyecto";
 const nomPersona = (id) => (equipo.find(p => p.id === id) || perfiles.find(p => p.id === id) || {}).nombre || "—";
 const fechaISO = (d) => { const x = new Date(d); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); };
@@ -473,11 +494,11 @@ async function cargarTodo() {
     sb.from("crm_leads").select("*").order("actualizado", {ascending: false}),
     sb.from("crm_reuniones").select("*").gte("inicio", new Date(Date.now() - 90 * 864e5).toISOString()).order("inicio"),
   ];
-  if (esDir()) pet.push(sb.from("crm_perfiles").select("*").order("creado"));
+  if (esDir()) pet.push(sb.from("crm_perfiles").select("*").order("creado"), sb.from("ventas").select("*").order("id"));
   const r = await Promise.all(pet);
   const e = r.find(x => x.error); if (e) return fallo(e.error, "Error al cargar datos");
   proyectos = r[0].data; miembros = r[1].data; equipo = r[2].data; leads = r[3].data; reuniones = r[4].data;
-  if (esDir()) perfiles = r[5].data;
+  if (esDir()) { perfiles = r[5].data; ventas = r[6].data || []; }
   misProyectos = esDir() ? proyectos.map(p => p.id) : miembros.filter(m => m.perfil_id === yo.id).map(m => m.proyecto_id);
 }
 
@@ -500,6 +521,7 @@ function render() {
   if (vista === "equipo" && esDir()) m.innerHTML = vEquipo();
   if (vista === "proyectos") m.innerHTML = vProyectos();
   if (vista === "contactos") m.innerHTML = vContactos();
+  if (vista === "ventas" && esDir()) m.innerHTML = vVentas();
   if (vista === "calendario") m.innerHTML = vCalendario();
   enlazar(m);
 }
@@ -513,6 +535,7 @@ function enlazar(r) {
   const bq = $("#buscar", r); if (bq) bq.oninput = () => { busqueda = bq.value; const pos = bq.selectionStart; render(); const n = $("#buscar"); n.focus(); n.setSelectionRange(pos, pos); };
   const vp = $("#ver-perdidos", r); if (vp) vp.onclick = () => { verPerdidos = !verPerdidos; render(); };
   r.querySelectorAll("[data-perfil]").forEach(b => b.onclick = () => editarPerfil(b.dataset.perfil));
+  r.querySelectorAll("[data-fventa]").forEach(b => b.onclick = () => { filtroVentas = b.dataset.fventa; render(); });
   r.querySelectorAll("[data-fcont]").forEach(b => b.onclick = () => { filtroContProy = b.dataset.fcont; render(); });
   const bc = $("#buscar-cont", r); if (bc) bc.oninput = () => { busqContactos = bc.value; const pos = bc.selectionStart; render(); const n = $("#buscar-cont"); n.focus(); n.setSelectionRange(pos, pos); };
   const ex = $("#exportar-cont", r); if (ex) ex.onclick = exportarContactos;
@@ -540,7 +563,7 @@ function vPanel() {
     <div class="cifra"><div class="etiq">Leads activos</div><div class="num">${act.length}</div><div class="det">${eur(pipeline)} en pipeline</div></div>
     <div class="cifra"><div class="etiq">Valor ponderado</div><div class="num">${eur(pond)}</div><div class="det">según la probabilidad de cada etapa</div></div>
     <div class="cifra ${venc.length ? "alerta" : "bien"}"><div class="etiq">Pasos vencidos</div><div class="num">${venc.length}</div><div class="det">${venc.length ? "leads sin actualizar" : "todo al día"}${sinPaso.length ? ` · ${sinPaso.length} sin próximo paso` : ""}</div></div>
-    <div class="cifra bien"><div class="etiq">Ganados</div><div class="num">${ganados.length}</div><div class="det">${eur(ganados.reduce((s, l) => s + (+l.valor || 0), 0))}</div></div>
+    ${esDir() ? `<div class="cifra bien" data-vista="ventas" style="cursor:pointer"><div class="etiq">Ventas cerradas</div><div class="num">${ventas.length}</div><div class="det">${eur(ventas.reduce((s, v) => s + (+v.importe || 0), 0))} · ver ventas →</div></div>` : `<div class="cifra bien"><div class="etiq">Ganados</div><div class="num">${ganados.length}</div><div class="det">${eur(ganados.reduce((s, l) => s + (+l.valor || 0), 0))}</div></div>`}
   </section>
   ${bloqueReunionesHoy()}
   <section class="dos-col">
@@ -556,14 +579,14 @@ function vPanel() {
 /* ===== PIPELINE ===== */
 function filtrados() {
   const q = busqueda.toLowerCase();
-  return leads.filter(l => filtroProy === "todos" || l.proyecto_id === filtroProy)
+  return leads.filter(l => pasaFiltro(l.proyecto_id, filtroProy))
     .filter(l => filtroPersona === "todos" || (filtroPersona === "sin" ? !l.closer_id && !l.setter_id : l.closer_id === filtroPersona || l.setter_id === filtroPersona))
     .filter(l => !q || [l.empresa, l.contacto, l.email, l.telefono].join(" ").toLowerCase().includes(q));
 }
 function tarjeta(l) {
   return `<div class="lead" role="button" tabindex="0" data-lead="${l.id}">
     <span class="lead-sup"><span class="avatar">${iniciales(l.empresa)}</span><span class="lead-nom"><b>${esc(l.empresa)}</b><small>${esc(l.contacto || "Sin contacto")}</small></span><span class="prob">${PROB[l.etapa] || 0} %</span></span>
-    <span class="lead-serv"><span class="punto dir"></span><span>${esc(nomProy(l.proyecto_id))}</span></span>
+    <span class="lead-serv"><span class="punto dir"></span><span>${etiquetaProy(l.proyecto_id)}</span></span>
     <span class="lead-inf"><span class="valor">${+l.valor ? eur(l.valor) : "—"}</span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${esc(l.proximo_paso || "Sin próximo paso")}${l.proximo_paso_fecha ? " · " + rel(l.proximo_paso_fecha) : ""}</span></span>
     <span class="lead-cta">Closer: <b>${esc(l.closer_id ? nomPersona(l.closer_id) : "sin asignar")}</b>${l.setter_id ? " · Setter: " + esc(nomPersona(l.setter_id)) : ""}</span>
   </div>`;
@@ -574,9 +597,7 @@ function vPipeline() {
   const perdidos = Ls.filter(l => l.etapa === "Perdido");
   const personas = esDir() ? perfiles.filter(p => p.activo) : [];
   return `<div class="cabecera"><div><h2>Pipeline</h2><div class="sub">${Ls.filter(l => l.etapa !== "Perdido").length} leads · pulsa uno para ver y actualizar</div></div><button class="btn btn-oro" data-nuevo-lead>+ Nuevo lead</button></div>
-  <div class="barra-herr"><div class="izq"><div class="filtros" role="group" aria-label="Proyecto">
-    <button class="chip" data-fproy="todos" aria-pressed="${filtroProy === "todos"}">Todos</button>
-    ${proyVisibles.map(p => `<button class="chip" data-fproy="${p.id}" aria-pressed="${filtroProy === p.id}">${esc(p.nombre)}</button>`).join("")}</div></div>
+  <div class="barra-herr"><div class="izq">${chipsProyecto("fproy", filtroProy)}</div>
     <div class="der">${esDir() ? `<select class="entrada" id="f-persona" aria-label="Comercial"><option value="todos">Todo el equipo</option><option value="sin" ${filtroPersona === "sin" ? "selected" : ""}>Sin asignar</option>${personas.map(p => `<option value="${p.id}" ${filtroPersona === p.id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select>` : ""}
     <input class="entrada buscar" id="buscar" type="search" placeholder="Buscar empresa o contacto" value="${esc(busqueda)}"></div></div>
   <div class="kanban-scroll"><div class="kanban">${ETAPAS.map(e => {
@@ -784,58 +805,87 @@ function vProyectos() {
   const pct = (n) => (+n || 0).toLocaleString("es-ES") + " %";
   return `<div class="cabecera"><div><h2>Proyectos</h2><div class="sub">${esDir() ? "Todos los proyectos y sus comisiones" : "Los proyectos en los que trabajas"}</div></div></div>
   <div class="tabla-env"><table><thead><tr><th>Proyecto</th><th>Cuenta</th><th class="num">Ticket</th>${esDir() ? `<th class="num">CDV by JCerezo</th>` : ""}<th class="num">Closer</th><th class="num">Setter</th><th class="num">Leads activos</th><th>Estado</th></tr></thead>
-  <tbody>${vis.map(p => `<tr><td>${esc(p.nombre)}</td><td>${esc(p.cuenta || "")}</td><td class="num">${p.ticket ? eur(p.ticket) : "—"}</td>${esDir() ? `<td class="num">${pct(p.com_cdv)}</td>` : ""}<td class="num">${pct(p.com_closer)}</td><td class="num">${pct(p.com_setter)}</td><td class="num">${leads.filter(l => l.proyecto_id === p.id && l.etapa !== "Perdido" && l.etapa !== "Ganado").length}</td><td><span class="pildora ${p.estado === "Activo" ? "p-ok" : "p-neutro"}">${esc(p.estado || "")}</span></td></tr>`).join("") || `<tr><td colspan="8">Sin proyectos asignados todavía.</td></tr>`}</tbody></table></div>`;
+  <tbody>${vis.sort((a, b) => (a.cuenta || "").localeCompare(b.cuenta || "", "es") || a.nombre.localeCompare(b.nombre, "es")).map(p => `<tr><td>${esc(p.nombre)}</td><td>${esc(p.cuenta || "")}</td><td class="num">${p.ticket ? eur(p.ticket) : "—"}</td>${esDir() ? `<td class="num">${pct(p.com_cdv)}</td>` : ""}<td class="num">${pct(p.com_closer)}</td><td class="num">${pct(p.com_setter)}</td><td class="num">${leads.filter(l => l.proyecto_id === p.id && l.etapa !== "Perdido" && l.etapa !== "Ganado").length}</td><td><span class="pildora ${p.estado === "Activo" ? "p-ok" : "p-neutro"}">${esc(p.estado || "")}</span></td></tr>`).join("") || `<tr><td colspan="8">Sin proyectos asignados todavía.</td></tr>`}</tbody></table></div>`;
 }
 
 /* ===== CONTACTOS ===== */
+const normEmp = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\b(s\.?l\.?u?|s\.?a\.?|sl|sa)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 function contactosAgrupados() {
   const q = busqContactos.toLowerCase();
   const mapa = new Map();
+  const ficha = (empresa) => { const k = normEmp(empresa); if (!mapa.has(k)) mapa.set(k, {empresa, contactos: [], cargo: "", telefono: "", email: "", leads: [], ventas: []}); return mapa.get(k); };
   leads.forEach(l => {
-    const clave = (l.empresa || "").trim().toLowerCase() + "|" + (l.contacto || "").trim().toLowerCase();
-    if (!mapa.has(clave)) mapa.set(clave, {empresa: l.empresa, contacto: l.contacto, cargo: l.cargo, telefono: l.telefono, email: l.email, leads: []});
-    const c = mapa.get(clave);
-    c.cargo = c.cargo || l.cargo; c.telefono = c.telefono || l.telefono; c.email = c.email || l.email;
+    const c = ficha(l.empresa);
+    if (l.contacto && !c.contactos.includes(l.contacto)) c.contactos.push(l.contacto);
+    c.cargo = c.cargo || l.cargo || ""; c.telefono = c.telefono || l.telefono || ""; c.email = c.email || l.email || "";
     c.leads.push(l);
   });
+  ventas.forEach(v => ficha(v.cliente).ventas.push(v));
   return [...mapa.values()]
-    .filter(c => filtroContProy === "todos" || c.leads.some(l => l.proyecto_id === filtroContProy))
-    .filter(c => !q || [c.empresa, c.contacto, c.cargo, c.telefono, c.email].join(" ").toLowerCase().includes(q))
+    .filter(c => filtroContProy === "todos" || c.leads.some(l => pasaFiltro(l.proyecto_id, filtroContProy)) || c.ventas.some(v => pasaFiltro(proyDeVenta(v), filtroContProy)))
+    .filter(c => !q || [c.empresa, c.contactos.join(" "), c.cargo, c.telefono, c.email].join(" ").toLowerCase().includes(q))
     .sort((a, b) => (a.empresa || "").localeCompare(b.empresa || "", "es"));
 }
 function vContactos() {
   const lista = contactosAgrupados();
-  const proyVisibles = proyectos.filter(p => misProyectos.includes(p.id));
-  return `<div class="cabecera"><div><h2>Contactos</h2><div class="sub">${lista.length} contactos · todos los proyectos en una sola lista</div></div>
+  const clientes = lista.filter(c => c.ventas.length).length;
+  return `<div class="cabecera"><div><h2>Contactos</h2><div class="sub">${lista.length} empresas${esDir() ? ` · ${clientes} ya son clientes` : ""} · todos los proyectos en una sola lista</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="exportar-cont">⬇ Descargar Excel</button><button class="btn btn-oro" data-nuevo-lead>+ Nuevo contacto</button></div></div>
-  <div class="barra-herr"><div class="izq"><div class="filtros" role="group" aria-label="Proyecto">
-    <button class="chip" data-fcont="todos" aria-pressed="${filtroContProy === "todos"}">Todos</button>
-    ${proyVisibles.map(p => `<button class="chip" data-fcont="${p.id}" aria-pressed="${filtroContProy === p.id}">${esc(p.nombre)}</button>`).join("")}</div></div>
+  <div class="barra-herr"><div class="izq">${chipsProyecto("fcont", filtroContProy)}</div>
     <div class="der"><input class="entrada buscar" id="buscar-cont" type="search" placeholder="Buscar empresa, persona, teléfono o correo" value="${esc(busqContactos)}"></div></div>
-  <div class="tabla-env"><table><thead><tr><th>Empresa</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th>Proyectos</th>${esDir() ? "<th>Comercial</th>" : ""}<th>Etapa</th></tr></thead><tbody>
+  <div class="tabla-env"><table><thead><tr><th>Empresa</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th>Productos</th>${esDir() ? "<th>Comercial</th>" : ""}<th>Situación</th></tr></thead><tbody>
   ${lista.length ? lista.map(c => {
     const l0 = c.leads[0];
-    const coms = [...new Set(c.leads.flatMap(l => [l.closer_id, l.setter_id]).filter(Boolean))].map(nomPersona);
-    return `<tr class="clic" data-lead="${l0.id}"><td><div class="celda-nom"><span class="avatar">${iniciales(c.empresa)}</span><div>${esc(c.empresa)}</div></div></td>
-      <td>${esc(c.contacto || "—")}${c.cargo ? `<small style="display:block;color:var(--texto3)">${esc(c.cargo)}</small>` : ""}</td>
+    const coms = [...new Set(c.leads.flatMap(l => [l.closer_id, l.setter_id]).filter(Boolean).map(nomPersona).concat(c.ventas.flatMap(v => [v.closer, v.setter]).filter(Boolean)))];
+    const prods = [...new Set(c.ventas.map(v => proyDeVenta(v)).filter(Boolean))];
+    const prodsLead = [...new Set(c.leads.map(l => l.proyecto_id).filter(id => id && !prods.includes(id)))];
+    const situ = [...prods.map(id => `<span class="pildora p-ok">Cliente ${esc(nomProy(id))}</span>`), ...c.leads.filter(l => !prods.includes(l.proyecto_id)).map(l => `<span class="pildora ${l.etapa === "Perdido" ? "p-mal" : "p-neutro"}">${esc(l.etapa)}</span>`)].join(" ");
+    return `<tr class="${l0 ? "clic" : ""}" ${l0 ? `data-lead="${l0.id}"` : ""}><td><div class="celda-nom"><span class="avatar">${iniciales(c.empresa)}</span><div>${esc(c.empresa)}${c.ventas.length ? `<small>${eur(c.ventas.reduce((s, v) => s + (+v.importe || 0), 0))} vendido</small>` : ""}</div></div></td>
+      <td>${esc(c.contactos.join(", ") || "—")}${c.cargo ? `<small style="display:block;color:var(--texto3)">${esc(c.cargo)}</small>` : ""}</td>
       <td>${c.telefono ? `<a href="tel:${esc(c.telefono)}" onclick="event.stopPropagation()" style="color:var(--oro-claro)">${esc(c.telefono)}</a>` : "—"}</td>
       <td>${c.email ? `<a href="mailto:${esc(c.email)}" onclick="event.stopPropagation()" style="color:var(--oro-claro)">${esc(c.email)}</a>` : "—"}</td>
-      <td><div class="filtros">${c.leads.map(l => `<span class="area dir">${esc(nomProy(l.proyecto_id))}</span>`).join("")}</div></td>
+      <td><div class="filtros">${[...prods, ...prodsLead].map(id => `<span class="area dir">${etiquetaProy(id)}</span>`).join("")}</div></td>
       ${esDir() ? `<td>${esc(coms.join(", ") || "Sin asignar")}</td>` : ""}
-      <td>${c.leads.map(l => esc(l.etapa)).join(" · ")}</td></tr>`;
+      <td>${situ}</td></tr>`;
   }).join("") : `<tr><td colspan="7">No hay contactos${busqContactos || filtroContProy !== "todos" ? " con este filtro" : " todavía. Cada lead que creéis aparece aquí"}.</td></tr>`}
   </tbody></table></div>`;
 }
 function exportarContactos() {
   const filas = [["Empresa", "Contacto", "Cargo", "Teléfono", "Correo", "Proyecto", "Etapa", "Valor", "Closer", "Setter", "Próximo paso", "Fecha próximo paso", "Origen"]];
   const visibles = new Set(contactosAgrupados().flatMap(c => c.leads.map(l => l.id)));
-  leads.filter(l => visibles.has(l.id)).forEach(l => filas.push([l.empresa, l.contacto, l.cargo, l.telefono, l.email, nomProy(l.proyecto_id), l.etapa,
+  contactosAgrupados().forEach(c => c.ventas.forEach(v => filas.push([v.cliente, "", "", "", "", (proyDeVenta(v) ? cuentaDe(proyDeVenta(v)) + " · " + nomProy(proyDeVenta(v)) : v.proyecto), "Cliente (" + ({pendiente: "factura pendiente", cobrado: "factura cobrada", comision_cobrada: "comisión cobrada"}[v.estado] || v.estado) + ")",
+    String(+v.importe || 0).replace(".", ","), v.closer || "", v.setter || "", "", v.fecha_cobro || "", "Venta cerrada"])));
+  leads.filter(l => visibles.has(l.id)).forEach(l => filas.push([l.empresa, l.contacto, l.cargo, l.telefono, l.email, cuentaDe(l.proyecto_id) + " · " + nomProy(l.proyecto_id), l.etapa,
     String(+l.valor || 0).replace(".", ","), l.closer_id ? nomPersona(l.closer_id) : "", l.setter_id ? nomPersona(l.setter_id) : "", l.proximo_paso, l.proximo_paso_fecha, l.origen]));
   const csv = "﻿" + filas.map(f => f.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
   a.download = "contactos-crm-" + fechaISO(new Date()) + ".csv"; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ===== VENTAS (solo director; misma tabla que Agenda Central) ===== */
+const ESTADO_VENTA = {pendiente: ["Factura pendiente", "p-mal"], cobrado: ["Factura cobrada", "p-aviso"], comision_cobrada: ["Comisión cobrada", "p-ok"]};
+function vVentas() {
+  const vs = ventas.filter(v => pasaFiltro(proyDeVenta(v), filtroVentas)).sort((a, b) => String(b.fecha_cobro || "").localeCompare(String(a.fecha_cobro || "")));
+  const sum = (arr, k) => arr.reduce((s, v) => s + (+v[k] || 0), 0);
+  const pend = vs.filter(v => v.estado === "pendiente"), fc = vs.filter(v => v.estado === "cobrado"), cc = vs.filter(v => v.estado === "comision_cobrada");
+  const porProd = {}; vs.forEach(v => { const id = proyDeVenta(v) || "?"; (porProd[id] = porProd[id] || []).push(v); });
+  return `<div class="cabecera"><div><h2>Ventas cerradas</h2><div class="sub">${vs.length} ventas · las mismas que en Agenda Central (se actualizan solas)</div></div></div>
+  <div class="barra-herr"><div class="izq">${chipsProyecto("fventa", filtroVentas)}</div></div>
+  <section class="cifras">
+    <div class="cifra"><div class="etiq">Vendido</div><div class="num">${eur(sum(vs, "importe"))}</div><div class="det">${vs.length} ventas</div></div>
+    <div class="cifra"><div class="etiq">Comisión CDV by JCerezo</div><div class="num">${eur(sum(vs, "com_cdv"))}</div><div class="det">total generado</div></div>
+    <div class="cifra bien"><div class="etiq">Comisión cobrada</div><div class="num">${eur(sum(cc, "com_cdv"))}</div><div class="det">${cc.length} ventas</div></div>
+    <div class="cifra ${pend.length ? "alerta" : ""}"><div class="etiq">Pendiente de cobro</div><div class="num">${eur(sum(pend, "com_cdv") + sum(fc, "com_cdv"))}</div><div class="det">${pend.length} factura pendiente · ${fc.length} factura cobrada</div></div>
+  </section>
+  <div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>Por producto</h3></div>
+    ${Object.entries(porProd).map(([id, arr]) => `<div class="fila-barra"><span>${id === "?" ? "Sin producto" : etiquetaProy(id)}</span><div class="barra"><span style="width:${sum(arr, "importe") / Math.max(1, sum(vs, "importe")) * 100}%"></span></div><span class="n">${arr.length} · ${eur(sum(arr, "importe"))}</span></div>`).join("") || `<p class="vacia">Sin ventas.</p>`}</div>
+  <div class="tabla-env"><table><thead><tr><th>Cliente</th><th>Producto</th><th class="num">Importe</th><th>Closer</th><th>Setter</th><th>Cobro</th><th class="num">Com. CDV by JCerezo</th><th class="num">Com. closer</th><th>Estado</th></tr></thead><tbody>
+  ${vs.map(v => { const id = proyDeVenta(v), e = ESTADO_VENTA[v.estado] || [v.estado, "p-neutro"];
+    return `<tr><td>${esc(v.cliente)}</td><td><span class="area dir">${id ? etiquetaProy(id) : esc(v.proyecto || "—")}</span>${v.tipo_cobro === "mensual" ? ` <small style="color:var(--texto3)">mensual</small>` : ""}</td><td class="num">${eur(v.importe)}</td><td>${esc(v.closer || "—")}</td><td>${esc(v.setter || "—")}</td><td>${v.fecha_cobro ? fF(v.fecha_cobro) : "—"}</td><td class="num">${eur(v.com_cdv)}</td><td class="num">${eur(v.com_closer)}</td><td><span class="pildora ${e[1]}">${e[0]}</span></td></tr>`; }).join("") || `<tr><td colspan="9">No hay ventas con este filtro.</td></tr>`}
+  </tbody></table></div>
+  <p style="font-size:12px;color:var(--texto3);margin-top:10px">Para registrar o cobrar ventas sigue usando Agenda Central: aquí se ven al instante.</p>`;
 }
 
 /* ===== CALENDARIO ===== */
