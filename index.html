@@ -1347,17 +1347,19 @@ async function activarSesion() {
   if(!sbAuth) return 'sinlib';
   const {data:{session}} = await sbAuth.auth.getSession();
   if(!session) return 'nosesion';
-  let perfil = null;
+  let perfil = null, fallo = '';
   try {
     const r = await fetch(`${SB_URL}/rest/v1/crm_perfiles?select=nombre,rol,activo&id=eq.${session.user.id}`, {headers: await sbHeaders()});
     if(r.ok) perfil = (await r.json())[0] || null;
-    else throw new Error('HTTP ' + r.status);
-  } catch(e) {
-    // Sin conexión: se permite seguir con la última sesión válida guardada en este dispositivo
+    else fallo = 'perfil HTTP ' + r.status + ' ' + (await r.text().catch(()=>'')).slice(0,120);
+  } catch(e) { fallo = 'perfil sin conexión: ' + e.message; }
+  if(!perfil && fallo) {
+    // Sin conexión o error puntual: seguir con la última sesión válida de este dispositivo
     const cache = JSON.parse(localStorage.getItem('cdv_session') || 'null');
-    if(cache && cache.rol === 'director' && cache.uid === session.user.id) perfil = {nombre: cache.nombre, rol: 'director', activo: true};
+    if(cache && cache.rol === 'director' && (!cache.uid || cache.uid === session.user.id)) perfil = {nombre: cache.nombre || 'Javier Cerezo Martínez', rol: 'director', activo: true};
+    else { console.warn('[Acceso]', fallo); window.__ultimoFalloAcceso = fallo; return 'error'; }
   }
-  if(!perfil || perfil.rol !== 'director' || !perfil.activo) { await sbAuth.auth.signOut(); return 'noacceso'; }
+  if(!perfil || perfil.rol !== 'director' || !perfil.activo) return 'noacceso';
   const user = {...USUARIOS_BASE[0], nombre: perfil.nombre || USUARIOS_BASE[0].nombre};
   usuarioActual = user;
   localStorage.setItem('cdv_session', JSON.stringify({usuario:user.usuario,nombre:user.nombre,rol:user.rol,uid:session.user.id}));
@@ -1379,10 +1381,13 @@ async function doLogin() {
   if(!sbAuth) return mostrarError('Sin conexión: no se puede iniciar sesión ahora');
   btn.textContent = 'Entrando...';
   const {error} = await sbAuth.auth.signInWithPassword({email, password: p});
-  if(error) return mostrarError(error.message === 'Email not confirmed' ? 'Confirma tu correo: revisa tu bandeja de entrada' : 'Correo o contraseña incorrectos');
+  if(error) {
+    const m = error.message || String(error);
+    return mostrarError(m === 'Invalid login credentials' ? 'Correo o contraseña incorrectos (Supabase: ' + m + ')' : m === 'Email not confirmed' ? 'Confirma tu correo: revisa tu bandeja de entrada' : 'No se pudo entrar: ' + m);
+  }
   const r = await activarSesion();
-  if(r === 'noacceso') return mostrarError('Esta cuenta no tiene acceso a Agenda Central');
-  if(r !== 'ok') return mostrarError('No se pudo iniciar sesión');
+  if(r === 'noacceso') return mostrarError('Has entrado, pero esta cuenta no figura como director en el CRM');
+  if(r !== 'ok') return mostrarError('Has entrado, pero no se pudo comprobar tu perfil: ' + (window.__ultimoFalloAcceso || r));
   err.style.display = 'none'; btn.textContent = 'Entrar';
 }
 
