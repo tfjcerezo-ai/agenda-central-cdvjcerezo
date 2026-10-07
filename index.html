@@ -1176,7 +1176,7 @@ async function syncASupabase() {
       sbUpsert('incubacion', incubacion),
       sbUpsert('fin_personal', finPersonal),
       sbUpsert('fin_familiar', finFamiliar),
-      sbUpsert('ventas', ventas),
+      sbUpsert('ventas', ventas.map(filaVentaSB)),
       sbUpsert('equipo', equipo),
     ]);
     const alguno = resultados.some(r=>r);
@@ -2194,28 +2194,26 @@ function renderIncubacion() {
 let finPersonal = JSON.parse(localStorage.getItem('cdv_fp')) || [];
 let finFamiliar = JSON.parse(localStorage.getItem('cdv_ff')) || [];
 const VENTAS0 = [
-  // ELOGISTIC
-  {id:1001,cliente:'Grupo Logístico Albacete',proyecto:'Elogistic',importe:9300,closer:'Juan Antonio',setter:'Juan Antonio',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:465,com_closer:744,com_setter:186,com_jr:0},
-  {id:1002,cliente:'Cirac Logística',proyecto:'Elogistic',importe:19500,closer:'Juan Antonio',setter:'Koenraad',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:975,com_closer:1560,com_setter:390,com_jr:0},
-  {id:1003,cliente:'Transportes Aurelio Abellán',proyecto:'Elogistic',importe:14500,closer:'Juan Antonio',setter:'Juan Antonio',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:725,com_closer:1160,com_setter:290,com_jr:0},
-  {id:1004,cliente:'Grupo López Hortelano',proyecto:'Elogistic',importe:8648,closer:'Juan Antonio',setter:'Paula',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:432,com_closer:692,com_setter:173,com_jr:0},
-  {id:1005,cliente:'Transportes Santiago Jiménez e Hijos S.L.',proyecto:'Elogistic',importe:17800,closer:'Juan Antonio',setter:'Juan Antonio',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:0,com_closer:1424,com_setter:356,com_jr:0},
-  // DeCA — 15% Closer + 10% CDV by JCerezo, 0% Setter
-  {id:1006,cliente:'Hormigones Zenit S.L.',proyecto:'DeCA',importe:1950,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:195,com_closer:292.5,com_setter:0,com_jr:0},
-  {id:1007,cliente:'Transmaba S.L.',proyecto:'DeCA',importe:1950,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:195,com_closer:292.5,com_setter:0,com_jr:0},
-  {id:1008,cliente:'Transportes Cavero Caballero S.L.',proyecto:'DeCA',importe:1950,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:195,com_closer:292.5,com_setter:0,com_jr:0},
-  {id:1009,cliente:'Enrique Riaño',proyecto:'DeCA',importe:1852,closer:'Koenraad',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:185.2,com_closer:277.8,com_setter:0,com_jr:0},
-  // DeCA — mensual (cuota 95€/mes) — 15% Closer + 10% CDV
-  {id:1010,cliente:'Garrido Mora 2007 S.L.',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:9.5,com_closer:14.25,com_setter:0,com_jr:0},
-  {id:1011,cliente:'Hermanos Serrano Muñoz',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:9.5,com_closer:14.25,com_setter:0,com_jr:0},
-  {id:1012,cliente:'Trading Sureste',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:9.5,com_closer:14.25,com_setter:0,com_jr:0},
-  {id:1013,cliente:'Transporte Varea',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:9.5,com_closer:14.25,com_setter:0,com_jr:0},
-  {id:1014,cliente:'Manuel Garrido Fernández (hermano)',proyecto:'DeCA',importe:45,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:4.5,com_closer:6.75,com_setter:0,com_jr:0},
-  {id:1015,cliente:'De Pepillo a Miguel',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:9.5,com_closer:14.25,com_setter:0,com_jr:0},
-  {id:1016,cliente:'Hijos de Isaías Abad S.L.',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:9.5,com_closer:14.25,com_setter:0,com_jr:0},
-  {id:1017,cliente:'P.valiente2012s.l',proyecto:'DeCA',importe:95,closer:'Juan Antonio',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:9.5,com_closer:14.25,com_setter:0,com_jr:0},
-  {id:1018,cliente:'Hermanos Rodríguez Parrilla',proyecto:'DeCA',importe:95,closer:'Juan Antonio',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:9.5,com_closer:14.25,com_setter:0,com_jr:0},
-  {id:1019,cliente:'La Salud Productos',proyecto:'DeCA',importe:95,closer:'Javier Cerezo',setter:'',fecha_cobro:'2026-09-01',estado:'pendiente',com_cdv:9.5,com_closer:14.25,com_setter:0,com_jr:0},
+  // Datos verificados con el Excel de comisiones Elocrea (29/09/2026)
+  {"id": 1001, "cliente": "Grupo Logístico Albacete", "proyecto": "Elogistic", "tipo_cobro": "unico", "importe": 9300, "closer": "Juan Antonio", "setter": "Juan Antonio", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 465, "com_closer": 744, "com_setter": 186, "com_jr": 0},
+  {"id": 1002, "cliente": "Cirac Logística", "proyecto": "Elogistic", "tipo_cobro": "unico", "importe": 19500, "closer": "Juan Antonio", "setter": "Koenraad", "closer2": "Koenraad", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 975, "com_closer": 780, "com_closer2": 780, "com_setter": 390, "com_jr": 0, "notas": "Closer compartido: 4% Juanan + 4% Koenraad"},
+  {"id": 1003, "cliente": "Transportes Aurelio Abellán", "proyecto": "Elogistic", "tipo_cobro": "unico", "importe": 14500, "closer": "Juan Antonio", "setter": "Juan Antonio", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 725, "com_closer": 1160, "com_setter": 290, "com_jr": 0},
+  {"id": 1004, "cliente": "Grupo López Hortelano", "proyecto": "Elogistic", "tipo_cobro": "unico", "importe": 8648, "closer": "Juan Antonio", "setter": "Paula", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 432.4, "com_closer": 691.84, "com_setter": 172.96, "com_jr": 0, "liquidado_cdv": 605.36, "notas": "Setter Paula: lo cobra CDV by JCerezo y se lo paga a ella"},
+  {"id": 1005, "cliente": "Transportes Santiago Jiménez e Hijos S.L.", "proyecto": "Elogistic", "tipo_cobro": "unico", "importe": 17800, "closer": "Juan Antonio", "setter": "Juan Antonio", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 0, "com_closer": 1424, "com_setter": 356, "com_jr": 0, "notas": "Referido: sin comisión para CDV by JCerezo. Confirmar comisiones de Juanan"},
+  {"id": 1006, "cliente": "Hormigones Zenit S.L.", "proyecto": "DeCA", "tipo_cobro": "unico", "importe": 1950, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 195, "com_closer": 292.5, "com_setter": 0, "com_jr": 0},
+  {"id": 1007, "cliente": "Transmaba S.L.", "proyecto": "DeCA", "tipo_cobro": "unico", "importe": 1950, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 195, "com_closer": 292.5, "com_setter": 0, "com_jr": 0},
+  {"id": 1008, "cliente": "Transportes Cavero Caballero S.L.", "proyecto": "DeCA", "tipo_cobro": "unico", "importe": 1950, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 195, "com_closer": 292.5, "com_setter": 0, "com_jr": 0},
+  {"id": 1009, "cliente": "Enrique Riaño", "proyecto": "DeCA", "tipo_cobro": "unico", "importe": 1852.5, "closer": "Koenraad", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 185.25, "com_closer": 277.88, "com_setter": 0, "com_jr": 0, "notas": "Cerrado 29/09/2026 (1.950 € con 5% dto.)"},
+  {"id": 1010, "cliente": "Garrido Mora 2007 S.L.", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
+  {"id": 1011, "cliente": "Hermanos Serrano Muñoz", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
+  {"id": 1012, "cliente": "Trading Sureste", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
+  {"id": 1013, "cliente": "Transporte Varea", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
+  {"id": 1014, "cliente": "Manuel Garrido Fernández (hermano)", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 45, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 4.5, "com_closer": 6.75, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
+  {"id": 1015, "cliente": "De Pepillo a Miguel", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
+  {"id": 1016, "cliente": "Hijos de Isaías Abad S.L.", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
+  {"id": 1017, "cliente": "P.valiente2012s.l", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Juan Antonio", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
+  {"id": 1018, "cliente": "Hermanos Rodríguez Parrilla", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Juan Antonio", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
+  {"id": 1019, "cliente": "La Salud Productos", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
 ];
 const _ventasGuardadas = JSON.parse(localStorage.getItem('cdv_v'));
 let ventas = (_ventasGuardadas && _ventasGuardadas.length > 0) ? _ventasGuardadas : VENTAS0;
@@ -2226,6 +2224,23 @@ function navElocrea(id, btn) {
   document.querySelectorAll('#cdv-elocrea .cal-vistas .vista-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   if(id==='comisiones') renderComisiones();
+}
+
+// Comisiones por persona del equipo (sin Javier: lo suyo va en CDV by JCerezo). Cada venta cuenta una vez por persona.
+function comisionesPorPersona(vn) {
+  const pp = {};
+  vn.forEach(v => {
+    const vistos = new Set();
+    repartoVenta(v).forEach(p => {
+      if(esJavier(p.nombre) || !p.com) return;
+      const d = pp[p.nombre] = pp[p.nombre] || {ventas:0,total:0,cobrado:0,pendiente:0,detalle:[]};
+      if(!vistos.has(p.nombre)) { d.ventas++; vistos.add(p.nombre); }
+      d.total += p.com;
+      if(estadoEsComisionCobrada(v.estado)) d.cobrado += p.com; else d.pendiente += p.com;
+      d.detalle.push({...v, miCom:p.com, papel:p.papel});
+    });
+  });
+  return pp;
 }
 
 function renderComisiones() {
@@ -2258,28 +2273,17 @@ function renderComisiones() {
   }
 
   // Director ve todo por persona
-  const porPersona = {};
-  ventas.map(normVenta).forEach(v => {
-    [v.closer, v.setter].forEach((nombre, idx) => {
-      if(!nombre) return;
-      if(!porPersona[nombre]) porPersona[nombre]={ventas:0,total:0,cobrado:0,detalle:[]};
-      const com = idx===0 ? (v.com_closer||0) : (v.com_setter||0);
-      porPersona[nombre].ventas++;
-      porPersona[nombre].total += com;
-      if(estadoEsComisionCobrada(v.estado)) porPersona[nombre].cobrado += com;
-      porPersona[nombre].detalle.push({...v, miCom: com});
-    });
-  });
+  const porPersona = comisionesPorPersona(ventas.map(normVenta));
 
   const ventasN2 = ventas.map(normVenta);
-  const totalCDV = ventasN2.reduce((a,v)=>a+(v.com_cdv||0),0);
-  const cobradoCDV = ventasN2.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+(v.com_cdv||0),0);
+  const totalCDV = ventasN2.reduce((a,v)=>a+ingresoCDV(v),0);
+  const cobradoCDV = ventasN2.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+ingresoCDV(v),0);
 
   document.getElementById('comResumen2').innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobradoCDV}€</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
-      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${totalCDV-cobradoCDV}€</div><div class="stat-label">CDV by JCerezo Pendiente</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${eur2(totalCDV)}</div><div class="stat-label">CDV by JCerezo Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${eur2(cobradoCDV)}</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${eur2(totalCDV-cobradoCDV)}</div><div class="stat-label">CDV by JCerezo Pendiente</div></div>
       <div class="stat-card"><div class="stat-numero">${ventas.length}</div><div class="stat-label">Ventas total</div></div>
     </div>`;
 
@@ -2288,12 +2292,12 @@ function renderComisiones() {
       <div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:10px;padding:12px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${nombre}</div>
-          <span style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--dorado);">${d.total}€</span>
+          <span style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--dorado);">${eur2(d.total)}</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
           <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Ventas</div><div style="font-weight:700;color:var(--blanco);">${d.ventas}</div></div>
-          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Cobrado</div><div style="font-weight:700;color:var(--verde);">${d.cobrado}€</div></div>
-          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Pendiente</div><div style="font-weight:700;color:var(--rojo);">${d.total-d.cobrado}€</div></div>
+          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Cobrado</div><div style="font-weight:700;color:var(--verde);">${eur2(d.cobrado)}</div></div>
+          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Pendiente</div><div style="font-weight:700;color:var(--rojo);">${eur2(d.total-d.cobrado)}</div></div>
         </div>
       </div>`).join('')
     : '<div class="empty-state"><div class="empty-text">Sin ventas registradas</div></div>';
@@ -2405,12 +2409,43 @@ function normVenta(v) {
   };
 }
 
+// Comisiones: lo que cobra Javier como closer o setter es ingreso de CDV by JCerezo (no se paga al equipo)
+const eur2 = n => (Number(n)||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+'€';
+const esJavier = n => /^javier(\s+cerezo)?$/i.test(String(n||'').trim());
+function repartoVenta(v) {
+  const r = [];
+  if(v.closer) r.push({nombre:v.closer, papel:'closer', com:+v.com_closer||0});
+  if(v.closer2) r.push({nombre:v.closer2, papel:'closer', com:+v.com_closer2||0});
+  if(v.setter) r.push({nombre:v.setter, papel:'setter', com:+v.com_setter||0});
+  return r;
+}
+const comJavier = v => repartoVenta(v).filter(p=>esJavier(p.nombre)).reduce((a,p)=>a+p.com,0);
+const ingresoCDV = v => (+v.com_cdv||0) + comJavier(v);
+const comEquipo = v => repartoVenta(v).filter(p=>!esJavier(p.nombre)).reduce((a,p)=>a+p.com,0);
+function cajasComisionVenta(v) {
+  const jv = comJavier(v);
+  const otros = repartoVenta(v).filter(p=>!esJavier(p.nombre) && p.com);
+  const caja = (titulo, valor, color, fondo, sub) => `<div style="text-align:center;background:${fondo};border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${titulo}</div><div style="font-size:14px;font-weight:700;color:${color};">${eur2(valor)}</div>${sub?`<div style="font-size:9px;color:var(--gris);">${sub}</div>`:''}</div>`;
+  const cajas = [caja('CDV by JCerezo', ingresoCDV(v), 'var(--dorado)', 'rgba(201,168,76,0.1)', jv ? `${eur2(v.com_cdv)} empresa + ${eur2(jv)} Javier` : '')]
+    .concat(otros.map(p => caja(`${p.nombre} · ${p.papel}`, p.com, p.papel==='closer'?'var(--verde)':'var(--azul)', p.papel==='closer'?'rgba(81,207,102,0.1)':'rgba(74,158,232,0.1)')));
+  return `<div style="display:grid;grid-template-columns:repeat(${Math.min(3,cajas.length)},1fr);gap:6px;margin-bottom:8px;">${cajas.join('')}</div>${v.notas?`<div style="font-size:10px;color:var(--gris);margin-bottom:8px;">📝 ${v.notas}</div>`:''}`;
+}
+// Columnas de la tabla ventas en Supabase (todas las filas deben llevar las mismas claves)
+const COLS_VENTA = ['id','cliente','proyecto','importe','closer','setter','closer2','fecha_cobro','estado','tipo_cobro','com_cdv','com_closer','com_closer2','com_setter','com_jr','liquidado_cdv','notas'];
+function filaVentaSB(v) {
+  const n = normVenta(v); const o = {};
+  COLS_VENTA.forEach(k => { o[k] = n[k] === undefined || n[k] === '' && k !== 'setter' && k !== 'closer' ? null : n[k]; });
+  if(!o.tipo_cobro) o.tipo_cobro = 'unico';
+  ['com_cdv','com_closer','com_closer2','com_setter','com_jr'].forEach(k => o[k] = r2(o[k]));
+  return o;
+}
+
 function renderVentas() {
   const hoy = new Date().toISOString().split('T')[0];
   const nv = ventas.map(normVenta);
-  const comisionCobrada = nv.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+v.com_cdv,0);
-  const facturaCobrada = nv.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0);
-  const pendienteCom = nv.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.com_cdv,0);
+  const comisionCobrada = nv.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+ingresoCDV(v),0);
+  const facturaCobrada = nv.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+ingresoCDV(v),0);
+  const pendienteCom = nv.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+ingresoCDV(v),0);
   document.getElementById('statsCDV').innerHTML = `
     <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${comisionCobrada.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Comisión cobrada</div></div>
     <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${facturaCobrada.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Factura cobrada</div></div>
@@ -2429,11 +2464,7 @@ function renderVentas() {
         <span style="color:var(--gris);">${fmtFecha(v.fecha_cobro)}</span>
       </div>
       ${alerta?`<div style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--rojo);">⚠️ ${diasRest<=0?'¡VENCIDO HOY!':'Vence en '+diasRest+' días'}</div>`:''}
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
-        <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV by JCerezo</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.com_cdv}€</div></div>
-        <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer||'—'}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.com_closer}€</div></div>
-        <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter||'—'}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.com_setter}€</div></div>
-      </div>
+      ${cajasComisionVenta(v)}
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:11px;padding:3px 8px;border-radius:10px;background:rgba(0,0,0,0.3);color:${estadoColor(v.estado)};">${estadoLabel(v.estado)}</span>
         <div style="display:flex;gap:6px;">
@@ -2597,9 +2628,9 @@ function guardarEditVenta(id) {
 function renderVentasProyecto(proyNombre, containerId) {
   const nv = ventas.map(normVenta);
   const filtradas = nv.filter(v => (v.proyecto||'').toLowerCase() === proyNombre.toLowerCase());
-  const comCobrada = filtradas.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+v.com_cdv,0);
-  const factCobrada = filtradas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+v.com_cdv,0);
-  const pend = filtradas.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+v.com_cdv,0);
+  const comCobrada = filtradas.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+ingresoCDV(v),0);
+  const factCobrada = filtradas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+ingresoCDV(v),0);
+  const pend = filtradas.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+ingresoCDV(v),0);
   const cont = document.getElementById(containerId);
   if(!cont) return;
   cont.innerHTML = `
@@ -2621,11 +2652,7 @@ function renderVentasProyecto(proyNombre, containerId) {
           <span style="color:var(--gris);">${fmtFecha(v.fecha_cobro)}</span>
           <span style="color:${estadoColor(v.estado)};">${estadoLabel(v.estado)}</span>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
-          <div style="text-align:center;background:rgba(201,168,76,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">CDV by JCerezo</div><div style="font-size:14px;font-weight:700;color:var(--dorado);">${v.com_cdv}€</div></div>
-          <div style="text-align:center;background:rgba(81,207,102,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.closer||'—'}</div><div style="font-size:14px;font-weight:700;color:var(--verde);">${v.com_closer}€</div></div>
-          <div style="text-align:center;background:rgba(74,158,232,0.1);border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${v.setter||'—'}</div><div style="font-size:14px;font-weight:700;color:var(--azul);">${v.com_setter}€</div></div>
-        </div>
+        ${cajasComisionVenta(v)}
         <div style="display:flex;justify-content:flex-end;gap:6px;">
           ${v.estado==='pendiente'?`<button onclick="cobrarVenta(${v.id});renderVentasProyecto('${proyNombre}','${containerId}')" style="background:rgba(201,168,76,0.2);border:1px solid rgba(201,168,76,0.4);color:var(--dorado);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">🟡 Factura cobrada</button>`:''}
           ${v.estado==='cobrado'?`<button onclick="cobrarComisionVenta(${v.id});renderVentasProyecto('${proyNombre}','${containerId}')" style="background:rgba(81,207,102,0.2);border:1px solid rgba(81,207,102,0.4);color:var(--verde);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;">✅ Comisión cobrada</button>`:''}
@@ -2922,15 +2949,15 @@ function navComisiones(id, btn) {
 
 function renderComResumen() {
   const vn = ventas.map(normVenta);
-  const totalCDV = vn.reduce((a,v)=>a+(v.com_cdv||0),0);
-  const totalClosers = vn.reduce((a,v)=>a+(v.com_closer||0),0);
-  const totalSetters = vn.reduce((a,v)=>a+(v.com_setter||0),0);
+  const totalCDV = vn.reduce((a,v)=>a+ingresoCDV(v),0);
+  const totalClosers = vn.reduce((a,v)=>a+repartoVenta(v).filter(p=>p.papel==='closer'&&!esJavier(p.nombre)).reduce((x,p)=>x+p.com,0),0);
+  const totalSetters = vn.reduce((a,v)=>a+repartoVenta(v).filter(p=>p.papel==='setter'&&!esJavier(p.nombre)).reduce((x,p)=>x+p.com,0),0);
   const comisionCobradas = vn.filter(v=>estadoEsComisionCobrada(v.estado));
   const facturaCobradas = vn.filter(v=>v.estado==='cobrado');
   const pendientes = vn.filter(v=>v.estado==='pendiente');
   document.getElementById('comResumen').innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">CDV by JCerezo Total<br><span style="text-transform:none;letter-spacing:0;font-size:9px;">incl. ${eur2(vn.reduce((x,v)=>x+comJavier(v),0))} de Javier como closer/setter</span></div></div>
       <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${totalClosers.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Closers Total</div></div>
       <div class="stat-card"><div class="stat-numero" style="color:var(--azul)">${totalSetters.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">Setters Total</div></div>
       <div class="stat-card"><div class="stat-numero">${vn.length}</div><div class="stat-label">Ventas totales</div></div>
@@ -2951,25 +2978,17 @@ function renderComResumen() {
 }
 
 function renderComDetalle() {
-  // Agrupar por closer y setter
+  // Agrupar por persona del equipo (lo de Javier va en CDV by JCerezo)
   const porPersona = {};
-  ventas.map(normVenta).forEach(v => {
-    if(!porPersona[v.closer]) porPersona[v.closer]={ventas:0,comision:0,cobrado:0};
-    if(!porPersona[v.setter]) porPersona[v.setter]={ventas:0,comision:0,cobrado:0};
-    porPersona[v.closer].ventas++;
-    porPersona[v.closer].comision += (v.com_closer||0);
-    if(estadoEsComisionCobrada(v.estado)) porPersona[v.closer].cobrado += (v.com_closer||0);
-    porPersona[v.setter].comision += (v.com_setter||0);
-    if(estadoEsComisionCobrada(v.estado)) porPersona[v.setter].cobrado += (v.com_setter||0);
-  });
+  Object.entries(comisionesPorPersona(ventas.map(normVenta))).forEach(([n,d]) => porPersona[n] = {ventas:d.ventas, comision:d.total, cobrado:d.cobrado});
   document.getElementById('comDetalle').innerHTML = Object.keys(porPersona).length
     ? Object.entries(porPersona).map(([nombre,d])=>`
       <div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:10px;padding:12px;margin-bottom:10px;">
         <div style="font-size:13px;font-weight:600;color:var(--blanco-suave);margin-bottom:8px;">${nombre}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
           <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Ventas</div><div style="font-size:16px;font-weight:700;color:var(--blanco);">${d.ventas}</div></div>
-          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Comisión total</div><div style="font-size:16px;font-weight:700;color:var(--dorado);">${d.comision}€</div></div>
-          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Pendiente</div><div style="font-size:16px;font-weight:700;color:var(--rojo);">${d.comision-d.cobrado}€</div></div>
+          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Comisión total</div><div style="font-size:16px;font-weight:700;color:var(--dorado);">${eur2(d.comision)}</div></div>
+          <div style="text-align:center;"><div style="font-size:10px;color:var(--gris);">Pendiente</div><div style="font-size:16px;font-weight:700;color:var(--rojo);">${eur2(d.comision-d.cobrado)}</div></div>
         </div>
       </div>`).join('')
     : '<div class="empty-state"><div class="empty-text">Sin ventas registradas todavía</div></div>';
@@ -2994,18 +3013,19 @@ function save() {
 // =====================
 function renderComisionesDirector() {
   const vn = ventas.map(normVenta);
-  const totalCDV = vn.reduce((a,v)=>a+(v.com_cdv||0),0);
-  const cobradoCDV = vn.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+(v.com_cdv||0),0);
+  const totalCDV = vn.reduce((a,v)=>a+ingresoCDV(v),0);
+  const cobradoCDV = vn.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+ingresoCDV(v),0);
   const pendienteCDV = totalCDV - cobradoCDV;
-  const totalClosers = vn.reduce((a,v)=>a+(v.com_closer||0),0);
-  const totalSetters = vn.reduce((a,v)=>a+(v.com_setter||0),0);
+  const totalJavier = vn.reduce((a,v)=>a+comJavier(v),0);
+  const totalClosers = vn.reduce((a,v)=>a+comEquipo(v),0);
+  const totalSetters = 0; // ya incluido en comEquipo
   const totalFacturado = vn.reduce((a,v)=>a+(v.importe||0),0);
   const cobradoFacturado = vn.filter(v=>estadoEsFacturaCobrada(v.estado)).reduce((a,v)=>a+(v.importe||0),0);
 
   // Resumen global
   document.getElementById('comDirResumen').innerHTML = `
     <div class="stats-grid" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">CDV by JCerezo Total</div></div>
+      <div class="stat-card"><div class="stat-numero" style="color:var(--dorado)">${totalCDV.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">CDV by JCerezo Total<br><span style="text-transform:none;letter-spacing:0;font-size:9px;">incl. ${eur2(vn.reduce((x,v)=>x+comJavier(v),0))} de Javier como closer/setter</span></div></div>
       <div class="stat-card"><div class="stat-numero" style="color:var(--verde)">${cobradoCDV.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">CDV by JCerezo Cobrado</div></div>
       <div class="stat-card"><div class="stat-numero" style="color:var(--rojo)">${pendienteCDV.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div><div class="stat-label">CDV by JCerezo Pendiente</div></div>
       <div class="stat-card"><div class="stat-numero">${vn.length}</div><div class="stat-label">Ventas totales</div></div>
@@ -3026,20 +3046,8 @@ function renderComisionesDirector() {
       </div>
     </div>`;
 
-  // Desglose por comercial
-  const porPersona = {};
-  vn.forEach(v => {
-    ['closer','setter'].forEach(rol => {
-      const nombre = v[rol];
-      const com = rol==='closer' ? (v.com_closer||0) : (v.com_setter||0);
-      if(!nombre || nombre==='-' || nombre==='' || com===0) return;
-      if(!porPersona[nombre]) porPersona[nombre]={ventas:0,total:0,cobrado:0,pendiente:0};
-      porPersona[nombre].ventas++;
-      porPersona[nombre].total += com;
-      if(estadoEsComisionCobrada(v.estado)) porPersona[nombre].cobrado += com;
-      else porPersona[nombre].pendiente += com;
-    });
-  });
+  // Desglose por comercial (sin Javier)
+  const porPersona = comisionesPorPersona(vn);
 
   const filas = Object.entries(porPersona).sort((a,b)=>b[1].total-a[1].total);
   document.getElementById('comDirDetalle').innerHTML = filas.length
