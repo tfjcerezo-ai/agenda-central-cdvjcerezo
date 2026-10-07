@@ -2627,7 +2627,9 @@ function guardarEditVenta(id) {
 
 function renderVentasProyecto(proyNombre, containerId) {
   const nv = ventas.map(normVenta);
-  const filtradas = nv.filter(v => (v.proyecto||'').toLowerCase() === proyNombre.toLowerCase());
+  const ALIAS = {jbernad: ['josé bernad','jose bernad', ...PROYECTOS_COMERCIALES.filter(p=>p.cuenta==='José Bernad').map(p=>p.nombre.toLowerCase())], zeren: ['zeren clinic']};
+  const nombres = [proyNombre.toLowerCase(), ...(ALIAS[proyNombre] || [])];
+  const filtradas = nv.filter(v => nombres.includes((v.proyecto||'').toLowerCase()));
   const comCobrada = filtradas.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+ingresoCDV(v),0);
   const factCobrada = filtradas.filter(v=>v.estado==='cobrado').reduce((a,v)=>a+ingresoCDV(v),0);
   const pend = filtradas.filter(v=>v.estado==='pendiente').reduce((a,v)=>a+ingresoCDV(v),0);
@@ -2760,7 +2762,11 @@ const PROYECTOS_COMERCIALES = [
   {nombre:'Kinelia',estado:'Sin arrancar',comCloser:15,comSetter:0,comCDV:10},
   {nombre:'Zeren Clinic',estado:'Pendiente firma',comCloser:15,comSetter:0,comCDV:15},
   {nombre:'YIUX',estado:'Propuesta enviada',comCloser:10,comSetter:0,comCDV:8},
-  {nombre:'José Bernad',estado:'Activo',comCloser:50,comSetter:50,comCDV:0},
+  // José Bernad: comisión sobre venta sin IVA, 50 % Javier (closer) y 50 % Koenraad (setter)
+  {nombre:'Protecciones',cuenta:'José Bernad',estado:'Activo',comCloser:18,comSetter:18,comCDV:0},
+  {nombre:'Protecciones Ultra, macizas y zócalo',cuenta:'José Bernad',estado:'Activo',comCloser:10,comSetter:10,comCDV:0},
+  {nombre:'Perfilería PVC y aluminio',cuenta:'José Bernad',estado:'Activo',comCloser:8,comSetter:8,comCDV:0},
+  {nombre:'Perfilería chapa',cuenta:'José Bernad',estado:'Activo',comCloser:5,comSetter:5,comCDV:0},
   {nombre:'CAYFI',estado:'Dossier pendiente',comCloser:0,comSetter:0,comCDV:7},
 ];
 
@@ -2772,7 +2778,7 @@ function updateVentasDropdowns() {
   if(vCloser) vCloser.innerHTML = getActivoClosersOptions();
   if(vSetter) vSetter.innerHTML = getActivoSettersOptions();
   if(vProyecto) vProyecto.innerHTML = '<option value="">Selecciona proyecto...</option>' +
-    PROYECTOS_COMERCIALES.map(p=>`<option value="${p.nombre}">${p.nombre} (${p.estado})</option>`).join('');
+    PROYECTOS_COMERCIALES.map(p=>`<option value="${p.nombre}">${p.cuenta?p.cuenta+' · ':''}${p.nombre} (${p.estado})</option>`).join('');
 }
 
 // Función para obtener comisiones de un proyecto
