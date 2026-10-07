@@ -860,8 +860,14 @@ function editarPerfil(id) {
     const quitar = suyos.filter(x => !elegidos.includes(x)), poner = elegidos.filter(x => !suyos.includes(x));
     const cambiarSocio = elegidos.filter(x => suyos.includes(x) && !!(miembros.find(m => m.perfil_id === id && m.proyecto_id === x) || {}).socio !== socioDe(x));
     if (quitar.length) { const {error: e1} = await sb.from("crm_miembros").delete().eq("perfil_id", id).in("proyecto_id", quitar); if (e1) return "Error al quitar proyectos: " + e1.message; }
-    if (poner.length) { const {error: e2} = await sb.from("crm_miembros").insert(poner.map(x => ({perfil_id: id, proyecto_id: x, socio: socioDe(x)}))); if (e2) return "Error al asignar proyectos: " + e2.message; }
-    for (const x of cambiarSocio) { const {error: e3} = await sb.from("crm_miembros").update({socio: socioDe(x)}).eq("perfil_id", id).eq("proyecto_id", x); if (e3) return "Error al cambiar socio: " + e3.message; }
+    let sinSocio = false;
+    if (poner.length) {
+      let {error: e2} = await sb.from("crm_miembros").insert(poner.map(x => ({perfil_id: id, proyecto_id: x, socio: socioDe(x)})));
+      if (e2 && /socio/i.test(e2.message)) { sinSocio = true; ({error: e2} = await sb.from("crm_miembros").insert(poner.map(x => ({perfil_id: id, proyecto_id: x})))); }
+      if (e2) return "Error al asignar proyectos: " + e2.message;
+    }
+    for (const x of sinSocio ? [] : cambiarSocio) { const {error: e3} = await sb.from("crm_miembros").update({socio: socioDe(x)}).eq("perfil_id", id).eq("proyecto_id", x); if (e3 && /socio/i.test(e3.message)) { sinSocio = true; break; } if (e3) return "Error al cambiar socio: " + e3.message; }
+    if (sinSocio && document.querySelector("#p-proys [data-socio]:checked")) aviso("Proyectos asignados. La opción Socio aún no está activa en la base de datos: avisa a Claude.", true);
     await cargarTodo(); aviso("Guardado");
   });
 }
