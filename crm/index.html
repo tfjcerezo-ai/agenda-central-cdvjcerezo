@@ -923,7 +923,15 @@ function exportarContactos() {
 /* ===== VENTAS (solo director; misma tabla que Agenda Central) ===== */
 const ESTADO_VENTA = {pendiente: ["Factura pendiente", "p-mal"], cobrado: ["Factura cobrada", "p-aviso"], comision_cobrada: ["Comisión cobrada", "p-ok"]};
 const ESTADO_FACTURA = {emitida: ["Emitida · pendiente de cobro", "p-aviso"], cobrada: ["Cobrada", "p-ok"], anulada: ["Anulada", "p-neutro"]};
-const TIPO_FACTURA = {a_cuenta: "A cuenta", liquidacion: "Liquidación", otra: "Otra"};
+const TIPO_FACTURA = {a_cuenta: "A cuenta", liquidacion: "Liquidación", rectificativa: "Rectificativa", otra: "Otra"};
+const rectificadaPor = (f) => facturas.find(x => x.tipo === "rectificativa" && x.id !== f.id && x.numero.startsWith(f.numero) && x.estado !== "anulada");
+function pildoraFactura(f) {
+  const r = rectificadaPor(f);
+  if (r) return `<span class="pildora p-neutro">Anulada por ${esc(r.numero)}</span>`;
+  if (f.tipo === "rectificativa" && f.estado !== "anulada") return `<span class="pildora p-neutro">Rectificativa</span>`;
+  const e = ESTADO_FACTURA[f.estado] || [f.estado, "p-neutro"];
+  return `<span class="pildora ${e[1]}">${e[0]}</span>`;
+}
 const conIVA = (base, irpf = 7, iva = 21) => r2(base) + r2(base * iva / 100) - r2(base * irpf / 100);
 function bloqueFacturas(vs) {
   const cuentasVentas = [...new Set(vs.map(v => cuentaDe(proyDeVenta(v))))];
@@ -933,17 +941,18 @@ function bloqueFacturas(vs) {
   const vivas = fs.filter(f => f.estado !== "anulada");
   const facturado = r2(sum(vivas, f => +f.base || 0));
   const cobrado = r2(sum(vivas.filter(f => f.estado === "cobrada"), f => +f.base || 0));
+  const pendCobro = r2(sum(vivas.filter(f => f.estado === "emitida" && f.tipo !== "rectificativa" && !rectificadaPor(f)), f => +f.base || 0));
   const pendFacturar = r2(devengado - facturado);
   const paula = r2(sum(vs.filter(v => v.liquidado_cdv != null), v => +v.liquidado_cdv - ingresoCDV(v)));
   return `<div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>Facturas y cobros${filtroVentas === "todos" ? "" : " · " + esc(cuentasVentas.join(", "))}</h3><button class="btn" id="nueva-factura">+ Nueva factura</button></div>
     <div class="fila-liq"><span>Comisiones a facturar por CDV by JCerezo</span><b>${eur(devengado)}</b></div>
     ${paula > 0 ? `<div class="fila-liq sub"><span>incluye ${eur(paula)} de setters que cobra CDV by JCerezo y luego les paga</span></div>` : ""}
-    <div class="fila-liq"><span>Facturado (${vivas.length} ${vivas.length === 1 ? "factura" : "facturas"})</span><b>${eur(facturado)}</b></div>
+    <div class="fila-liq"><span>Facturado neto (${vivas.length} ${vivas.length === 1 ? "factura" : "facturas"}, con rectificativas)</span><b>${eur(facturado)}</b></div>
     <div class="fila-liq"><span>Cobrado</span><b style="color:var(--bien)">${eur(cobrado)}</b></div>
-    ${facturado > cobrado ? `<div class="fila-liq"><span>Facturado y pendiente de cobro</span><b style="color:var(--aviso)">${eur(facturado - cobrado)}</b></div>` : ""}
+    ${pendCobro > 0 ? `<div class="fila-liq"><span>Facturado y pendiente de cobro</span><b style="color:var(--aviso)">${eur(pendCobro)}</b></div>` : ""}
     <div class="fila-liq total"><span>Pendiente de facturar a la liquidación final</span><b>${eur(pendFacturar)}<small>${eur(conIVA(pendFacturar))} con IVA 21 % y retención IRPF 7 %</small></b></div>
     <div class="tabla-env" style="margin-top:12px"><table><thead><tr><th>Nº factura</th><th>Fecha</th><th>Concepto</th><th>Tipo</th><th class="num">Base</th><th class="num">IRPF</th><th class="num">IVA</th><th class="num">Total</th><th>Estado</th></tr></thead><tbody>
-    ${fs.length ? fs.map(f => { const e = ESTADO_FACTURA[f.estado] || [f.estado, "p-neutro"]; return `<tr class="clic" data-factura="${f.id}"><td><b style="font-weight:600">${esc(f.numero)}</b></td><td>${fF(f.fecha)}</td><td>${esc(f.concepto || "")}<small style="display:block;color:var(--texto3)">${esc(f.cliente || "")}</small></td><td>${TIPO_FACTURA[f.tipo] || esc(f.tipo)}</td><td class="num">${eur(f.base)}</td><td class="num">−${eur(f.irpf)}</td><td class="num">${eur(f.iva)}</td><td class="num"><b>${eur(f.total)}</b></td><td><span class="pildora ${e[1]}">${e[0]}</span></td></tr>`; }).join("") : `<tr><td colspan="9">Todavía no hay facturas registradas.</td></tr>`}
+    ${fs.length ? fs.map(f => { return `<tr class="clic" data-factura="${f.id}"><td><b style="font-weight:600">${esc(f.numero)}</b></td><td>${fF(f.fecha)}</td><td>${esc(f.concepto || "")}<small style="display:block;color:var(--texto3)">${esc(f.cliente || "")}</small></td><td>${TIPO_FACTURA[f.tipo] || esc(f.tipo)}</td><td class="num">${eur(f.base)}</td><td class="num">${eur(-f.irpf)}</td><td class="num">${eur(f.iva)}</td><td class="num"><b>${eur(f.total)}</b></td><td>${pildoraFactura(f)}</td></tr>`; }).join("") : `<tr><td colspan="9">Todavía no hay facturas registradas.</td></tr>`}
     </tbody></table></div></div>`;
 }
 function vVentas() {
@@ -984,7 +993,7 @@ function editarFactura(id) {
       <div class="campo"><label for="fa-cuenta">Cuenta</label><select id="fa-cuenta">${[...new Set(proyectos.map(p => p.cuenta).filter(Boolean))].map(c => `<option ${(f ? f.cuenta : "Elocrea") === c ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></div>
       <div class="campo" style="grid-column:1/-1"><label for="fa-concepto">Concepto</label><input id="fa-concepto" value="${esc(f ? f.concepto || "" : "Comisiones a cuenta")}"></div>
       <div class="campo"><label for="fa-tipo">Tipo</label><select id="fa-tipo">${Object.entries(TIPO_FACTURA).map(([k, v]) => `<option value="${k}" ${(f ? f.tipo : "a_cuenta") === k ? "selected" : ""}>${v}</option>`).join("")}</select></div>
-      <div class="campo"><label for="fa-base">Base imponible (€) *</label><input id="fa-base" type="number" step="0.01" min="0" required value="${f ? f.base : ""}"></div>
+      <div class="campo"><label for="fa-base">Base imponible (€) *</label><input id="fa-base" type="number" step="0.01" required value="${f ? f.base : ""}"></div>
       <div class="campo"><label for="fa-irpf">IRPF %</label><input id="fa-irpf" type="number" step="0.01" min="0" value="${f ? f.irpf_pct : 7}"></div>
       <div class="campo"><label for="fa-iva">IVA %</label><input id="fa-iva" type="number" step="0.01" min="0" value="${f ? f.iva_pct : 21}"></div>
       <div class="campo"><label for="fa-estado">Estado</label><select id="fa-estado">${Object.entries(ESTADO_FACTURA).map(([k, v]) => `<option value="${k}" ${(f ? f.estado : "emitida") === k ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>
@@ -992,7 +1001,7 @@ function editarFactura(id) {
       <div class="campo" style="grid-column:1/-1"><label for="fa-notas">Notas</label><textarea id="fa-notas">${esc(f ? f.notas || "" : "")}</textarea></div>
       <p class="nota-ejemplo" id="fa-total" style="grid-column:1/-1"></p>
     </div>`, async () => {
-    const base = parseFloat($("#fa-base").value); if (!(base >= 0)) return "Indica la base imponible.";
+    const base = parseFloat($("#fa-base").value); if (isNaN(base)) return "Indica la base imponible (en negativo si es una rectificativa).";
     const fila = {numero: $("#fa-num").value.trim(), fecha: $("#fa-fecha").value, cliente: $("#fa-cliente").value.trim() || "ELOCREA S.L.", cuenta: $("#fa-cuenta").value,
       concepto: $("#fa-concepto").value.trim() || null, tipo: $("#fa-tipo").value, base: r2(base), irpf_pct: +$("#fa-irpf").value || 0, iva_pct: +$("#fa-iva").value || 0,
       estado: $("#fa-estado").value, fecha_cobro: $("#fa-cobro").value || null, notas: $("#fa-notas").value.trim() || null};
