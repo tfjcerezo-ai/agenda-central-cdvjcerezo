@@ -420,9 +420,39 @@ function selectorProductos(prefijo, proyId, marcados) {
 }
 const ESTADO_COMPRA = {presupuesto: ["Presupuesto", "p-neutro"], pedido: ["Pedido", "p-aviso"], servido: ["Servido", "p-aviso"], cobrado: ["Cobrado", "p-ok"], anulado: ["Anulado", "p-mal"]};
 const tieneFicha = (proyId) => !!(proyectos.find(p => p.id === proyId) || {}).ficha_compra;
-const comisionCompra = (c, proyId) => { const pr = productos.find(x => x.proyecto_id === proyId && x.nombre === c.producto); return pr ? r2((+c.importe || 0) * ((+pr.com_closer || 0) + (+pr.com_setter || 0) + (+pr.com_cdv || 0)) / 100) : null; };
+const comisionCompra = (c, proyId) => { const pr = productos.find(x => x.proyecto_id === proyId && x.nombre === c.producto); if (pr) return r2((+c.importe || 0) * ((+pr.com_closer || 0) + (+pr.com_setter || 0) + (+pr.com_cdv || 0)) / 100); const py = proyectos.find(x => x.id === proyId); const pct = py ? (+py.com_cdv || 0) + (+py.com_closer || 0) + (+py.com_setter || 0) : 0; return pct ? r2((+c.importe || 0) * pct / 100) : null; };
+/* Cuotas mensuales (DeCA mensual): cada mes, el día de cobro, se devenga una cuota más */
+function cuotasDevengadas(v, hasta) {
+  if (v.tipo_cobro !== "mensual") return 1;
+  const ini = aFecha(String(v.inicio_cuotas || v.fecha_cobro || "").slice(0, 10)); if (!ini) return 1;
+  let fin = hasta ? new Date(hasta) : new Date(); const baja = v.fin_cuotas ? aFecha(String(v.fin_cuotas).slice(0, 10)) : null; if (baja && baja < fin) fin = baja;
+  const n = (fin.getFullYear() - ini.getFullYear()) * 12 + (fin.getMonth() - ini.getMonth()) + (fin.getDate() >= ini.getDate() ? 1 : 0);
+  return Math.max(0, n);
+}
+function fechasCuotas(v) { const ini = aFecha(String(v.inicio_cuotas || v.fecha_cobro || "").slice(0, 10)); const n = v._cuotas || 0; return [...Array(n)].map((_, i) => { const d = new Date(ini); d.setMonth(d.getMonth() + i); return fechaISO(d); }); }
+// En el CRM las ventas son solo de lectura: se escalan al cargar (importe y comisiones = cuota × cuotas devengadas)
+function escalarVenta(v) {
+  if (v.tipo_cobro !== "mensual") return {...v, _cuota: null, _cuotas: 1};
+  const f = cuotasDevengadas(v), x = (k) => r2((+v[k] || 0) * f);
+  return {...v, _cuota: +v.importe || 0, _cuotas: f, importe: x("importe"), com_cdv: x("com_cdv"), com_closer: x("com_closer"), com_closer2: x("com_closer2"), com_setter: x("com_setter")};
+}
+// Compras de un cliente: las apuntadas a mano + las ventas registradas en la agenda (las mensuales, una por cuota)
+function ventasDeLead(l) { const k = normEmp(l.empresa); return ventas.filter(v => normEmp(v.cliente) === k && proyDeVenta(v) === l.proyecto_id); }
+function comprasDe(leadsLista) {
+  const out = [];
+  leadsLista.forEach(l => {
+    compras.filter(c => c.lead_id === l.id).forEach(c => out.push({...c, _lead: l}));
+    ventasDeLead(l).forEach(v => {
+      const prod = (prodDeVenta(v) || {}).nombre || nomProy(proyDeVenta(v));
+      const est = v.estado === "comision_cobrada" || v.estado === "cobrado" ? "cobrado" : "pedido";
+      if (v.tipo_cobro === "mensual") fechasCuotas(v).forEach((f, i) => out.push({id: "v" + v.id + "-" + i, lead_id: l.id, fecha: f, producto: prod, descripcion: "Cuota mensual " + (i + 1), cantidad: 1, unidad: "mes", importe: v._cuota, estado: "cobrado", _venta: true, _lead: l}));
+      else out.push({id: "v" + v.id, lead_id: l.id, fecha: String(v.fecha_cobro || "").slice(0, 10), producto: prod, descripcion: "Venta registrada en la agenda", importe: v.importe, estado: est, _venta: true, _lead: l});
+    });
+  });
+  return out;
+}
 function statsCompras(leadIds) {
-  const vivas = compras.filter(c => leadIds.includes(c.lead_id) && c.estado !== "anulado" && c.estado !== "presupuesto").sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  const vivas = comprasDe(leads.filter(l => leadIds.includes(l.id))).filter(c => c.estado !== "anulado" && c.estado !== "presupuesto").sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
   const total = vivas.reduce((s, c) => s + (+c.importe || 0), 0);
   const fechas = [...new Set(vivas.map(c => c.fecha))].sort();
   let cadaDias = null, proxima = null;
@@ -434,7 +464,7 @@ function statsCompras(leadIds) {
   return {vivas, total, n: vivas.length, ticket: vivas.length ? total / vivas.length : 0, primera: fechas[0] || null, ultima: fechas[fechas.length - 1] || null, cadaDias, proxima};
 }
 function bloqueCompras(l) {
-  const cs = compras.filter(c => c.lead_id === l.id).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  const cs = comprasDe([l]).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
   const vivas = cs.filter(c => c.estado !== "anulado" && c.estado !== "presupuesto");
   const total = vivas.reduce((s, c) => s + (+c.importe || 0), 0);
   const com = vivas.reduce((s, c) => s + (comisionCompra(c, l.proyecto_id) || 0), 0);
@@ -442,7 +472,7 @@ function bloqueCompras(l) {
   const top = Object.entries(porProd).sort((a, b) => b[1] - a[1]);
   return `<div class="bloque" style="padding:14px"><div class="bloque-cab"><h3>Ficha de compra</h3><button class="btn" id="nueva-compra">+ Añadir compra</button></div>
     <div class="fila-liq"><span>Total comprado (${vivas.length} ${vivas.length === 1 ? "pedido" : "pedidos"})</span><b>${eur(total)}</b></div>
-    ${com ? `<div class="fila-liq"><span>Comisión generada (a repartir 50/50)</span><b>${eur(com)}<small>${eur(com / 2)} cada uno</small></b></div>` : ""}
+    ${com ? `<div class="fila-liq"><span>Comisión generada${prodsDe(l.proyecto_id).length ? " (a repartir 50/50)" : ""}</span><b>${eur(com)}${prodsDe(l.proyecto_id).length ? `<small>${eur(com / 2)} cada uno</small>` : ""}</b></div>` : ""}
     ${(() => { const st = statsCompras([l.id]); if (!st.n) return "";
       const meses = []; const h = new Date(); for (let i = 11; i >= 0; i--) { const d = new Date(h.getFullYear(), h.getMonth() - i, 1); meses.push({k: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"), t: d.toLocaleDateString("es-ES", {month: "short"})}); }
       const porMes = {}; st.vivas.forEach(c => { const k = String(c.fecha).slice(0, 7); porMes[k] = (porMes[k] || 0) + (+c.importe || 0); });
@@ -455,7 +485,7 @@ function bloqueCompras(l) {
         <div style="margin:10px 0 4px" class="etiq">Compras de los últimos 12 meses</div>
         <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:70px">${meses.map(m => { const v = porMes[m.k] || 0; return `<div title="${m.t}: ${eur(v)}" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:2px"><div style="background:${v ? "var(--oro)" : "var(--linea)"};height:${v ? Math.max(6, v / maxMes * 52) : 2}px;border-radius:3px"></div><div style="font-size:9px;color:var(--texto3);text-align:center">${m.t.replace(".", "")}</div></div>`; }).join("")}</div>`; })()}
     ${top.length ? `<div style="margin:8px 0">${top.map(([n, v]) => `<div class="fila-barra"><span>${esc(n)}</span><div class="barra"><span style="width:${v / Math.max(1, total) * 100}%"></span></div><span class="n">${eur(v)}</span></div>`).join("")}</div>` : ""}
-    ${cs.length ? `<ul class="lista">${cs.map(c => { const e = ESTADO_COMPRA[c.estado] || [c.estado, "p-neutro"]; return `<li class="clic" data-compra="${c.id}" style="cursor:pointer"><span class="crece"><b style="font-weight:500">${esc(c.producto || "Compra")}</b>${c.descripcion ? " · " + esc(c.descripcion) : ""}<small>${fF(c.fecha)}${c.cantidad ? " · " + (+c.cantidad).toLocaleString("es-ES") + " " + esc(c.unidad || "") : ""}${c.notas ? " · " + esc(c.notas) : ""}</small></span><span style="text-align:right"><b style="font-weight:600">${eur(c.importe)}</b><br><span class="pildora ${e[1]}">${e[0]}</span></span></li>`; }).join("")}</ul>` : `<p class="vacia">Todavía no hay compras. Apunta cada pedido para tener su histórico.</p>`}
+    ${cs.length ? `<ul class="lista">${cs.map(c => { const e = ESTADO_COMPRA[c.estado] || [c.estado, "p-neutro"]; return `<li ${c._venta ? `title="Viene de la venta registrada en la agenda"` : `class="clic" data-compra="${c.id}" style="cursor:pointer"`}><span class="crece"><b style="font-weight:500">${esc(c.producto || "Compra")}</b>${c.descripcion ? " · " + esc(c.descripcion) : ""}<small>${fF(c.fecha)}${c.cantidad ? " · " + (+c.cantidad).toLocaleString("es-ES") + " " + esc(c.unidad || "") : ""}${c.notas ? " · " + esc(c.notas) : ""}</small></span><span style="text-align:right"><b style="font-weight:600">${eur(c.importe)}</b><br><span class="pildora ${e[1]}">${e[0]}</span></span></li>`; }).join("")}</ul>` : `<p class="vacia">Todavía no hay compras. Apunta cada pedido para tener su histórico.</p>`}
   </div>`;
 }
 function editarCompra(l, id) {
@@ -624,11 +654,11 @@ async function cargarTodo() {
   const r = await Promise.all(pet);
   const e = r.find(x => x.error); if (e) return fallo(e.error, "Error al cargar datos");
   proyectos = r[0].data; miembros = r[1].data; equipo = r[2].data; leads = r[3].data; reuniones = r[4].data;
-  if (!esDir() && esSocio()) { const v = await sb.from("ventas").select("*").order("id"); ventas = v.error ? [] : v.data || []; }
+  if (!esDir() && esSocio()) { const v = await sb.from("ventas").select("*").order("id"); ventas = v.error ? [] : (v.data || []).map(escalarVenta); }
   const pr = await sb.from("crm_productos").select("*").order("orden"); productos = pr.error ? [] : pr.data || [];
   const co = await sb.from("crm_compras").select("*").order("fecha", {ascending: false}); compras = co.error ? [] : co.data || [];
   if (esDir()) {
-    perfiles = r[5].data; ventas = r[6].data || [];
+    perfiles = r[5].data; ventas = (r[6].data || []).map(escalarVenta);
     const f = await pFact; facturas = f.error ? [] : f.data || [];
     if (f.error) console.warn("Facturas no disponibles:", f.error.message);
   }
@@ -1112,7 +1142,7 @@ function vVentas() {
   ${vs.map(v => { const id = proyDeVenta(v), e = ESTADO_VENTA[v.estado] || [v.estado, "p-neutro"], jv = comJavier(v);
     const closerTxt = v.closer2 ? `${esc(v.closer)} + ${esc(v.closer2)}` : esc(v.closer || "—");
     const comCloser = v.closer2 ? `${eur(v.com_closer)} + ${eur(v.com_closer2)}` : celdaCom(v.com_closer, v.closer);
-    return `<tr><td>${esc(v.cliente)}${v.notas ? `<small style="display:block;color:var(--texto3);max-width:260px;white-space:normal">${esc(v.notas)}</small>` : ""}</td><td><span class="area dir">${id ? etiquetaProy(id) : esc(v.proyecto || "—")}${prodDeVenta(v) ? " · " + esc(prodDeVenta(v).nombre) : ""}</span>${v.tipo_cobro === "mensual" ? ` <small style="color:var(--texto3)">mensual</small>` : ""}</td><td class="num">${eur(v.importe)}</td><td>${closerTxt}</td><td>${esc(v.setter || "—")}</td>
+    return `<tr><td>${esc(v.cliente)}${v.notas ? `<small style="display:block;color:var(--texto3);max-width:260px;white-space:normal">${esc(v.notas)}</small>` : ""}</td><td><span class="area dir">${id ? etiquetaProy(id) : esc(v.proyecto || "—")}${prodDeVenta(v) ? " · " + esc(prodDeVenta(v).nombre) : ""}</span>${v.tipo_cobro === "mensual" ? ` <small style="color:var(--texto3)">mensual</small>` : ""}</td><td class="num">${v._cuota != null ? `${eur(v._cuota)}/mes<small style="display:block;color:var(--texto3)">${v._cuotas} ${v._cuotas === 1 ? "cuota" : "cuotas"} · ${eur(v.importe)}</small>` : eur(v.importe)}</td><td>${closerTxt}</td><td>${esc(v.setter || "—")}</td>
       <td class="num"><b style="font-weight:600">${eur(ingresoCDV(v))}</b>${jv ? `<small style="display:block;color:var(--texto3)">${eur(v.com_cdv)} empresa + ${eur(jv)} Javier</small>` : ""}</td><td class="num">${comCloser}</td><td class="num">${celdaCom(v.com_setter, v.setter)}</td><td><span class="pildora ${e[1]}">${e[0]}</span></td></tr>`; }).join("") || `<tr><td colspan="9">No hay ventas con este filtro.</td></tr>`}
   </tbody></table></div>
   <p style="font-size:12px;color:var(--texto3);margin-top:10px">Para registrar o cobrar ventas sigue usando Agenda Central: aquí se ven al instante. Cuando Javier es closer o setter, su comisión se suma a CDV by JCerezo y no cuenta como pago al equipo.</p>`;

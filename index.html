@@ -2413,26 +2413,36 @@ function normVenta(v) {
 // Comisiones: lo que cobra Javier como closer o setter es ingreso de CDV by JCerezo (no se paga al equipo)
 const eur2 = n => (Number(n)||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+'€';
 const esJavier = n => /^javier(\s+cerezo)?$/i.test(String(n||'').trim());
+// Cuotas mensuales: la comisión se devenga cada mes desde la primera cuota (mismo día de cobro cada mes)
+function cuotasDevengadas(v) {
+  if(v.tipo_cobro !== 'mensual') return 1;
+  const s = String(v.inicio_cuotas || v.fecha_cobro || '').slice(0,10); if(!s) return 1;
+  const ini = new Date(s + 'T00:00'); let fin = new Date();
+  if(v.fin_cuotas) { const b = new Date(String(v.fin_cuotas).slice(0,10) + 'T00:00'); if(b < fin) fin = b; }
+  return Math.max(0, (fin.getFullYear()-ini.getFullYear())*12 + (fin.getMonth()-ini.getMonth()) + (fin.getDate() >= ini.getDate() ? 1 : 0));
+}
+const importeTotal = v => (+v.importe||0) * cuotasDevengadas(v);
 function repartoVenta(v) {
-  const r = [];
-  if(v.closer) r.push({nombre:v.closer, papel:'closer', com:+v.com_closer||0});
-  if(v.closer2) r.push({nombre:v.closer2, papel:'closer', com:+v.com_closer2||0});
-  if(v.setter) r.push({nombre:v.setter, papel:'setter', com:+v.com_setter||0});
+  const r = [], f = cuotasDevengadas(v);
+  if(v.closer) r.push({nombre:v.closer, papel:'closer', com:(+v.com_closer||0)*f});
+  if(v.closer2) r.push({nombre:v.closer2, papel:'closer', com:(+v.com_closer2||0)*f});
+  if(v.setter) r.push({nombre:v.setter, papel:'setter', com:(+v.com_setter||0)*f});
   return r;
 }
 const comJavier = v => repartoVenta(v).filter(p=>esJavier(p.nombre)).reduce((a,p)=>a+p.com,0);
-const ingresoCDV = v => (+v.com_cdv||0) + comJavier(v);
+const ingresoCDV = v => (+v.com_cdv||0) * cuotasDevengadas(v) + comJavier(v);
 const comEquipo = v => repartoVenta(v).filter(p=>!esJavier(p.nombre)).reduce((a,p)=>a+p.com,0);
 function cajasComisionVenta(v) {
   const jv = comJavier(v);
   const otros = repartoVenta(v).filter(p=>!esJavier(p.nombre) && p.com);
   const caja = (titulo, valor, color, fondo, sub) => `<div style="text-align:center;background:${fondo};border-radius:6px;padding:6px;"><div style="font-size:10px;color:var(--gris);">${titulo}</div><div style="font-size:14px;font-weight:700;color:${color};">${eur2(valor)}</div>${sub?`<div style="font-size:9px;color:var(--gris);">${sub}</div>`:''}</div>`;
-  const cajas = [caja('CDV by JCerezo', ingresoCDV(v), 'var(--dorado)', 'rgba(201,168,76,0.1)', jv ? `${eur2(v.com_cdv)} empresa + ${eur2(jv)} Javier` : '')]
+  const fC = cuotasDevengadas(v);
+  const cajas = [caja('CDV by JCerezo', ingresoCDV(v), 'var(--dorado)', 'rgba(201,168,76,0.1)', jv ? `${eur2((+v.com_cdv||0)*fC)} empresa + ${eur2(jv)} Javier` : '')]
     .concat(otros.map(p => caja(`${p.nombre} · ${p.papel}`, p.com, p.papel==='closer'?'var(--verde)':'var(--azul)', p.papel==='closer'?'rgba(81,207,102,0.1)':'rgba(74,158,232,0.1)')));
-  return `<div style="display:grid;grid-template-columns:repeat(${Math.min(3,cajas.length)},1fr);gap:6px;margin-bottom:8px;">${cajas.join('')}</div>${v.notas?`<div style="font-size:10px;color:var(--gris);margin-bottom:8px;">📝 ${v.notas}</div>`:''}`;
+  return `<div style="display:grid;grid-template-columns:repeat(${Math.min(3,cajas.length)},1fr);gap:6px;margin-bottom:8px;">${cajas.join('')}</div>${v.tipo_cobro==='mensual'?`<div style="font-size:10px;color:var(--dorado);margin-bottom:6px;">🔁 ${eur2(v.importe)}/mes · ${fC} ${fC===1?'cuota devengada':'cuotas devengadas'} (${eur2(importeTotal(v))}) · comisiones acumuladas</div>`:''}${v.notas?`<div style="font-size:10px;color:var(--gris);margin-bottom:8px;">📝 ${v.notas}</div>`:''}`;
 }
 // Columnas de la tabla ventas en Supabase (todas las filas deben llevar las mismas claves)
-const COLS_VENTA = ['id','cliente','proyecto','producto','importe','closer','setter','closer2','fecha_cobro','estado','tipo_cobro','com_cdv','com_closer','com_closer2','com_setter','com_jr','liquidado_cdv','notas'];
+const COLS_VENTA = ['id','cliente','proyecto','producto','inicio_cuotas','fin_cuotas','importe','closer','setter','closer2','fecha_cobro','estado','tipo_cobro','com_cdv','com_closer','com_closer2','com_setter','com_jr','liquidado_cdv','notas'];
 function filaVentaSB(v) {
   const n = normVenta(v); const o = {};
   COLS_VENTA.forEach(k => { o[k] = n[k] === undefined || n[k] === '' && k !== 'setter' && k !== 'closer' ? null : n[k]; });
@@ -2612,6 +2622,7 @@ function guardarEditVenta(id) {
     ...(get('proyecto') ? partirClaveVenta(get('proyecto')) : {}),
     cliente: get('cliente') || ventas[idx].cliente,
     tipo_cobro,
+    inicio_cuotas: tipo_cobro === 'mensual' ? (ventas[idx].inicio_cuotas || fecha_cobro) : null,
     importe: parseFloat(get('importe')) || ventas[idx].importe,
     closer: get('closer') ?? ventas[idx].closer,
     setter: get('setter') ?? ventas[idx].setter,
@@ -3043,8 +3054,8 @@ function renderComisionesDirector() {
   const totalJavier = vn.reduce((a,v)=>a+comJavier(v),0);
   const totalClosers = vn.reduce((a,v)=>a+comEquipo(v),0);
   const totalSetters = 0; // ya incluido en comEquipo
-  const totalFacturado = vn.reduce((a,v)=>a+(v.importe||0),0);
-  const cobradoFacturado = vn.filter(v=>estadoEsFacturaCobrada(v.estado)).reduce((a,v)=>a+(v.importe||0),0);
+  const totalFacturado = vn.reduce((a,v)=>a+importeTotal(v),0);
+  const cobradoFacturado = vn.filter(v=>estadoEsFacturaCobrada(v.estado)).reduce((a,v)=>a+importeTotal(v),0);
 
   // Resumen global
   document.getElementById('comDirResumen').innerHTML = `
