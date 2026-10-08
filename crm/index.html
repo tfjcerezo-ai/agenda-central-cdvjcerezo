@@ -382,7 +382,8 @@ let leads = [];
 let reuniones = [];
 let ventas = [];       // solo director: ventas cerradas (tabla de Agenda Central)
 let facturas = [];
-let productos = [];    // crm_productos: productos que se comercializan dentro de un proyecto (p. ej. José Bernad)     // solo director: facturas emitidas por CDV by JCerezo
+let productos = [];
+let compras = [];      // crm_compras: ficha de compra de los clientes (José Bernad, CAYFI…)    // crm_productos: productos que se comercializan dentro de un proyecto (p. ej. José Bernad)     // solo director: facturas emitidas por CDV by JCerezo
 let filtroVentas = "todos";
 let semana = 0, filtroContProy = "todos", busqContactos = "";
 const TIPOS_REUNION = {reunion: "Reunión", llamada: "Llamada", visita: "Visita", demo: "Demo", otro: "Otro"};
@@ -416,6 +417,64 @@ function selectorProductos(prefijo, proyId, marcados) {
   const ps = prodsDe(proyId);
   if (!ps.length) return "";
   return `<div class="campo" style="grid-column:1/-1"><label>Productos que le interesan o consume</label><div class="filtros" id="${prefijo}-prods">${ps.map(pr => `<label class="chip" style="cursor:pointer;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" value="${esc(pr.nombre)}" ${(marcados || []).includes(pr.nombre) ? "checked" : ""} style="width:auto;margin:0"> ${esc(pr.nombre)}</label>`).join("")}</div></div>`;
+}
+const ESTADO_COMPRA = {presupuesto: ["Presupuesto", "p-neutro"], pedido: ["Pedido", "p-aviso"], servido: ["Servido", "p-aviso"], cobrado: ["Cobrado", "p-ok"], anulado: ["Anulado", "p-mal"]};
+const tieneFicha = (proyId) => !!(proyectos.find(p => p.id === proyId) || {}).ficha_compra;
+const comisionCompra = (c, proyId) => { const pr = productos.find(x => x.proyecto_id === proyId && x.nombre === c.producto); return pr ? r2((+c.importe || 0) * ((+pr.com_closer || 0) + (+pr.com_setter || 0) + (+pr.com_cdv || 0)) / 100) : null; };
+function bloqueCompras(l) {
+  const cs = compras.filter(c => c.lead_id === l.id).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  const vivas = cs.filter(c => c.estado !== "anulado" && c.estado !== "presupuesto");
+  const total = vivas.reduce((s, c) => s + (+c.importe || 0), 0);
+  const com = vivas.reduce((s, c) => s + (comisionCompra(c, l.proyecto_id) || 0), 0);
+  const porProd = {}; vivas.forEach(c => { const k = c.producto || "Sin producto"; porProd[k] = (porProd[k] || 0) + (+c.importe || 0); });
+  const top = Object.entries(porProd).sort((a, b) => b[1] - a[1]);
+  return `<div class="bloque" style="padding:14px"><div class="bloque-cab"><h3>Ficha de compra</h3><button class="btn" id="nueva-compra">+ Añadir compra</button></div>
+    <div class="fila-liq"><span>Total comprado (${vivas.length} ${vivas.length === 1 ? "pedido" : "pedidos"})</span><b>${eur(total)}</b></div>
+    ${com ? `<div class="fila-liq"><span>Comisión generada (a repartir 50/50)</span><b>${eur(com)}<small>${eur(com / 2)} cada uno</small></b></div>` : ""}
+    ${vivas.length ? `<div class="fila-liq"><span>Último pedido</span><b>${fF(vivas[0].fecha)}</b></div>` : ""}
+    ${top.length ? `<div style="margin:8px 0">${top.map(([n, v]) => `<div class="fila-barra"><span>${esc(n)}</span><div class="barra"><span style="width:${v / Math.max(1, total) * 100}%"></span></div><span class="n">${eur(v)}</span></div>`).join("")}</div>` : ""}
+    ${cs.length ? `<ul class="lista">${cs.map(c => { const e = ESTADO_COMPRA[c.estado] || [c.estado, "p-neutro"]; return `<li class="clic" data-compra="${c.id}" style="cursor:pointer"><span class="crece"><b style="font-weight:500">${esc(c.producto || "Compra")}</b>${c.descripcion ? " · " + esc(c.descripcion) : ""}<small>${fF(c.fecha)}${c.cantidad ? " · " + (+c.cantidad).toLocaleString("es-ES") + " " + esc(c.unidad || "") : ""}${c.notas ? " · " + esc(c.notas) : ""}</small></span><span style="text-align:right"><b style="font-weight:600">${eur(c.importe)}</b><br><span class="pildora ${e[1]}">${e[0]}</span></span></li>`; }).join("")}</ul>` : `<p class="vacia">Todavía no hay compras. Apunta cada pedido para tener su histórico.</p>`}
+  </div>`;
+}
+function editarCompra(l, id) {
+  const c = id ? compras.find(x => x.id === id) : null;
+  const ps = prodsDe(l.proyecto_id);
+  const UNIDADES = ["ud", "m", "m²", "rollo", "kit", "lote"];
+  modal(`<h3>${c ? "Editar compra" : "Nueva compra"} · ${esc(l.empresa)}</h3>
+    <div class="rejilla-campos">
+      <div class="campo"><label for="c-fecha">Fecha *</label><input id="c-fecha" type="date" required value="${c ? c.fecha : fechaISO(new Date())}"></div>
+      <div class="campo"><label for="c-estado">Estado</label><select id="c-estado">${Object.entries(ESTADO_COMPRA).map(([k, v]) => `<option value="${k}" ${(c ? c.estado : "pedido") === k ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>
+      <div class="campo" style="grid-column:1/-1"><label for="c-prod">Producto</label>${ps.length ? `<select id="c-prod">${ps.map(p => `<option ${c && c.producto === p.nombre ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select>` : `<input id="c-prod" value="${esc(c ? c.producto || "" : "")}" placeholder="Qué ha comprado">`}</div>
+      <div class="campo" style="grid-column:1/-1"><label for="c-desc">Detalle</label><input id="c-desc" value="${esc(c ? c.descripcion || "" : "")}" placeholder="Referencia, modelo, medidas…"></div>
+      <div class="campo"><label for="c-cant">Cantidad</label><input id="c-cant" type="number" step="0.01" min="0" value="${c && c.cantidad != null ? c.cantidad : ""}"></div>
+      <div class="campo"><label for="c-uni">Unidad</label><select id="c-uni">${UNIDADES.map(u => `<option ${(c ? c.unidad : "ud") === u ? "selected" : ""}>${u}</option>`).join("")}</select></div>
+      <div class="campo"><label for="c-imp">Importe sin IVA (€) *</label><input id="c-imp" type="number" step="0.01" min="0" required value="${c ? c.importe : ""}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="c-notas">Notas</label><textarea id="c-notas">${esc(c ? c.notas || "" : "")}</textarea></div>
+      <p class="nota-ejemplo" id="c-com" style="grid-column:1/-1"></p>
+    </div>`, async () => {
+    const imp = parseFloat($("#c-imp").value); if (isNaN(imp)) return "Indica el importe.";
+    const fila = {lead_id: l.id, fecha: $("#c-fecha").value, estado: $("#c-estado").value, producto: $("#c-prod").value.trim() || null, descripcion: $("#c-desc").value.trim() || null,
+      cantidad: $("#c-cant").value ? +$("#c-cant").value : null, unidad: $("#c-uni").value, importe: r2(imp), notas: $("#c-notas").value.trim() || null};
+    const q = c ? sb.from("crm_compras").update(fila).eq("id", c.id) : sb.from("crm_compras").insert(fila);
+    const {data, error} = await q.select().single();
+    if (error) return "No se pudo guardar: " + error.message;
+    if (c) Object.assign(c, data); else compras.unshift(data);
+    if (!c) await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Compra apuntada: ${fila.producto || ""} ${eur(fila.importe)}`.trim()});
+    aviso(c ? "Compra actualizada" : "Compra apuntada"); setTimeout(() => abrirLead(l.id), 0);
+  }, c ? "Guardar" : "Apuntar compra");
+  const calc = () => { const v = comisionCompra({importe: +$("#c-imp").value || 0, producto: $("#c-prod").value}, l.proyecto_id); $("#c-com").textContent = v != null ? `Comisión de esta compra: ${eur(v)} (${eur(v / 2)} cada uno)` : ""; };
+  ["#c-imp", "#c-prod"].forEach(k => { const el = $(k); if (el) el.oninput = el.onchange = calc; }); calc();
+  if (c) {
+    const acc = $(".modal-acciones");
+    const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.style.color = "var(--mal)"; b.style.marginRight = "auto"; b.textContent = "Borrar";
+    b.onclick = async () => {
+      if (!confirm("¿Borrar esta compra?")) return;
+      const {error} = await sb.from("crm_compras").delete().eq("id", c.id);
+      if (error) return fallo(error, "No se pudo borrar");
+      compras = compras.filter(x => x.id !== c.id); cerrarCapa(); abrirLead(l.id); aviso("Compra borrada");
+    };
+    acc.prepend(b);
+  }
 }
 const leerProductos = (prefijo) => [...document.querySelectorAll(`#${prefijo}-prods input:checked`)].map(i => i.value);
 /* Comisiones: lo que cobra Javier como closer o setter es ingreso de CDV by JCerezo */
@@ -545,6 +604,7 @@ async function cargarTodo() {
   proyectos = r[0].data; miembros = r[1].data; equipo = r[2].data; leads = r[3].data; reuniones = r[4].data;
   if (!esDir() && esSocio()) { const v = await sb.from("ventas").select("*").order("id"); ventas = v.error ? [] : v.data || []; }
   const pr = await sb.from("crm_productos").select("*").order("orden"); productos = pr.error ? [] : pr.data || [];
+  const co = await sb.from("crm_compras").select("*").order("fecha", {ascending: false}); compras = co.error ? [] : co.data || [];
   if (esDir()) {
     perfiles = r[5].data; ventas = r[6].data || [];
     const f = await pFact; facturas = f.error ? [] : f.data || [];
@@ -742,6 +802,7 @@ async function abrirLead(id) {
     <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span></div>
       <form class="paso-form" id="f-paso"><input class="entrada" id="paso-accion" aria-label="Acción" value="${esc(l.proximo_paso || "Llamar")}"><input class="entrada" type="date" id="paso-fecha" aria-label="Fecha" value="${l.proximo_paso_fecha || ""}"><button class="btn" type="submit">Programar</button></form></div>
     <button class="btn" id="reunion-lead" style="align-self:flex-start">📅 Programar reunión</button>
+    ${tieneFicha(l.proyecto_id) ? bloqueCompras(l) : ""}
     <div><div class="etiq" style="margin-bottom:8px">Registrar llamada</div><div class="filtros">${["Contestó", "No contestó", "Volver a llamar"].map(t => `<button class="chip" data-llamada="${t}">${t}</button>`).join("")}</div></div>
     <form id="f-nota"><div class="campo"><label for="nota-txt">Añadir nota</label><textarea id="nota-txt" placeholder="Qué ha pasado"></textarea></div><button class="btn" type="submit">Guardar nota</button></form>
     <div class="rejilla-campos">
@@ -763,6 +824,8 @@ async function abrirLead(id) {
   </aside>`;
   capa.querySelectorAll("[data-cerrar]").forEach(b => b.onclick = cerrarCapa);
   $("#reunion-lead").onclick = () => editarReunion(null, {lead_id: l.id});
+  const nc = $("#nueva-compra"); if (nc) nc.onclick = () => editarCompra(l, null);
+  capa.querySelectorAll("[data-compra]").forEach(b => b.onclick = () => editarCompra(l, +b.dataset.compra));
   const nota = async (tipo, texto) => {
     const {error} = await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo, texto});
     if (error) throw error;
@@ -935,7 +998,7 @@ function vContactos() {
     const prods = [...new Set(c.ventas.map(v => proyDeVenta(v)).filter(Boolean))];
     const prodsLead = [...new Set(c.leads.map(l => l.proyecto_id).filter(id => id && !prods.includes(id)))];
     const situ = [...prods.map(id => `<span class="pildora p-ok">Cliente ${esc(nomProy(id))}</span>`), ...c.leads.filter(l => !prods.includes(l.proyecto_id)).map(l => `<span class="pildora ${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? "p-mal" : l.etapa === GANADO ? "p-ok" : "p-neutro"}">${esc(l.etapa)}</span>`)].join(" ");
-    return `<tr class="${l0 ? "clic" : ""}" ${l0 ? `data-lead="${l0.id}"` : ""}><td><div class="celda-nom"><span class="avatar">${iniciales(c.empresa)}</span><div>${esc(c.empresa)}${c.ventas.length ? `<small>${eur(c.ventas.reduce((s, v) => s + (+v.importe || 0), 0))} vendido</small>` : ""}</div></div></td>
+    return `<tr class="${l0 ? "clic" : ""}" ${l0 ? `data-lead="${l0.id}"` : ""}><td><div class="celda-nom"><span class="avatar">${iniciales(c.empresa)}</span><div>${esc(c.empresa)}${c.ventas.length ? `<small>${eur(c.ventas.reduce((s, v) => s + (+v.importe || 0), 0))} vendido</small>` : ""}${(() => { const ids = c.leads.map(l => l.id); const t = compras.filter(x => ids.includes(x.lead_id) && x.estado !== "anulado" && x.estado !== "presupuesto").reduce((s, x) => s + (+x.importe || 0), 0); return t ? `<small>${eur(t)} en compras</small>` : ""; })()}</div></div></td>
       <td>${esc(c.contactos.join(", ") || "—")}${c.cargo ? `<small style="display:block;color:var(--texto3)">${esc(c.cargo)}</small>` : ""}</td>
       <td>${c.telefono ? `<a href="tel:${esc(c.telefono)}" onclick="event.stopPropagation()" style="color:var(--oro-claro)">${esc(c.telefono)}</a>` : "—"}</td>
       <td>${c.email ? `<a href="mailto:${esc(c.email)}" onclick="event.stopPropagation()" style="color:var(--oro-claro)">${esc(c.email)}</a>` : "—"}</td>
