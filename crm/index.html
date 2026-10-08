@@ -421,6 +421,18 @@ function selectorProductos(prefijo, proyId, marcados) {
 const ESTADO_COMPRA = {presupuesto: ["Presupuesto", "p-neutro"], pedido: ["Pedido", "p-aviso"], servido: ["Servido", "p-aviso"], cobrado: ["Cobrado", "p-ok"], anulado: ["Anulado", "p-mal"]};
 const tieneFicha = (proyId) => !!(proyectos.find(p => p.id === proyId) || {}).ficha_compra;
 const comisionCompra = (c, proyId) => { const pr = productos.find(x => x.proyecto_id === proyId && x.nombre === c.producto); return pr ? r2((+c.importe || 0) * ((+pr.com_closer || 0) + (+pr.com_setter || 0) + (+pr.com_cdv || 0)) / 100) : null; };
+function statsCompras(leadIds) {
+  const vivas = compras.filter(c => leadIds.includes(c.lead_id) && c.estado !== "anulado" && c.estado !== "presupuesto").sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  const total = vivas.reduce((s, c) => s + (+c.importe || 0), 0);
+  const fechas = [...new Set(vivas.map(c => c.fecha))].sort();
+  let cadaDias = null, proxima = null;
+  if (fechas.length > 1) {
+    const dias = (new Date(fechas[fechas.length - 1]) - new Date(fechas[0])) / 864e5;
+    cadaDias = Math.round(dias / (fechas.length - 1));
+    const p = new Date(fechas[fechas.length - 1]); p.setDate(p.getDate() + cadaDias); proxima = fechaISO(p);
+  }
+  return {vivas, total, n: vivas.length, ticket: vivas.length ? total / vivas.length : 0, primera: fechas[0] || null, ultima: fechas[fechas.length - 1] || null, cadaDias, proxima};
+}
 function bloqueCompras(l) {
   const cs = compras.filter(c => c.lead_id === l.id).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
   const vivas = cs.filter(c => c.estado !== "anulado" && c.estado !== "presupuesto");
@@ -431,7 +443,17 @@ function bloqueCompras(l) {
   return `<div class="bloque" style="padding:14px"><div class="bloque-cab"><h3>Ficha de compra</h3><button class="btn" id="nueva-compra">+ Añadir compra</button></div>
     <div class="fila-liq"><span>Total comprado (${vivas.length} ${vivas.length === 1 ? "pedido" : "pedidos"})</span><b>${eur(total)}</b></div>
     ${com ? `<div class="fila-liq"><span>Comisión generada (a repartir 50/50)</span><b>${eur(com)}<small>${eur(com / 2)} cada uno</small></b></div>` : ""}
-    ${vivas.length ? `<div class="fila-liq"><span>Último pedido</span><b>${fF(vivas[0].fecha)}</b></div>` : ""}
+    ${(() => { const st = statsCompras([l.id]); if (!st.n) return "";
+      const meses = []; const h = new Date(); for (let i = 11; i >= 0; i--) { const d = new Date(h.getFullYear(), h.getMonth() - i, 1); meses.push({k: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"), t: d.toLocaleDateString("es-ES", {month: "short"})}); }
+      const porMes = {}; st.vivas.forEach(c => { const k = String(c.fecha).slice(0, 7); porMes[k] = (porMes[k] || 0) + (+c.importe || 0); });
+      const maxMes = Math.max(1, ...meses.map(m => porMes[m.k] || 0));
+      const atrasada = st.proxima && difDias(st.proxima) < 0;
+      return `<div class="fila-liq"><span>Ticket medio</span><b>${eur(st.ticket)}</b></div>
+        <div class="fila-liq"><span>Cliente desde · último pedido</span><b>${fF(st.primera)} · ${fF(st.ultima)}</b></div>
+        <div class="fila-liq"><span>Compra cada</span><b>${st.cadaDias != null ? st.cadaDias + " días de media" : "— (hace falta más de un pedido)"}</b></div>
+        ${st.proxima ? `<div class="fila-liq"><span>Próxima compra prevista</span><b style="color:${atrasada ? "var(--aviso)" : "var(--bien)"}">${fF(st.proxima)}<small>${atrasada ? "ya debería haber repetido: llámale" : "dentro de " + difDias(st.proxima) + " días"}</small></b></div>` : ""}
+        <div style="margin:10px 0 4px" class="etiq">Compras de los últimos 12 meses</div>
+        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:70px">${meses.map(m => { const v = porMes[m.k] || 0; return `<div title="${m.t}: ${eur(v)}" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:2px"><div style="background:${v ? "var(--oro)" : "var(--linea)"};height:${v ? Math.max(6, v / maxMes * 52) : 2}px;border-radius:3px"></div><div style="font-size:9px;color:var(--texto3);text-align:center">${m.t.replace(".", "")}</div></div>`; }).join("")}</div>`; })()}
     ${top.length ? `<div style="margin:8px 0">${top.map(([n, v]) => `<div class="fila-barra"><span>${esc(n)}</span><div class="barra"><span style="width:${v / Math.max(1, total) * 100}%"></span></div><span class="n">${eur(v)}</span></div>`).join("")}</div>` : ""}
     ${cs.length ? `<ul class="lista">${cs.map(c => { const e = ESTADO_COMPRA[c.estado] || [c.estado, "p-neutro"]; return `<li class="clic" data-compra="${c.id}" style="cursor:pointer"><span class="crece"><b style="font-weight:500">${esc(c.producto || "Compra")}</b>${c.descripcion ? " · " + esc(c.descripcion) : ""}<small>${fF(c.fecha)}${c.cantidad ? " · " + (+c.cantidad).toLocaleString("es-ES") + " " + esc(c.unidad || "") : ""}${c.notas ? " · " + esc(c.notas) : ""}</small></span><span style="text-align:right"><b style="font-weight:600">${eur(c.importe)}</b><br><span class="pildora ${e[1]}">${e[0]}</span></span></li>`; }).join("")}</ul>` : `<p class="vacia">Todavía no hay compras. Apunta cada pedido para tener su histórico.</p>`}
   </div>`;
@@ -652,6 +674,7 @@ function enlazar(r) {
   r.querySelectorAll("[data-fcont]").forEach(b => b.onclick = () => { filtroContProy = b.dataset.fcont; render(); });
   const bc = $("#buscar-cont", r); if (bc) bc.oninput = () => { busqContactos = bc.value; const pos = bc.selectionStart; render(); const n = $("#buscar-cont"); n.focus(); n.setSelectionRange(pos, pos); };
   const ex = $("#exportar-cont", r); if (ex) ex.onclick = exportarContactos;
+  const exc = $("#exportar-compras", r); if (exc) exc.onclick = exportarCompras;
   r.querySelectorAll("[data-semana]").forEach(b => b.onclick = () => { semana = b.dataset.semana === "0" ? 0 : semana + (+b.dataset.semana); render(); });
   r.querySelectorAll("[data-nueva-reunion]").forEach(b => b.onclick = () => editarReunion(null, {fecha: b.dataset.fecha || null}));
   r.querySelectorAll("[data-reunion]").forEach(b => b.onclick = (e) => { e.stopPropagation(); editarReunion(+b.dataset.reunion); });
@@ -988,25 +1011,34 @@ function vContactos() {
   const lista = contactosAgrupados();
   const clientes = lista.filter(c => c.ventas.length).length;
   return `<div class="cabecera"><div><h2>Contactos</h2><div class="sub">${lista.length} empresas${esDir() ? ` · ${clientes} ya son clientes` : ""} · todos los proyectos en una sola lista</div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="exportar-cont">⬇ Descargar Excel</button><button class="btn btn-oro" data-nuevo-lead>+ Nuevo contacto</button></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="exportar-cont">⬇ Descargar Excel</button>${compras.length ? `<button class="btn" id="exportar-compras">⬇ Historial de compras</button>` : ""}<button class="btn btn-oro" data-nuevo-lead>+ Nuevo contacto</button></div></div>
   <div class="barra-herr"><div class="izq">${chipsProyecto("fcont", filtroContProy)}</div>
     <div class="der"><input class="entrada buscar" id="buscar-cont" type="search" placeholder="Buscar empresa, persona, teléfono o correo" value="${esc(busqContactos)}"></div></div>
-  <div class="tabla-env"><table><thead><tr><th>Empresa</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th>Productos</th>${esDir() ? "<th>Comercial</th>" : ""}<th>Situación</th></tr></thead><tbody>
+  <div class="tabla-env"><table><thead><tr><th>Empresa</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th>Productos</th><th class="num">Compras</th>${esDir() ? "<th>Comercial</th>" : ""}<th>Situación</th></tr></thead><tbody>
   ${lista.length ? lista.map(c => {
     const l0 = c.leads[0];
     const coms = [...new Set(c.leads.flatMap(l => [l.closer_id, l.setter_id]).filter(Boolean).map(nomPersona).concat(c.ventas.flatMap(v => [v.closer, v.setter]).filter(Boolean)))];
     const prods = [...new Set(c.ventas.map(v => proyDeVenta(v)).filter(Boolean))];
     const prodsLead = [...new Set(c.leads.map(l => l.proyecto_id).filter(id => id && !prods.includes(id)))];
     const situ = [...prods.map(id => `<span class="pildora p-ok">Cliente ${esc(nomProy(id))}</span>`), ...c.leads.filter(l => !prods.includes(l.proyecto_id)).map(l => `<span class="pildora ${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? "p-mal" : l.etapa === GANADO ? "p-ok" : "p-neutro"}">${esc(l.etapa)}</span>`)].join(" ");
-    return `<tr class="${l0 ? "clic" : ""}" ${l0 ? `data-lead="${l0.id}"` : ""}><td><div class="celda-nom"><span class="avatar">${iniciales(c.empresa)}</span><div>${esc(c.empresa)}${c.ventas.length ? `<small>${eur(c.ventas.reduce((s, v) => s + (+v.importe || 0), 0))} vendido</small>` : ""}${(() => { const ids = c.leads.map(l => l.id); const t = compras.filter(x => ids.includes(x.lead_id) && x.estado !== "anulado" && x.estado !== "presupuesto").reduce((s, x) => s + (+x.importe || 0), 0); return t ? `<small>${eur(t)} en compras</small>` : ""; })()}</div></div></td>
+    return `<tr class="${l0 ? "clic" : ""}" ${l0 ? `data-lead="${l0.id}"` : ""}><td><div class="celda-nom"><span class="avatar">${iniciales(c.empresa)}</span><div>${esc(c.empresa)}${c.ventas.length ? `<small>${eur(c.ventas.reduce((s, v) => s + (+v.importe || 0), 0))} vendido</small>` : ""}</div></div></td>
       <td>${esc(c.contactos.join(", ") || "—")}${c.cargo ? `<small style="display:block;color:var(--texto3)">${esc(c.cargo)}</small>` : ""}</td>
       <td>${c.telefono ? `<a href="tel:${esc(c.telefono)}" onclick="event.stopPropagation()" style="color:var(--oro-claro)">${esc(c.telefono)}</a>` : "—"}</td>
       <td>${c.email ? `<a href="mailto:${esc(c.email)}" onclick="event.stopPropagation()" style="color:var(--oro-claro)">${esc(c.email)}</a>` : "—"}</td>
       <td><div class="filtros">${[...prods, ...prodsLead].map(id => `<span class="area dir">${etiquetaProy(id)}</span>`).join("")}${tagsProd([...new Set(c.leads.flatMap(l => l.productos || []).concat(c.ventas.map(v => (prodDeVenta(v) || {}).nombre).filter(Boolean)))])}</div></td>
+      <td class="num">${(() => { const conFicha = c.leads.filter(l => tieneFicha(l.proyecto_id)); if (!conFicha.length) return `<span style="color:var(--texto3)">—</span>`; const st = statsCompras(conFicha.map(l => l.id)); return st.n ? `<b style="font-weight:600">${eur(st.total)}</b><small style="display:block;color:var(--texto3)">${st.n} ${st.n === 1 ? "pedido" : "pedidos"} · último ${fF(st.ultima)}${st.cadaDias != null ? " · cada " + st.cadaDias + " d" : ""}</small>` : `<span style="color:var(--texto3)">sin compras</span>`; })()}</td>
       ${esDir() ? `<td>${esc(coms.join(", ") || "Sin asignar")}</td>` : ""}
       <td>${situ}</td></tr>`;
-  }).join("") : `<tr><td colspan="7">No hay contactos${busqContactos || filtroContProy !== "todos" ? " con este filtro" : " todavía. Cada lead que creéis aparece aquí"}.</td></tr>`}
+  }).join("") : `<tr><td colspan="8">No hay contactos${busqContactos || filtroContProy !== "todos" ? " con este filtro" : " todavía. Cada lead que creéis aparece aquí"}.</td></tr>`}
   </tbody></table></div>`;
+}
+function exportarCompras() {
+  const filas = [["Cliente", "Proyecto", "Fecha", "Producto", "Detalle", "Cantidad", "Unidad", "Importe sin IVA", "Estado", "Notas"]];
+  compras.slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach(c => { const l = leads.find(x => x.id === c.lead_id) || {};
+    filas.push([l.empresa || "", nomProy(l.proyecto_id), c.fecha, c.producto || "", c.descripcion || "", c.cantidad != null ? String(c.cantidad).replace(".", ",") : "", c.unidad || "", String(+c.importe || 0).replace(".", ","), (ESTADO_COMPRA[c.estado] || [c.estado])[0], c.notas || ""]); });
+  const csv = "\ufeff" + filas.map(f => f.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
+  a.download = "historial-compras-" + fechaISO(new Date()) + ".csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 function exportarContactos() {
   const filas = [["Empresa", "Contacto", "Cargo", "Teléfono", "Correo", "Proyecto", "Etapa", "Valor", "Closer", "Setter", "Próximo paso", "Fecha próximo paso", "Origen"]];
