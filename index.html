@@ -2780,6 +2780,9 @@ const PROYECTOS_COMERCIALES = [
   {nombre:'Perfilería PVC y aluminio',cuenta:'José Bernad',estado:'Activo',comCloser:8,comSetter:8,comCDV:0},
   {nombre:'Perfilería chapa',cuenta:'José Bernad',estado:'Activo',comCloser:5,comSetter:5,comCDV:0},
   {nombre:'CAYFI',estado:'Sin condiciones aún',comCloser:0,comSetter:0,comCDV:0},
+  // Eventos: ingreso directo de CDV by JCerezo (caché, comisión de sala, inscripciones), 100 % empresa
+  {nombre:'LIGA25DJ',cuenta:'Eventos',estado:'Activo',comCloser:0,comSetter:0,comCDV:100},
+  {nombre:'Varios',cuenta:'Eventos',estado:'Activo',comCloser:0,comSetter:0,comCDV:100},
 ];
 
 // Función para actualizar dropdowns de Nueva Venta
@@ -2797,10 +2800,12 @@ function updateVentasDropdowns() {
 // el valor es "José Bernad|Producto" y se guarda como proyecto = José Bernad, producto = Producto.
 const claveVenta = p => p.cuenta === 'José Bernad' ? 'José Bernad|' + p.nombre : p.nombre;
 function opcionesProyectoVenta(seleccion) {
-  const sueltos = PROYECTOS_COMERCIALES.filter(p=>p.cuenta!=='José Bernad');
+  const sueltos = PROYECTOS_COMERCIALES.filter(p=>!p.cuenta);
   const jb = PROYECTOS_COMERCIALES.filter(p=>p.cuenta==='José Bernad');
+  const ev = PROYECTOS_COMERCIALES.filter(p=>p.cuenta==='Eventos');
   const opt = p => `<option value="${claveVenta(p)}" ${claveVenta(p)===seleccion?'selected':''}>${p.nombre} (${p.estado})</option>`;
-  return sueltos.map(opt).join('') + (jb.length ? `<optgroup label="José Bernad — elige el producto">${jb.map(opt).join('')}</optgroup>` : '');
+  return sueltos.map(opt).join('') + (jb.length ? `<optgroup label="José Bernad — elige el producto">${jb.map(opt).join('')}</optgroup>` : '')
+    + (ev.length ? `<optgroup label="Eventos — ingreso 100 % CDV by JCerezo">${ev.map(p=>opt(p).replace(p.nombre+' (', 'Eventos · '+p.nombre+' (')).join('')}</optgroup>` : '');
 }
 function claveDeVenta(v) {
   if(v.producto) return (v.proyecto||'José Bernad') + '|' + v.producto;
