@@ -2348,8 +2348,9 @@ function guardarVenta() {
   const hoy = new Date().toISOString().split('T')[0];
   const diasAlerta = Math.floor((new Date(fecha)-new Date(hoy))/(1000*60*60*24));
   const com = getProyectoComisiones(proyecto);
+  const pp = partirClaveVenta(proyecto);
   ventas.unshift({
-    id:Date.now(), cliente, proyecto, importe:imp,
+    id:Date.now(), cliente, proyecto:pp.proyecto, producto:pp.producto, importe:imp,
     closer:document.getElementById('vCloser').value,
     setter:document.getElementById('vSetter').value,
     fecha_cobro:fecha, estado:'pendiente',
@@ -2431,7 +2432,7 @@ function cajasComisionVenta(v) {
   return `<div style="display:grid;grid-template-columns:repeat(${Math.min(3,cajas.length)},1fr);gap:6px;margin-bottom:8px;">${cajas.join('')}</div>${v.notas?`<div style="font-size:10px;color:var(--gris);margin-bottom:8px;">📝 ${v.notas}</div>`:''}`;
 }
 // Columnas de la tabla ventas en Supabase (todas las filas deben llevar las mismas claves)
-const COLS_VENTA = ['id','cliente','proyecto','importe','closer','setter','closer2','fecha_cobro','estado','tipo_cobro','com_cdv','com_closer','com_closer2','com_setter','com_jr','liquidado_cdv','notas'];
+const COLS_VENTA = ['id','cliente','proyecto','producto','importe','closer','setter','closer2','fecha_cobro','estado','tipo_cobro','com_cdv','com_closer','com_closer2','com_setter','com_jr','liquidado_cdv','notas'];
 function filaVentaSB(v) {
   const n = normVenta(v); const o = {};
   COLS_VENTA.forEach(k => { o[k] = n[k] === undefined || n[k] === '' && k !== 'setter' && k !== 'closer' ? null : n[k]; });
@@ -2460,7 +2461,7 @@ function renderVentas() {
         <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--dorado);">${v.importe.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px;">
-        <span style="background:rgba(201,168,76,0.15);padding:4px 8px;border-radius:4px;color:var(--dorado);">📁 ${v.proyecto||'Sin proyecto'}</span>
+        <span style="background:rgba(201,168,76,0.15);padding:4px 8px;border-radius:4px;color:var(--dorado);">📁 ${v.proyecto||'Sin proyecto'}${v.producto?' · '+v.producto:''}</span>
         <span style="color:var(--gris);">${fmtFecha(v.fecha_cobro)}</span>
       </div>
       ${alerta?`<div style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:var(--rojo);">⚠️ ${diasRest<=0?'¡VENCIDO HOY!':'Vence en '+diasRest+' días'}</div>`:''}
@@ -2491,7 +2492,9 @@ function editarVenta(id) {
   const v = ventas.find(x=>x.id===id);
   if(!v) return;
   const nv = normVenta(v);
-  const proyOpts = Object.entries(PNOMBRES).map(([k,n])=>`<option value="${k}" ${(nv.proyecto||'')=== k?'selected':''}>${n}</option>`).join('');
+  const claveAct = claveDeVenta(nv);
+  const conocida = PROYECTOS_COMERCIALES.some(p=>claveVenta(p)===claveAct);
+  const proyOpts = (conocida ? '' : `<option value="${claveAct}" selected>${claveAct || 'Sin proyecto'}</option>`) + opcionesProyectoVenta(claveAct);
   const inputStyle = 'background:#2a2a2a;border:1px solid rgba(201,168,76,0.2);border-radius:8px;color:var(--blanco-suave);padding:8px 12px;width:100%;font-size:13px;box-sizing:border-box;';
   const labelStyle = 'font-size:11px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;';
   const modal = document.createElement('div');
@@ -2565,9 +2568,7 @@ function editarVenta(id) {
 function evRecalcComisiones() {
   const proyectoKey = document.getElementById('ev_proyecto')?.value || '';
   const imp = parseFloat(document.getElementById('ev_importe')?.value) || 0;
-  // Buscar comisiones por nombre del proyecto (PNOMBRES mapea key→nombre)
-  const proyNombre = PNOMBRES[proyectoKey] || proyectoKey;
-  const com = getProyectoComisiones(proyNombre);
+  const com = getProyectoComisiones(proyectoKey);
   const cdv = r2(imp*(com.comCDV/100));
   const closer = r2(imp*(com.comCloser/100));
   const setter = r2(imp*(com.comSetter/100));
@@ -2608,7 +2609,7 @@ function guardarEditVenta(id) {
   const fecha_cobro = tipo_cobro === 'mensual' ? proximoCobro6() : (get('fecha_cobro') || ventas[idx].fecha_cobro);
   ventas[idx] = {
     ...ventas[idx],
-    proyecto: get('proyecto') || ventas[idx].proyecto,
+    ...(get('proyecto') ? partirClaveVenta(get('proyecto')) : {}),
     cliente: get('cliente') || ventas[idx].cliente,
     tipo_cobro,
     importe: parseFloat(get('importe')) || ventas[idx].importe,
@@ -2777,13 +2778,30 @@ function updateVentasDropdowns() {
   const vProyecto = document.getElementById('vProyecto');
   if(vCloser) vCloser.innerHTML = getActivoClosersOptions();
   if(vSetter) vSetter.innerHTML = getActivoSettersOptions();
-  if(vProyecto) vProyecto.innerHTML = '<option value="">Selecciona proyecto...</option>' +
-    PROYECTOS_COMERCIALES.map(p=>`<option value="${p.nombre}">${p.cuenta?p.cuenta+' · ':''}${p.nombre} (${p.estado})</option>`).join('');
+  if(vProyecto) vProyecto.innerHTML = '<option value="">Selecciona proyecto...</option>' + opcionesProyectoVenta('');
 }
 
 // Función para obtener comisiones de un proyecto
-function getProyectoComisiones(nombreProyecto) {
-  const p = PROYECTOS_COMERCIALES.find(x=>x.nombre===nombreProyecto);
+// Opciones de proyecto para registrar ventas. En José Bernad el proyecto es uno y se elige el producto:
+// el valor es "José Bernad|Producto" y se guarda como proyecto = José Bernad, producto = Producto.
+const claveVenta = p => p.cuenta === 'José Bernad' ? 'José Bernad|' + p.nombre : p.nombre;
+function opcionesProyectoVenta(seleccion) {
+  const sueltos = PROYECTOS_COMERCIALES.filter(p=>p.cuenta!=='José Bernad');
+  const jb = PROYECTOS_COMERCIALES.filter(p=>p.cuenta==='José Bernad');
+  const opt = p => `<option value="${claveVenta(p)}" ${claveVenta(p)===seleccion?'selected':''}>${p.nombre} (${p.estado})</option>`;
+  return sueltos.map(opt).join('') + (jb.length ? `<optgroup label="José Bernad — elige el producto">${jb.map(opt).join('')}</optgroup>` : '');
+}
+function claveDeVenta(v) {
+  if(v.producto) return (v.proyecto||'José Bernad') + '|' + v.producto;
+  const n = String(v.proyecto||'').toLowerCase();
+  const p = PROYECTOS_COMERCIALES.find(x=>x.nombre.toLowerCase()===n || (PNOMBRES[n]||'').toLowerCase()===x.nombre.toLowerCase());
+  return p ? claveVenta(p) : (v.proyecto||'');
+}
+function partirClaveVenta(k) { const [a,b] = String(k||'').split('|'); return b ? {proyecto:a, producto:b} : {proyecto:a, producto:null}; }
+function getProyectoComisiones(clave) {
+  const {proyecto, producto} = partirClaveVenta(clave);
+  const n = (producto || proyecto || '').toLowerCase();
+  const p = PROYECTOS_COMERCIALES.find(x=>x.nombre.toLowerCase()===n);
   return p || {comCloser:0,comSetter:0,comCDV:0};
 }
 
