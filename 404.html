@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Redirigiendo… · CDV by JCerezo</title>
+<script>
+  // Cualquier dirección mal escrita (CRM, Crm, /crm/login…) lleva al CRM; el resto, a la agenda
+  var p = location.pathname.toLowerCase();
+  var destino = p.indexOf("crm") !== -1 ? "/crm/" : "/";
+  location.replace(destino + location.search + location.hash);
+</script>
+<style>body{background:#0A0A0A;color:#E8E2D0;font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px;text-align:center}a{color:#C9A84C}</style>
+</head><body><p>Redirigiendo… Si no pasa nada, entra en <a href="/crm/">el CRM</a> o en <a href="/">la agenda</a>.</p></body></html>
