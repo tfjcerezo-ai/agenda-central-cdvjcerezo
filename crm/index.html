@@ -1375,7 +1375,7 @@ async function generarRecurrentes() {
       if (f < ini || (fin && f > fin)) continue;
       const periodo = a + "-" + String(m + 1).padStart(2, "0");
       if (gastos.some(g => g.recurrente_id === rc.id && g.periodo === periodo)) continue;
-      nuevos.push({fecha: fechaISO(f), proveedor: rc.proveedor, concepto: rc.concepto, categoria: rc.categoria, proyecto_id: rc.proyecto_id, base: rc.base, iva_pct: rc.iva_pct, irpf_pct: rc.irpf_pct, deducible_pct: rc.deducible_pct, estado: "previsto", recurrente_id: rc.id, periodo});
+      nuevos.push({fecha: fechaISO(f), proveedor: rc.proveedor, concepto: rc.concepto, categoria: rc.categoria, proyecto_id: rc.proyecto_id, base: rc.base, iva_pct: rc.iva_pct, irpf_pct: rc.irpf_pct, deducible_pct: rc.deducible_pct, gasto_pct: rc.gasto_pct == null ? 100 : rc.gasto_pct, estado: "previsto", recurrente_id: rc.id, periodo});
     }
   });
   if (!nuevos.length) return;
@@ -1383,6 +1383,8 @@ async function generarRecurrentes() {
   if (error) return console.warn("No se pudieron apuntar los gastos recurrentes:", error.message);
   gastos.push(...(data || [])); gastos.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
 }
+const pctGasto = (g) => g.gasto_pct == null ? 100 : +g.gasto_pct;
+const baseFiscal = (g) => r2((+g.base || 0) * pctGasto(g) / 100);
 const trimestre = (fecha) => { const d = aFecha(String(fecha || "").slice(0, 10)); return d ? Math.floor(d.getMonth() / 3) : -1; };
 function vGastos() {
   const delAnio = (f) => String(f || "").slice(0, 4) === String(anioMes);
@@ -1392,7 +1394,7 @@ function vGastos() {
   const ing = Array(12).fill(0), gProy = Array(12).fill(0), gEstr = Array(12).fill(0), porProy = {};
   const acum = (id, k, v) => { const o = porProy[id] = porProy[id] || {ing: 0, gas: 0}; o[k] += v; };
   ventas.forEach(v => apuntesMes(v).forEach(a => { const d = aFecha(a.fecha); if (!d || d.getFullYear() !== anioMes) return; ing[d.getMonth()] += a.cdv; acum(proyDeVenta(v) || "?", "ing", a.cdv); }));
-  gs.forEach(g => { const m = aFecha(String(g.fecha).slice(0, 10)).getMonth(), b = +g.base || 0; (g.proyecto_id ? gProy : gEstr)[m] += b; acum(g.proyecto_id || "", "gas", b); });
+  gs.forEach(g => { const m = aFecha(String(g.fecha).slice(0, 10)).getMonth(), b = baseFiscal(g); (g.proyecto_id ? gProy : gEstr)[m] += b; acum(g.proyecto_id || "", "gas", b); });
   const ben = ing.map((x, m) => x - gProy[m] - gEstr[m]);
   const tIng = sum(ing, x => x), tGas = sum(gProy, x => x) + sum(gEstr, x => x), previstos = gs.filter(g => g.estado === "previsto");
   const mesAct = new Date().getFullYear() === anioMes ? new Date().getMonth() : -1;
@@ -1405,7 +1407,8 @@ function vGastos() {
     const sop = sum(gs.filter(g => g.estado === "pagado" && trimestre(g.fecha) === t), g => (+g.iva || 0) * (+g.deducible_pct || 0) / 100);
     const ret = sum(fv.filter(f => trimestre(f.fecha) === t), f => +f.irpf || 0);
     const retTerc = sum(gs.filter(g => g.estado === "pagado" && trimestre(g.fecha) === t), g => +g.irpf || 0);
-    return {rep: r2(rep), sop: r2(sop), dif: r2(rep - sop), ret: r2(ret), retTerc: r2(retTerc)};
+    const gasAcum = sum(gs.filter(g => g.estado === "pagado" && trimestre(g.fecha) <= t), baseFiscal);
+    return {rep: r2(rep), sop: r2(sop), dif: r2(rep - sop), ret: r2(ret), retTerc: r2(retTerc), gasAcum: r2(gasAcum)};
   });
   const ids = Object.keys(porProy).sort((a, b) => (a === "" ? "zz" : cuentaDe(a) + nomProy(a)).localeCompare(b === "" ? "zz" : cuentaDe(b) + nomProy(b), "es"));
   const lista = gs.filter(g => filtroGasto === "todos" || (filtroGasto === "estructura" ? !g.proyecto_id : filtroGasto === "previstos" ? g.estado === "previsto" : g.categoria === filtroGasto));
@@ -1413,7 +1416,7 @@ function vGastos() {
     <div class="filtros"><button class="chip" data-manio="-1" aria-label="Año anterior">‹ ${anioMes - 1}</button><button class="chip" data-manio="1" aria-label="Año siguiente">${anioMes + 1} ›</button><button class="btn" id="nuevo-recurrente">+ Gasto recurrente</button><button class="btn btn-oro" id="nuevo-gasto">+ Nuevo gasto</button></div></div>
   <section class="cifras">
     <div class="cifra"><div class="etiq">Ingresos</div><div class="num">${eur(tIng)}</div><div class="det">comisiones y eventos, sin IVA</div></div>
-    <div class="cifra"><div class="etiq">Gastos</div><div class="num">${eur(tGas)}</div><div class="det">${gs.length} apuntes, base sin IVA</div></div>
+    <div class="cifra"><div class="etiq">Gastos</div><div class="num">${eur(tGas)}</div><div class="det">${gs.length} apuntes, parte que cuenta como gasto, sin IVA</div></div>
     <div class="cifra ${tIng - tGas >= 0 ? "bien" : ""}"><div class="etiq">Beneficio</div><div class="num" ${tIng - tGas < 0 ? `style="color:var(--mal)"` : ""}>${eur(tIng - tGas)}</div><div class="det">antes de impuestos</div></div>
     <div class="cifra"><div class="etiq">Previstos sin factura</div><div class="num">${previstos.length}</div><div class="det">${eur(sum(previstos, g => +g.total || 0))} · recurrentes de este año</div></div>
   </section>
@@ -1421,7 +1424,7 @@ function vGastos() {
     <div class="tabla-env"><table style="font-size:12.5px"><thead><tr><th></th>${MESES.map((m, i) => `<th class="num"${i === mesAct ? ` style="color:var(--oro)"` : ""}>${m}</th>`).join("")}<th class="num">Total</th></tr></thead><tbody>
     ${filaMes("Ingresos CDV by JCerezo", ing)}${filaMes("Gastos de proyectos", gProy.map(x => -x))}${filaMes("Gastos de estructura", gEstr.map(x => -x))}${filaMes("Beneficio", ben, true, true)}
     </tbody></table></div>
-    <p style="font-size:12px;color:var(--texto3);margin-top:8px">Importes sin IVA. Los ingresos cuentan en el mes de su fecha de cobro; las comisiones de Elocrea aún sin liquidar también cuentan, en su fecha prevista.</p></div>
+    <p style="font-size:12px;color:var(--texto3);margin-top:8px">Importes sin IVA. De los suministros de casa solo cuenta la parte afecta a la actividad (columna "% gasto"). Los ingresos cuentan en el mes de su fecha de cobro; las comisiones de Elocrea aún sin liquidar también cuentan, en su fecha prevista.</p></div>
   <div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>Por proyecto · ${anioMes}</h3></div>
     <div class="tabla-env"><table><thead><tr><th>Proyecto</th><th class="num">Ingresos</th><th class="num">Gastos</th><th class="num">Resultado</th></tr></thead><tbody>
     ${ids.map(id => { const o = porProy[id], r = o.ing - o.gas; return `<tr><td>${id === "?" ? "Sin proyecto" : nomDestino(id)}${id === "" ? `<small style="display:block;color:var(--texto3)">suscripciones, móvil, cuota, gestoría…</small>` : ""}</td><td class="num">${o.ing ? eur(o.ing) : "—"}</td><td class="num">${o.gas ? eur(o.gas) : "—"}</td><td class="num"><b style="font-weight:600;color:${r < 0 ? "var(--mal)" : "var(--bien)"}">${eur(r)}</b></td></tr>`; }).join("") || `<tr><td colspan="4">Sin movimientos en ${anioMes}.</td></tr>`}
@@ -1433,6 +1436,10 @@ function vGastos() {
       <tr style="border-top:2px solid var(--linea)"><td><b>Diferencia</b><small style="display:block;color:var(--texto3)">positivo: a ingresar · negativo: a compensar</small></td>${trim.map(t => `<td class="num"><b style="color:${t.dif > 0 ? "var(--aviso)" : "var(--bien)"}">${eur(t.dif)}</b></td>`).join("")}</tr>
       <tr><td>Retenciones que te han practicado<small style="display:block;color:var(--texto3)">IRPF de tus facturas, ya adelantado a Hacienda</small></td>${trim.map(t => `<td class="num">${eur(t.ret)}</td>`).join("")}</tr>
       <tr><td>Retenciones que has practicado tú<small style="display:block;color:var(--texto3)">IRPF de facturas de profesionales que te facturan</small></td>${trim.map(t => `<td class="num">${eur(t.retTerc)}</td>`).join("")}</tr>
+      ${(() => { const dec = (mod, t) => impuestos.find(i => i.modelo === mod && +i.ejercicio === anioMes && i.periodo === (t + 1) + "T"); const celdaComp = (crm, d, campo) => `<td class="num">${d && d[campo] != null ? `${eur(d[campo])}${Math.abs(r2(d[campo] - crm)) >= 0.01 ? `<small style="display:block;color:var(--aviso)">${d[campo] > crm ? "+" : ""}${eur(r2(d[campo] - crm))} vs CRM</small>` : ""}` : `<span style="color:var(--texto3)">—</span>`}</td>`;
+        return `<tr style="border-top:2px solid var(--linea)"><td>IVA deducible declarado en el 303<small style="display:block;color:var(--texto3)">y diferencia con lo calculado aquí</small></td>${trim.map((x, t) => celdaComp(x.sop, dec("303", t), "cuota_deducible")).join("")}</tr>
+      <tr><td>Gastos deducibles IRPF acumulados<small style="display:block;color:var(--texto3)">calculado aquí, con el % que cuenta como gasto</small></td>${trim.map(x => `<td class="num">${eur(x.gasAcum)}</td>`).join("")}</tr>
+      <tr><td>Gastos acumulados declarados en el 130<small style="display:block;color:var(--texto3)">y diferencia con lo calculado aquí</small></td>${trim.map((x, t) => celdaComp(x.gasAcum, dec("130", t), "gastos_acum")).join("")}</tr>`; })()}
       <tr style="border-top:2px solid var(--linea)"><td><b>Resultado del 303 presentado</b><small style="display:block;color:var(--texto3)">lo que declaraste de verdad</small></td>${[0, 1, 2, 3].map(t => { const d = impuestos.find(i => i.modelo === "303" && +i.ejercicio === anioMes && i.periodo === (t + 1) + "T"); return `<td class="num">${d ? `<b style="color:${+d.resultado < 0 ? "var(--bien)" : "var(--aviso)"}">${eur(d.resultado)}</b>` : `<span style="color:var(--texto3)">—</span>`}</td>`; }).join("")}</tr>
     </tbody></table></div>
     ${(() => { const c = r2(impuestos.filter(i => i.modelo === "303" && i.tipo === "compensar").reduce((s, i) => s - (+i.resultado || 0), 0) - impuestos.filter(i => i.modelo === "303").reduce((s, i) => s + (+i.compensado_anterior || 0), 0)); return c > 0 ? `<div class="aviso-compensar">Tienes <b>${eur(c)}</b> de IVA a compensar de trimestres anteriores. Aplícalo en el próximo 303.</div>` : ""; })()}
@@ -1449,7 +1456,7 @@ function vGastos() {
     <select class="entrada" id="f-cat-gasto" aria-label="Categoría"><option value="">Por categoría…</option>${CATEGORIAS_GASTO.map(c => `<option ${filtroGasto === c ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></div></div>
     <div class="der"><button class="btn" id="exportar-gastos">⬇ Exportar gastos</button></div></div>
   <div class="tabla-env"><table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Categoría</th><th>Proyecto</th><th class="num">Base</th><th class="num">IVA</th><th class="num">Total</th><th>Estado</th></tr></thead><tbody>
-  ${lista.map(g => `<tr class="clic" data-gasto="${g.id}"><td>${fF(g.fecha)}</td><td>${esc(g.proveedor)}<small style="display:block;color:var(--texto3)">${esc([g.numero ? "Nº " + g.numero : "", g.concepto || ""].filter(Boolean).join(" · "))}</small></td><td>${esc(g.categoria)}</td><td>${nomDestino(g.proyecto_id)}</td><td class="num">${eur(g.base)}</td><td class="num">${eur(g.iva)}${+g.deducible_pct < 100 ? `<small style="display:block;color:var(--texto3)">deducible ${pctTxt(g.deducible_pct)}</small>` : ""}</td><td class="num"><b style="font-weight:600">${eur(g.total)}</b></td><td><span class="pildora ${(ESTADO_GASTO[g.estado] || ["", "p-neutro"])[1]}">${(ESTADO_GASTO[g.estado] || [g.estado])[0]}</span></td></tr>`).join("") || `<tr><td colspan="8">No hay gastos${filtroGasto !== "todos" ? " con este filtro" : ` en ${anioMes}`}.</td></tr>`}
+  ${lista.map(g => `<tr class="clic" data-gasto="${g.id}"><td>${fF(g.fecha)}</td><td>${esc(g.proveedor)}<small style="display:block;color:var(--texto3)">${esc([g.numero ? "Nº " + g.numero : "", g.concepto || ""].filter(Boolean).join(" · "))}</small></td><td>${esc(g.categoria)}</td><td>${nomDestino(g.proyecto_id)}</td><td class="num">${eur(g.base)}${pctGasto(g) < 100 ? `<small style="display:block;color:var(--texto3)">cuenta ${pctTxt(pctGasto(g))} · ${eur(baseFiscal(g))}</small>` : ""}</td><td class="num">${eur(g.iva)}${+g.deducible_pct < 100 ? `<small style="display:block;color:var(--texto3)">deducible ${pctTxt(g.deducible_pct)}</small>` : ""}</td><td class="num"><b style="font-weight:600">${eur(g.total)}</b></td><td><span class="pildora ${(ESTADO_GASTO[g.estado] || ["", "p-neutro"])[1]}">${(ESTADO_GASTO[g.estado] || [g.estado])[0]}</span></td></tr>`).join("") || `<tr><td colspan="8">No hay gastos${filtroGasto !== "todos" ? " con este filtro" : ` en ${anioMes}`}.</td></tr>`}
   </tbody></table></div>`;
 }
 function camposGasto(g, rec) {
@@ -1460,10 +1467,11 @@ function camposGasto(g, rec) {
     <div class="campo"><label for="g-base">Base sin IVA (€) *</label><input id="g-base" type="number" step="0.01" required value="${g ? g.base : ""}"></div>
     <div class="campo"><label for="g-iva">IVA %</label><input id="g-iva" type="number" step="0.01" min="0" value="${g ? g.iva_pct : 21}"></div>
     <div class="campo"><label for="g-irpf">Retención IRPF %</label><input id="g-irpf" type="number" step="0.01" min="0" value="${g ? g.irpf_pct : 0}"></div>
-    <div class="campo"><label for="g-ded">% deducible</label><input id="g-ded" type="number" step="1" min="0" max="100" value="${g ? g.deducible_pct : 100}"></div>`;
+    <div class="campo"><label for="g-ded">% IVA deducible</label><input id="g-ded" type="number" step="1" min="0" max="100" value="${g ? g.deducible_pct : 100}"></div>
+    <div class="campo"><label for="g-gpct">% que cuenta como gasto (IRPF)</label><input id="g-gpct" type="number" step="0.01" min="0" max="100" value="${g && g.gasto_pct != null ? g.gasto_pct : 100}"></div>`;
 }
 const leerGasto = () => ({proveedor: $("#g-prov").value.trim(), categoria: $("#g-cat").value, concepto: $("#g-concepto").value.trim() || null, proyecto_id: $("#g-proy").value || null,
-  base: r2(parseFloat($("#g-base").value)), iva_pct: +$("#g-iva").value || 0, irpf_pct: +$("#g-irpf").value || 0, deducible_pct: Math.min(100, Math.max(0, +$("#g-ded").value || 0))});
+  base: r2(parseFloat($("#g-base").value)), iva_pct: +$("#g-iva").value || 0, irpf_pct: +$("#g-irpf").value || 0, deducible_pct: Math.min(100, Math.max(0, +$("#g-ded").value || 0)), gasto_pct: Math.min(100, Math.max(0, $("#g-gpct").value === "" ? 100 : +$("#g-gpct").value))});
 function totalGastoVivo(pre) {
   const calc = () => { const b = +$("#g-base").value || 0, iv = +$("#g-iva").value || 0, ir = +$("#g-irpf").value || 0; $("#" + pre + "-total").textContent = `Total: ${eur(r2(b) + r2(b * iv / 100) - r2(b * ir / 100))} (base ${eur(b)} + IVA ${eur(b * iv / 100)}${ir ? " − IRPF " + eur(b * ir / 100) : ""})`; };
   ["#g-base", "#g-iva", "#g-irpf"].forEach(k => $(k).oninput = calc); calc();
@@ -1590,9 +1598,9 @@ function editarImpuesto(id) {
   });
 }
 function exportarGastos() {
-  const filas = [["Fecha", "Nº factura", "Proveedor", "NIF", "Concepto", "Categoría", "Proyecto", "Base", "IVA %", "IVA", "IRPF %", "IRPF", "Total", "% deducible", "Estado", "Notas"]];
+  const filas = [["Fecha", "Nº factura", "Proveedor", "NIF", "Concepto", "Categoría", "Proyecto", "Base", "IVA %", "IVA", "IRPF %", "IRPF", "Total", "% IVA deducible", "% gasto IRPF", "Gasto IRPF", "Estado", "Notas"]];
   const n = (x) => String(+x || 0).replace(".", ",");
-  gastos.filter(g => String(g.fecha).slice(0, 4) === String(anioMes)).slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach(g => filas.push([g.fecha, g.numero || "", g.proveedor, g.nif_proveedor || "", g.concepto || "", g.categoria, g.proyecto_id ? cuentaDe(g.proyecto_id) + " · " + nomProy(g.proyecto_id) : "Estructura", n(g.base), n(g.iva_pct), n(g.iva), n(g.irpf_pct), n(g.irpf), n(g.total), n(g.deducible_pct), (ESTADO_GASTO[g.estado] || [g.estado])[0], g.notas || ""]));
+  gastos.filter(g => String(g.fecha).slice(0, 4) === String(anioMes)).slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach(g => filas.push([g.fecha, g.numero || "", g.proveedor, g.nif_proveedor || "", g.concepto || "", g.categoria, g.proyecto_id ? cuentaDe(g.proyecto_id) + " · " + nomProy(g.proyecto_id) : "Estructura", n(g.base), n(g.iva_pct), n(g.iva), n(g.irpf_pct), n(g.irpf), n(g.total), n(g.deducible_pct), n(pctGasto(g)), n(baseFiscal(g)), (ESTADO_GASTO[g.estado] || [g.estado])[0], g.notas || ""]));
   const csv = "﻿" + filas.map(f => f.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n");
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
   a.download = "gastos-cdv-by-jcerezo-" + anioMes + ".csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
