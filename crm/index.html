@@ -1274,7 +1274,7 @@ function editarFactura(id) {
 }
 
 /* ===== GASTOS Y RESULTADO (solo director) ===== */
-const CATEGORIAS_GASTO = ["Software y suscripciones", "Telefonía e internet", "Web y dominios", "Sala y producción de eventos", "Artistas y DJs", "Publicidad y marketing", "Comisiones a colaboradores", "Desplazamientos y dietas", "Cuota de autónomos y seguros", "Gestoría y servicios profesionales", "Material y equipos", "Formación", "Comisiones bancarias", "Otros"];
+const CATEGORIAS_GASTO = ["Software y suscripciones", "Telefonía e internet", "Suministros", "Web y dominios", "Sala y producción de eventos", "Artistas y DJs", "Publicidad y marketing", "Comisiones a colaboradores", "Desplazamientos y dietas", "Cuota de autónomos y seguros", "Gestoría y servicios profesionales", "Material y equipos", "Formación", "Comisiones bancarias", "Otros"];
 const ESTADO_GASTO = {previsto: ["Previsto", "p-aviso"], pagado: ["Pagado", "p-ok"], descartado: ["Descartado", "p-neutro"]};
 const gastoVivo = (g) => g.estado !== "descartado";
 const nomDestino = (id) => id ? etiquetaProy(id) : "Estructura";
