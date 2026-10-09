@@ -330,6 +330,14 @@ td.num{white-space:nowrap}
 .pp-barra b{font-size:10.5px;font-weight:600;color:inherit}
 .pp-n{text-align:right;font-variant-numeric:tabular-nums;color:var(--texto2);font-size:12px}.pp-n small{color:var(--ok);font-size:11px;margin-left:6px}
 .pp-grupo{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--texto3);margin:10px 0 2px}.pp-grupo:first-of-type{margin-top:0}.pp-grupo.mal{color:var(--mal)}
+.tel-acc{display:inline-flex;gap:8px;align-items:center;white-space:nowrap}.tel-acc a{color:var(--oro-claro);text-decoration:none}
+.tel-acc a.wa{font-size:11px;font-weight:600;color:#25D366;border:1px solid rgba(37,211,102,.45);border-radius:999px;padding:2px 8px}.tel-acc a.wa:hover{background:rgba(37,211,102,.1)}
+.etapas-cont{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin-top:4px}
+.etapa-cont{display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;background:var(--panel);border:1px solid var(--linea);border-radius:10px;padding:8px 10px;color:var(--texto2);font:inherit;font-size:11.5px;cursor:pointer}
+.etapa-cont b{font-size:20px;color:var(--texto);font-weight:600;font-variant-numeric:tabular-nums}.etapa-cont.cerr{opacity:.75}
+.etapa-cont.activa{border-color:var(--oro);background:var(--oro-suave)}.etapa-cont.activa b{color:var(--oro-claro)}
+.tabla-lista td{vertical-align:top}
+.aviso-compensar{margin-top:10px;padding:10px 12px;border:1px solid rgba(95,167,122,.4);background:rgba(95,167,122,.08);border-radius:8px;font-size:13px}
 </style>
 </head>
 <body>
@@ -377,6 +385,12 @@ const GANADO = "Cierre ganado", PERDIDO = "Cierre perdido", NO_INTERESA = "No in
 const ETAPAS = ["Nuevo","No contactado","Contactado","Reunión","Propuesta","Negociación",GANADO,PERDIDO,NO_INTERESA];
 const CERRADAS = [GANADO, PERDIDO, NO_INTERESA];
 const esActivo = (l) => !CERRADAS.includes(l.etapa);
+const INTERES = {sin_contacto: ["Sin contacto", "p-neutro"], sin_interes: ["Sin interés", "p-mal"], medio: ["Interés medio", "p-aviso"], muy: ["Muy interesado", "p-ok"], potencial: ["Cliente potencial", "p-ok"]};
+const pildoraInteres = (k) => INTERES[k] ? `<span class="pildora ${INTERES[k][1]}">${INTERES[k][0]}</span>` : "";
+const opcionesInteres = (sel) => `<option value="">Sin valorar</option>` + Object.entries(INTERES).map(([k, v]) => `<option value="${k}" ${sel === k ? "selected" : ""}>${v[0]}</option>`).join("");
+// Enlace de WhatsApp: los móviles españoles de 9 cifras llevan delante el 34
+function waLink(tel) { let d = String(tel || "").replace(/\D/g, ""); if (!d) return null; if (d.startsWith("00")) d = d.slice(2); if (d.length === 9) d = "34" + d; return "https://wa.me/" + d; }
+const enlacesTel = (tel) => !tel ? `<span style="color:var(--texto3)">—</span>` : `<span class="tel-acc"><a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(tel)}</a><a class="wa" href="${waLink(tel)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Abrir WhatsApp" aria-label="WhatsApp ${esc(tel)}">WhatsApp</a></span>`;
 const ETAPAS_VIVAS = ETAPAS.slice(0, 6), OPAC_ETAPA = [22, 34, 48, 62, 80, 100];
 const fondoEtapa = (i) => `background:color-mix(in srgb, var(--oro) ${OPAC_ETAPA[i]}%, transparent);color:${OPAC_ETAPA[i] >= 62 ? "var(--negro)" : "var(--texto)"}`;
 const PROB = {Nuevo:10,"No contactado":5,Contactado:20,"Reunión":40,Propuesta:60,"Negociación":80,[GANADO]:100,[PERDIDO]:0,[NO_INTERESA]:0};
@@ -398,7 +412,8 @@ let facturas = [];
 let productos = [];
 let compras = [];      // crm_compras: ficha de compra de los clientes (José Bernad, CAYFI…)    // crm_productos: productos que se comercializan dentro de un proyecto (p. ej. José Bernad)     // solo director: facturas emitidas por CDV by JCerezo
 let filtroVentas = "todos";
-let gastos = [], recurrentes = [], filtroGasto = "todos";   // solo director: gastos de CDV by JCerezo
+let gastos = [], recurrentes = [], filtroGasto = "todos", impuestos = [];
+let vistaPipe = (() => { try { return localStorage.getItem("crm_vista_pipe") || "tablero"; } catch (e) { return "tablero"; } })(), filtroRapido = "todos", filtroEtapaLista = null;   // solo director: gastos de CDV by JCerezo
 let metricaMes = "cdv", anioMes = new Date().getFullYear();
 let semana = 0, filtroContProy = "todos", busqContactos = "";
 const TIPOS_REUNION = {reunion: "Reunión", llamada: "Llamada", visita: "Visita", demo: "Demo", otro: "Otro"};
@@ -678,6 +693,7 @@ async function cargarTodo() {
     if (f.error) console.warn("Facturas no disponibles:", f.error.message);
     const [gr, rr] = await Promise.all([sb.from("gastos").select("*").order("fecha", {ascending: false}), sb.from("gastos_recurrentes").select("*").order("proveedor")]);
     gastos = gr.error ? [] : gr.data || []; recurrentes = rr.error ? [] : rr.data || [];
+    const im = await sb.from("impuestos").select("*").order("ejercicio").order("periodo"); impuestos = im.error ? [] : im.data || [];
     if (!gr.error && !rr.error) await generarRecurrentes();
   }
   misProyectos = esDir() ? proyectos.map(p => p.id) : miembros.filter(m => m.perfil_id === yo.id).map(m => m.proyecto_id);
@@ -723,6 +739,11 @@ function enlazar(r) {
   r.querySelectorAll("[data-fventa]").forEach(b => b.onclick = () => { filtroVentas = b.dataset.fventa; render(); });
   r.querySelectorAll("[data-mmet]").forEach(b => b.onclick = () => { metricaMes = b.dataset.mmet; render(); });
   r.querySelectorAll("[data-manio]").forEach(b => b.onclick = () => { anioMes += +b.dataset.manio; render(); });
+  r.querySelectorAll("[data-vpipe]").forEach(b => b.onclick = () => { vistaPipe = b.dataset.vpipe; try { localStorage.setItem("crm_vista_pipe", vistaPipe); } catch (e) {} render(); });
+  r.querySelectorAll("[data-frapido]").forEach(b => b.onclick = () => { filtroRapido = b.dataset.frapido; render(); });
+  r.querySelectorAll("[data-fetapa]").forEach(b => b.onclick = () => { const e = b.dataset.fetapa; filtroEtapaLista = !e || filtroEtapaLista === e ? null : e; render(); });
+  r.querySelectorAll("[data-impuesto]").forEach(b => b.onclick = () => editarImpuesto(+b.dataset.impuesto));
+  const ni = $("#nuevo-impuesto", r); if (ni) ni.onclick = () => editarImpuesto(null);
   r.querySelectorAll("[data-gasto]").forEach(b => b.onclick = () => editarGasto(+b.dataset.gasto));
   r.querySelectorAll("[data-recurrente]").forEach(b => b.onclick = () => editarRecurrente(+b.dataset.recurrente));
   const ng = $("#nuevo-gasto", r); if (ng) ng.onclick = () => editarGasto(null);
@@ -776,6 +797,28 @@ function vPanel() {
         <div class="pp-barra">${x.n ? x.porEtapa.map((c, i) => c ? `<div title="${esc(ETAPAS_VIVAS[i])}: ${c}" style="flex:${c};${fondoEtapa(i)}"><b>${c}</b></div>` : "").join("") + `<div style="flex:${max - x.n};background:none"></div>` : `<div style="flex:1;background:none"></div>`}</div>
         <span class="pp-n">${x.n} ${x.n === 1 ? "activo" : "activos"}${x.v ? " · " + eur(x.v) : ""}${x.g ? `<small>${x.g} ${x.g === 1 ? "ganado" : "ganados"}</small>` : ""}</span></div>`).join("")}` : `<p class="vacia">Aún no hay leads. Crea el primero con «Nuevo lead».</p>`}
     </div>
+  </section>
+  ${bloqueConversion()}`;
+}
+// Conversión y origen (sin contar las ventas que vienen ya cerradas de la Agenda)
+function bloqueConversion() {
+  const ls = leads.filter(l => l.origen !== "Venta cerrada (Agenda)");
+  if (!ls.length) return "";
+  const cerrados = ls.filter(l => CERRADAS.includes(l.etapa)), gan = ls.filter(l => l.etapa === GANADO);
+  const tasa = cerrados.length ? gan.length / cerrados.length * 100 : null;
+  const pct = (n) => (Math.round(n * 10) / 10).toLocaleString("es-ES") + " %";
+  const porOrigen = {}; ls.forEach(l => { const o = l.origen || "Sin origen"; const x = porOrigen[o] = porOrigen[o] || {n: 0, g: 0}; x.n++; if (l.etapa === GANADO) x.g++; });
+  const orig = Object.entries(porOrigen).sort((a, b) => b[1].n - a[1].n), maxO = Math.max(1, ...orig.map(o => o[1].n));
+  const porCom = {}; if (esDir()) ls.forEach(l => { if (!l.closer_id) return; const x = porCom[l.closer_id] = porCom[l.closer_id] || {c: 0, g: 0, a: 0}; if (CERRADAS.includes(l.etapa)) x.c++; if (l.etapa === GANADO) x.g++; if (esActivo(l)) x.a++; });
+  return `<section class="dos-col" style="margin-top:16px">
+    <div class="bloque"><div class="bloque-cab"><h3>Conversión</h3></div>
+      <div class="fila-liq"><span>Leads cerrados (ganados, perdidos y no interesa)</span><b>${cerrados.length}</b></div>
+      <div class="fila-liq"><span>Ganados</span><b>${gan.length}</b></div>
+      <div class="fila-liq total"><span>Tasa de conversión</span><b>${tasa === null ? "—" : pct(tasa)}<small>ganados sobre leads cerrados</small></b></div>
+      ${Object.keys(porCom).length ? `<div class="tabla-env" style="margin-top:10px"><table><thead><tr><th>Closer</th><th class="num">Activos</th><th class="num">Cerrados</th><th class="num">Ganados</th><th class="num">Conversión</th></tr></thead><tbody>${Object.entries(porCom).sort((a, b) => b[1].g - a[1].g).map(([id, x]) => `<tr><td>${esc(nomPersona(id))}</td><td class="num">${x.a}</td><td class="num">${x.c}</td><td class="num">${x.g}</td><td class="num">${x.c ? pct(x.g / x.c * 100) : "—"}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <p style="font-size:12px;color:var(--texto3);margin-top:8px">No cuenta las ventas cargadas desde la Agenda, que entraron ya ganadas.</p></div>
+    <div class="bloque"><div class="bloque-cab"><h3>Leads por origen</h3></div>
+      ${orig.map(([o, x]) => `<div class="fila-barra"><span>${esc(o)}</span><div class="barra"><span style="width:${x.n / maxO * 100}%"></span></div><span class="n">${x.n}${x.g ? ` · ${x.g} ganados` : ""}</span></div>`).join("")}</div>
   </section>`;
 }
 
@@ -790,7 +833,7 @@ function tarjeta(l) {
   return `<div class="lead" role="button" tabindex="0" data-lead="${l.id}">
     <span class="lead-sup"><span class="avatar">${iniciales(l.empresa)}</span><span class="lead-nom"><b>${esc(l.empresa)}</b><small>${esc(l.contacto || "Sin contacto")}</small></span><span class="prob">${PROB[l.etapa] || 0} %</span></span>
     <span class="lead-serv"><span class="punto dir"></span><span>${etiquetaProy(l.proyecto_id)}</span></span>
-    ${tagsProd(l.productos)}
+    ${tagsProd(l.productos)}${l.interes ? `<span style="display:block;margin-top:4px">${pildoraInteres(l.interes)}</span>` : ""}
     <span class="lead-inf"><span class="valor">${+l.valor ? eur(l.valor) : "—"}</span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${esc(l.proximo_paso || "Sin próximo paso")}${l.proximo_paso_fecha ? " · " + rel(l.proximo_paso_fecha) : ""}</span></span>
     <span class="lead-cta">Closer: <b>${esc(l.closer_id ? nomPersona(l.closer_id) : "sin asignar")}</b>${l.setter_id ? " · Setter: " + esc(nomPersona(l.setter_id)) : ""}</span>
   </div>`;
@@ -820,11 +863,12 @@ function vPipeline() {
   const Ls = filtrados();
   const vg = ventasGanadas();
   const personas = esDir() ? perfiles.filter(p => p.activo) : [];
-  return `<div class="cabecera"><div><h2>Pipeline</h2><div class="sub">${Ls.filter(esActivo).length} leads abiertos${vg.length ? ` · ${vg.length} ventas cerradas` : ""} · pulsa uno para ver y actualizar</div></div><button class="btn btn-oro" data-nuevo-lead>+ Nuevo lead</button></div>
+  const conmutador = `<div class="filtros" role="group" aria-label="Vista"><button class="chip" data-vpipe="tablero" aria-pressed="${vistaPipe !== "lista"}">Tablero</button><button class="chip" data-vpipe="lista" aria-pressed="${vistaPipe === "lista"}">Lista</button></div>`;
+  return `<div class="cabecera"><div><h2>Pipeline</h2><div class="sub">${Ls.filter(esActivo).length} leads abiertos${vg.length ? ` · ${vg.length} ventas cerradas` : ""} · pulsa uno para ver y actualizar</div></div><div class="filtros">${conmutador}<button class="btn btn-oro" data-nuevo-lead>+ Nuevo lead</button></div></div>
   <div class="barra-herr"><div class="izq">${chipsProyecto("fproy", filtroProy)}</div>
     <div class="der">${esDir() ? `<select class="entrada" id="f-persona" aria-label="Comercial"><option value="todos">Todo el equipo</option><option value="sin" ${filtroPersona === "sin" ? "selected" : ""}>Sin asignar</option>${personas.map(p => `<option value="${p.id}" ${filtroPersona === p.id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select>` : ""}
     <input class="entrada buscar" id="buscar" type="search" placeholder="Buscar empresa o contacto" value="${esc(busqueda)}"></div></div>
-  <div class="kanban-scroll"><div class="kanban">${ETAPAS.map(e => {
+  ${vistaPipe === "lista" ? vLista(Ls) : `<div class="kanban-scroll"><div class="kanban">${ETAPAS.map(e => {
     const g = Ls.filter(l => l.etapa === e).sort((a, b) => (a.proximo_paso_fecha || "9").localeCompare(b.proximo_paso_fecha || "9"));
     const extra = e === GANADO ? vg : [];
     const v = g.reduce((s, l) => s + (+l.valor || 0), 0) + extra.reduce((s, x) => s + (+x.importe || 0), 0);
@@ -832,9 +876,26 @@ function vPipeline() {
     const clase = e === GANADO ? "final" : e === PERDIDO || e === NO_INTERESA ? "cerrada" : "";
     return `<section class="columna ${clase}" data-etapa="${e}"><div class="col-cab"><div class="col-tit"><h3>${e}</h3><span class="cnt">${n}${esActivo({etapa: e}) ? " · " + PROB[e] + " %" : ""}</span></div><div class="col-val"><b>${eur(v)}</b></div></div>
       <div class="tarjetas">${n ? g.map(tarjeta).join("") + extra.map(tarjetaVenta).join("") : `<div class="vacia">Sin leads</div>`}</div></section>`;
-  }).join("")}</div></div>`;
+  }).join("")}</div></div>`}`;
 }
 
+/* Vista de lista: para trabajar leads uno tras otro con filtros rápidos */
+const sinActividad = (l, dias = 7) => { const f = l.actualizado ? new Date(l.actualizado) : null; return !f || (Date.now() - f) / 864e5 > dias; };
+const FILTROS_RAPIDOS = [["todos", "Todos", () => true], ["vencidas", "Vencidas", l => difDias(l.proximo_paso_fecha) !== null && difDias(l.proximo_paso_fecha) < 0], ["hoy", "Hoy", l => difDias(l.proximo_paso_fecha) === 0], ["manana", "Mañana", l => difDias(l.proximo_paso_fecha) === 1], ["proximas", "Próximas", l => difDias(l.proximo_paso_fecha) > 1], ["sinpaso", "Sin próximo paso", l => !l.proximo_paso_fecha], ["sinact", "Sin actividad 7 días", l => sinActividad(l)]];
+function vLista(Ls) {
+  const base = filtroEtapaLista ? Ls.filter(l => l.etapa === filtroEtapaLista) : Ls.filter(esActivo);
+  const fr = FILTROS_RAPIDOS.find(f => f[0] === filtroRapido) || FILTROS_RAPIDOS[0];
+  const ls = base.filter(fr[2]).sort((a, b) => (a.proximo_paso_fecha || "9999").localeCompare(b.proximo_paso_fecha || "9999") || String(a.empresa).localeCompare(String(b.empresa), "es"));
+  const cont = ETAPAS.map(e => [e, Ls.filter(l => l.etapa === e).length]);
+  return `<div class="etapas-cont">${cont.map(([e, n]) => `<button class="etapa-cont${filtroEtapaLista === e ? " activa" : ""}${CERRADAS.includes(e) ? " cerr" : ""}" data-fetapa="${esc(e)}" aria-pressed="${filtroEtapaLista === e}"><span>${esc(e)}</span><b>${n}</b></button>`).join("")}</div>
+  <div class="filtros" style="margin:10px 0">${FILTROS_RAPIDOS.map(([k, t, f]) => `<button class="chip" data-frapido="${k}" aria-pressed="${filtroRapido === k}">${t} <span style="color:var(--texto3)">${base.filter(f).length}</span></button>`).join("")}
+    ${filtroEtapaLista ? `<button class="btn-texto" data-fetapa="">Quitar filtro «${esc(filtroEtapaLista)}» ×</button>` : ""}</div>
+  <div class="tabla-env"><table class="tabla-lista"><thead><tr><th>Empresa</th><th>Proyecto</th><th>Etapa</th><th>Interés</th><th>Próximo paso</th><th>Teléfono</th><th>Comercial</th><th class="num">Valor</th></tr></thead><tbody>
+  ${ls.map(l => `<tr class="clic" data-lead="${l.id}"><td><b style="font-weight:600">${esc(l.empresa)}</b><small style="display:block;color:var(--texto3)">${esc(l.contacto || "Sin contacto")}</small></td><td>${etiquetaProy(l.proyecto_id)}</td><td>${esc(l.etapa)}</td><td>${pildoraInteres(l.interes) || `<span style="color:var(--texto3)">—</span>`}</td>
+    <td>${l.proximo_paso_fecha ? `${esc(l.proximo_paso || "Seguimiento")}<small style="display:block"><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${rel(l.proximo_paso_fecha)}</span></small>` : `<span style="color:var(--aviso)">Sin programar</span>`}</td>
+    <td>${enlacesTel(l.telefono)}</td><td>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}${l.setter_id ? `<small style="display:block;color:var(--texto3)">setter ${esc(nomPersona(l.setter_id))}</small>` : ""}</td><td class="num">${+l.valor ? eur(l.valor) : "—"}</td></tr>`).join("") || `<tr><td colspan="8">No hay leads con este filtro.</td></tr>`}
+  </tbody></table></div>`;
+}
 /* ===== NUEVO LEAD ===== */
 function nuevoLead() {
   const proyVisibles = proyectos.filter(p => misProyectos.includes(p.id));
@@ -850,6 +911,7 @@ function nuevoLead() {
       <div class="campo"><label for="n-tel">Teléfono</label><input id="n-tel" type="tel"></div>
       <div class="campo"><label for="n-email">Correo</label><input id="n-email" type="email"></div>
       <div class="campo"><label for="n-valor">Valor (€)</label><input id="n-valor" type="number" min="0" step="0.01"></div>
+      <div class="campo"><label for="n-interes">Interés</label><select id="n-interes">${opcionesInteres("")}</select></div>
       <div class="campo"><label for="n-origen">Origen</label><select id="n-origen">${ORIGENES.map(o => `<option>${o}</option>`).join("")}</select></div>
       <div class="campo"><label for="n-paso">Próximo paso</label><input id="n-paso" value="Llamar"></div>
       <div class="campo"><label for="n-fecha">Fecha</label><input id="n-fecha" type="date" value="${fechaISO(mañana)}"></div>
@@ -863,7 +925,7 @@ function nuevoLead() {
       empresa, proyecto_id, contacto: $("#n-contacto").value.trim() || null, cargo: $("#n-cargo").value.trim() || null,
       telefono: $("#n-tel").value.trim() || null, email: $("#n-email").value.trim() || null,
       valor: $("#n-valor").value ? Math.round(parseFloat($("#n-valor").value) * 100) / 100 : (proyectos.find(p => p.id === proyecto_id) || {}).ticket || 0,
-      origen: $("#n-origen").value, proximo_paso: $("#n-paso").value.trim() || null, proximo_paso_fecha: $("#n-fecha").value || null,
+      origen: $("#n-origen").value, interes: $("#n-interes").value || null, proximo_paso: $("#n-paso").value.trim() || null, proximo_paso_fecha: $("#n-fecha").value || null,
     };
     if (prodsDe(proyecto_id).length) fila.productos = leerProductos("n");
     if (esDir()) { fila.closer_id = $("#n-closer").value || null; fila.setter_id = $("#n-setter").value || null; }
@@ -887,7 +949,7 @@ async function abrirLead(id) {
   capa.innerHTML = `<div class="velo" data-cerrar></div>
   <aside class="cajon" role="dialog" aria-label="Lead ${esc(l.empresa)}">
     <div class="cajon-sup"><div class="filtros"><span class="area dir">${esc(nomProy(l.proyecto_id))}</span><span class="prio ${l.prioridad}">Prioridad ${l.prioridad}</span>${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? `<span class="pildora p-mal">${esc(l.etapa)}</span>` : ""}</div><button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
-    <div class="cajon-id"><span class="avatar g">${iniciales(l.empresa)}</span><div><h2>${esc(l.empresa)}</h2><p>${esc(l.contacto || "Sin contacto")}${l.cargo ? " · " + esc(l.cargo) : ""}</p></div></div>
+    <div class="cajon-id"><span class="avatar g">${iniciales(l.empresa)}</span><div><h2>${esc(l.empresa)}</h2><p>${esc(l.contacto || "Sin contacto")}${l.cargo ? " · " + esc(l.cargo) : ""}</p>${l.telefono ? `<p style="margin-top:6px">${enlacesTel(l.telefono)}</p>` : ""}</div></div>
     <div class="prob-bloque"><div><b>${+l.valor ? eur(l.valor) : "—"}</b><span>valor</span></div><div><b>${PROB[l.etapa] || 0} %</b><span>probabilidad</span></div><div><b>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}</b><span>closer</span></div><div class="barra"><span style="width:${PROB[l.etapa] || 0}%"></span></div></div>
     <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span></div>
       <form class="paso-form" id="f-paso"><input class="entrada" id="paso-accion" aria-label="Acción" value="${esc(l.proximo_paso || "Llamar")}"><input class="entrada" type="date" id="paso-fecha" aria-label="Fecha" value="${l.proximo_paso_fecha || ""}"><button class="btn" type="submit">Programar</button></form></div>
@@ -898,6 +960,7 @@ async function abrirLead(id) {
     <div class="rejilla-campos">
       <div class="campo"><label for="l-etapa">Etapa</label><select id="l-etapa">${ETAPAS.map(e => `<option ${e === l.etapa ? "selected" : ""}>${e}</option>`).join("")}</select></div>
       <div class="campo"><label for="l-valor">Valor (€)</label><input id="l-valor" type="number" min="0" step="0.01" value="${+l.valor || ""}"></div>
+      <div class="campo"><label for="l-interes">Interés</label><select id="l-interes">${opcionesInteres(l.interes)}</select></div>
       <div class="campo"><label for="l-prio">Prioridad</label><select id="l-prio">${["alta", "media", "baja"].map(p => `<option value="${p}" ${p === l.prioridad ? "selected" : ""}>${p[0].toUpperCase() + p.slice(1)}</option>`).join("")}</select></div>
       <div class="campo"><label for="l-contacto">Contacto</label><input id="l-contacto" value="${esc(l.contacto || "")}"></div>
       <div class="campo"><label for="l-tel">Teléfono</label><input id="l-tel" type="tel" value="${esc(l.telefono || "")}"></div>
@@ -940,7 +1003,7 @@ async function abrirLead(id) {
   $("#guardar-ficha").onclick = async () => {
     const cambios = {
       valor: $("#l-valor").value ? Math.round(parseFloat($("#l-valor").value) * 100) / 100 : 0,
-      prioridad: $("#l-prio").value, contacto: $("#l-contacto").value.trim() || null,
+      prioridad: $("#l-prio").value, interes: $("#l-interes").value || null, contacto: $("#l-contacto").value.trim() || null,
       telefono: $("#l-tel").value.trim() || null, email: $("#l-email").value.trim() || null,
     };
     if (document.getElementById("l-prods")) cambios.productos = leerProductos("l");
@@ -1370,8 +1433,14 @@ function vGastos() {
       <tr style="border-top:2px solid var(--linea)"><td><b>Diferencia</b><small style="display:block;color:var(--texto3)">positivo: a ingresar · negativo: a compensar</small></td>${trim.map(t => `<td class="num"><b style="color:${t.dif > 0 ? "var(--aviso)" : "var(--bien)"}">${eur(t.dif)}</b></td>`).join("")}</tr>
       <tr><td>Retenciones que te han practicado<small style="display:block;color:var(--texto3)">IRPF de tus facturas, ya adelantado a Hacienda</small></td>${trim.map(t => `<td class="num">${eur(t.ret)}</td>`).join("")}</tr>
       <tr><td>Retenciones que has practicado tú<small style="display:block;color:var(--texto3)">IRPF de facturas de profesionales que te facturan</small></td>${trim.map(t => `<td class="num">${eur(t.retTerc)}</td>`).join("")}</tr>
+      <tr style="border-top:2px solid var(--linea)"><td><b>Resultado del 303 presentado</b><small style="display:block;color:var(--texto3)">lo que declaraste de verdad</small></td>${[0, 1, 2, 3].map(t => { const d = impuestos.find(i => i.modelo === "303" && +i.ejercicio === anioMes && i.periodo === (t + 1) + "T"); return `<td class="num">${d ? `<b style="color:${+d.resultado < 0 ? "var(--bien)" : "var(--aviso)"}">${eur(d.resultado)}</b>` : `<span style="color:var(--texto3)">—</span>`}</td>`; }).join("")}</tr>
     </tbody></table></div>
+    ${(() => { const c = r2(impuestos.filter(i => i.modelo === "303" && i.tipo === "compensar").reduce((s, i) => s - (+i.resultado || 0), 0) - impuestos.filter(i => i.modelo === "303").reduce((s, i) => s + (+i.compensado_anterior || 0), 0)); return c > 0 ? `<div class="aviso-compensar">Tienes <b>${eur(c)}</b> de IVA a compensar de trimestres anteriores. Aplícalo en el próximo 303.</div>` : ""; })()}
     <p style="font-size:12px;color:var(--texto3);margin-top:8px">Orientativo, para preparar la declaración: no la sustituye. Las facturas de proveedores de fuera de España (Claude, ChatGPT…) y los gastos de uso mixto pueden tener otro tratamiento: confírmalo antes de presentar.</p></div>
+
+  <div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>Impuestos presentados · ${anioMes}</h3><button class="btn" id="nuevo-impuesto">+ Registrar declaración</button></div>
+    ${(() => { const is = impuestos.filter(i => +i.ejercicio === anioMes).sort((a, b) => a.periodo.localeCompare(b.periodo) || a.modelo.localeCompare(b.modelo)); return is.length ? `<div class="tabla-env"><table><thead><tr><th>Modelo</th><th>Periodo</th><th>Presentado</th><th>Datos principales</th><th class="num">Resultado</th><th>Documento</th></tr></thead><tbody>${is.map(i => `<tr class="clic" data-impuesto="${i.id}"><td><b style="font-weight:600">${esc(i.modelo)}</b><small style="display:block;color:var(--texto3)">${esc(NOMBRE_MODELO[i.modelo] || "")}</small></td><td>${esc(i.periodo)}</td><td>${i.fecha_presentacion ? fF(i.fecha_presentacion) : "—"}</td><td style="font-size:12px">${resumenImpuesto(i)}</td><td class="num"><span class="pildora ${TIPO_IMP[i.tipo][1]}">${TIPO_IMP[i.tipo][0]}</span><b style="display:block;margin-top:4px">${eur(Math.abs(+i.resultado || 0))}</b></td><td style="font-size:11px;color:var(--texto3);max-width:220px;white-space:normal">${esc(i.documento || "—")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="vacia">Aún no hay declaraciones registradas de ${anioMes}.</p>`; })()}
+  </div>
   <div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>Gastos recurrentes</h3></div>
     ${recurrentes.length ? `<div class="tabla-env"><table><thead><tr><th>Proveedor</th><th>Categoría</th><th>Proyecto</th><th class="num">Base / mes</th><th class="num">Día</th><th>Vigencia</th></tr></thead><tbody>
     ${recurrentes.map(rc => `<tr class="clic" data-recurrente="${rc.id}"><td>${esc(rc.proveedor)}${rc.concepto ? `<small style="display:block;color:var(--texto3)">${esc(rc.concepto)}</small>` : ""}</td><td>${esc(rc.categoria)}</td><td>${nomDestino(rc.proyecto_id)}</td><td class="num">${eur(rc.base)}</td><td class="num">${rc.dia}</td><td>${rc.fin && aFecha(String(rc.fin)) < new Date() ? `<span class="pildora p-neutro">De baja desde ${fF(rc.fin)}</span>` : `desde ${fF(rc.inicio)}${rc.fin ? " hasta " + fF(rc.fin) : ""}`}</td></tr>`).join("")}</tbody></table></div>`
@@ -1465,6 +1534,59 @@ function editarRecurrente(id) {
     await sb.from("gastos").delete().eq("recurrente_id", rc.id).eq("estado", "previsto");
     const {error} = await sb.from("gastos_recurrentes").delete().eq("id", rc.id); if (error) return fallo(error, "No se pudo borrar");
     gastos = gastos.filter(x => !(x.recurrente_id === rc.id && x.estado === "previsto")); recurrentes = recurrentes.filter(x => x.id !== rc.id); cerrarCapa(); render(); aviso("Gasto recurrente borrado");
+  });
+}
+const NOMBRE_MODELO = {"303": "IVA trimestral", "130": "Pago fraccionado IRPF", "111": "Retenciones a profesionales", "115": "Retenciones alquileres", "390": "Resumen anual IVA", "100": "Renta anual", "349": "Operaciones intracomunitarias"};
+const TIPO_IMP = {ingresar: ["A ingresar", "p-aviso"], compensar: ["A compensar", "p-ok"], devolver: ["A devolver", "p-ok"], cero: ["Sin actividad / cero", "p-neutro"]};
+function resumenImpuesto(i) {
+  const n = (x) => x == null ? null : eur(x);
+  if (i.modelo === "303") return [i.cuota_devengada != null ? `IVA repercutido ${n(i.cuota_devengada)} (base ${n(i.base_devengada)})` : "", i.cuota_deducible != null ? `IVA deducible ${n(i.cuota_deducible)} (base ${n(i.base_deducible)})` : "", +i.compensado_anterior ? `Compensado de antes ${n(i.compensado_anterior)}` : ""].filter(Boolean).join("<br>");
+  if (i.modelo === "130") return [i.ingresos_acum != null ? `Ingresos acumulados ${n(i.ingresos_acum)}` : "", i.gastos_acum != null ? `Gastos acumulados ${n(i.gastos_acum)}` : "", i.ingresos_acum != null && i.gastos_acum != null ? `Rendimiento ${n(i.ingresos_acum - i.gastos_acum)}` : "", i.retenciones_acum != null ? `Retenciones ${n(i.retenciones_acum)}` : ""].filter(Boolean).join("<br>");
+  return esc(i.notas || "");
+}
+function editarImpuesto(id) {
+  const i = id ? impuestos.find(x => x.id === id) : null;
+  const num = (k) => i && i[k] != null ? i[k] : "";
+  const trim = Math.floor(new Date().getMonth() / 3) || 4;
+  modal(`<h3>${i ? "Modelo " + esc(i.modelo) + " · " + esc(i.periodo) + " " + i.ejercicio : "Registrar declaración presentada"}</h3>
+    <div class="rejilla-campos">
+      <div class="campo"><label for="im-mod">Modelo *</label><select id="im-mod">${Object.entries(NOMBRE_MODELO).map(([k, v]) => `<option value="${k}" ${(i ? i.modelo : "303") === k ? "selected" : ""}>${k} · ${v}</option>`).join("")}</select></div>
+      <div class="campo"><label for="im-ej">Ejercicio *</label><input id="im-ej" type="number" value="${i ? i.ejercicio : anioMes}"></div>
+      <div class="campo"><label for="im-per">Periodo *</label><select id="im-per">${["1T", "2T", "3T", "4T", "Anual"].map(x => `<option ${(i ? i.periodo : trim + "T") === x ? "selected" : ""}>${x}</option>`).join("")}</select></div>
+      <div class="campo"><label for="im-fp">Fecha de presentación</label><input id="im-fp" type="date" value="${i && i.fecha_presentacion ? i.fecha_presentacion : fechaISO(new Date())}"></div>
+      <div class="campo"><label for="im-tipo">Resultado</label><select id="im-tipo">${Object.entries(TIPO_IMP).map(([k, v]) => `<option value="${k}" ${(i ? i.tipo : "ingresar") === k ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>
+      <div class="campo"><label for="im-res">Importe del resultado (€)</label><input id="im-res" type="number" step="0.01" min="0" value="${i ? Math.abs(+i.resultado || 0) : ""}"></div>
+      <div class="campo"><label for="im-pago">Fecha de pago</label><input id="im-pago" type="date" value="${i && i.fecha_pago ? i.fecha_pago : ""}"></div>
+      <div class="campo"><label for="im-just">Nº de justificante</label><input id="im-just" value="${esc(i ? i.justificante || "" : "")}"></div>
+      <p class="nota-ejemplo" style="grid-column:1/-1">Modelo 303: copia las bases y cuotas de la declaración. Modelo 130: los acumulados del año.</p>
+      <div class="campo"><label for="im-bd">Base IVA repercutido</label><input id="im-bd" type="number" step="0.01" value="${num("base_devengada")}"></div>
+      <div class="campo"><label for="im-cd">Cuota IVA repercutido</label><input id="im-cd" type="number" step="0.01" value="${num("cuota_devengada")}"></div>
+      <div class="campo"><label for="im-bs">Base IVA deducible</label><input id="im-bs" type="number" step="0.01" value="${num("base_deducible")}"></div>
+      <div class="campo"><label for="im-cs">Cuota IVA deducible</label><input id="im-cs" type="number" step="0.01" value="${num("cuota_deducible")}"></div>
+      <div class="campo"><label for="im-comp">Compensado de trimestres anteriores</label><input id="im-comp" type="number" step="0.01" value="${num("compensado_anterior")}"></div>
+      <div class="campo"><label for="im-ing">Ingresos acumulados (130)</label><input id="im-ing" type="number" step="0.01" value="${num("ingresos_acum")}"></div>
+      <div class="campo"><label for="im-gas">Gastos acumulados (130)</label><input id="im-gas" type="number" step="0.01" value="${num("gastos_acum")}"></div>
+      <div class="campo"><label for="im-ret">Retenciones acumuladas (130)</label><input id="im-ret" type="number" step="0.01" value="${num("retenciones_acum")}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="im-doc">Dónde está el PDF</label><input id="im-doc" value="${esc(i ? i.documento || "" : "")}" placeholder="ADMINISTRACION / Facturas 3Q_2026 / Impuestos Q3 / …"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="im-notas">Notas</label><textarea id="im-notas">${esc(i ? i.notas || "" : "")}</textarea></div>
+    </div>`, async () => {
+    const v = (k) => { const x = $(k).value; return x === "" ? null : r2(parseFloat(x)); };
+    const tipo = $("#im-tipo").value, imp = Math.abs(v("#im-res") || 0);
+    const fila = {modelo: $("#im-mod").value, ejercicio: +$("#im-ej").value, periodo: $("#im-per").value, fecha_presentacion: $("#im-fp").value || null, tipo,
+      resultado: tipo === "ingresar" ? imp : tipo === "cero" ? 0 : -imp, fecha_pago: $("#im-pago").value || null, justificante: $("#im-just").value.trim() || null,
+      base_devengada: v("#im-bd"), cuota_devengada: v("#im-cd"), base_deducible: v("#im-bs"), cuota_deducible: v("#im-cs"), compensado_anterior: v("#im-comp"),
+      ingresos_acum: v("#im-ing"), gastos_acum: v("#im-gas"), retenciones_acum: v("#im-ret"), documento: $("#im-doc").value.trim() || null, notas: $("#im-notas").value.trim() || null};
+    if (!fila.ejercicio) return "Indica el ejercicio.";
+    const q = i ? sb.from("impuestos").update(fila).eq("id", i.id) : sb.from("impuestos").insert(fila);
+    const {data, error} = await q.select().single();
+    if (error) return "No se pudo guardar: " + (/duplicate|unique/i.test(error.message) ? "ya hay una declaración de ese modelo y periodo" : error.message);
+    if (i) Object.assign(i, data); else impuestos.push(data);
+    aviso(i ? "Declaración actualizada" : "Declaración registrada");
+  }, i ? "Guardar" : "Registrar");
+  if (i) botonBorrar("Borrar", async () => {
+    if (!confirm("¿Borrar el registro del modelo " + i.modelo + " " + i.periodo + "? Quedará en el historial de cambios.")) return;
+    const {error} = await sb.from("impuestos").delete().eq("id", i.id); if (error) return fallo(error, "No se pudo borrar");
+    impuestos = impuestos.filter(x => x.id !== i.id); cerrarCapa(); render(); aviso("Registro borrado");
   });
 }
 function exportarGastos() {
