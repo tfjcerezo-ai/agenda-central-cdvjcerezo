@@ -321,6 +321,15 @@ html,body{height:auto}
 .fila-liq.total{border-bottom:0;font-size:14px}.fila-liq.total b{color:var(--oro-claro);font-size:16px}
 .columna.cerrada{opacity:.78}
 td.num{white-space:nowrap}
+.pp-leyenda{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--texto3);margin:2px 0 10px}
+.pp-leyenda span{display:inline-flex;align-items:center;gap:5px}.pp-leyenda i{width:10px;height:10px;border-radius:2px;background:var(--oro);display:inline-block}
+.pp-fila{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;font-size:13px;padding:6px 4px;border-radius:6px;cursor:pointer}
+.pp-fila:hover,.pp-fila:focus-visible{background:var(--panel2);outline:none}
+.pp-nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-barra{display:flex;gap:2px;height:18px;grid-column:1/-1;grid-row:2}.pp-barra>div{background:var(--oro);border-radius:3px;min-width:18px;display:flex;align-items:center;justify-content:center}
+.pp-barra b{font-size:10.5px;font-weight:600;color:inherit}
+.pp-n{text-align:right;font-variant-numeric:tabular-nums;color:var(--texto2);font-size:12px}.pp-n small{color:var(--ok);font-size:11px;margin-left:6px}
+.pp-grupo{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--texto3);margin:10px 0 2px}.pp-grupo:first-of-type{margin-top:0}.pp-grupo.mal{color:var(--mal)}
 </style>
 </head>
 <body>
@@ -368,6 +377,8 @@ const GANADO = "Cierre ganado", PERDIDO = "Cierre perdido", NO_INTERESA = "No in
 const ETAPAS = ["Nuevo","No contactado","Contactado","Reunión","Propuesta","Negociación",GANADO,PERDIDO,NO_INTERESA];
 const CERRADAS = [GANADO, PERDIDO, NO_INTERESA];
 const esActivo = (l) => !CERRADAS.includes(l.etapa);
+const ETAPAS_VIVAS = ETAPAS.slice(0, 6), OPAC_ETAPA = [22, 34, 48, 62, 80, 100];
+const fondoEtapa = (i) => `background:color-mix(in srgb, var(--oro) ${OPAC_ETAPA[i]}%, transparent);color:${OPAC_ETAPA[i] >= 62 ? "var(--negro)" : "var(--texto)"}`;
 const PROB = {Nuevo:10,"No contactado":5,Contactado:20,"Reunión":40,Propuesta:60,"Negociación":80,[GANADO]:100,[PERDIDO]:0,[NO_INTERESA]:0};
 const MOTIVOS_NO = ["No cumple requisitos","No es el perfil de cliente","No le interesa","Ya tiene una solución","Otro"];
 const ORIGENES = ["Llamada en frío","Referido","Web","LinkedIn","Evento","Calendly","Kit Digital","Otro"];
@@ -700,6 +711,7 @@ function render() {
 function enlazar(r) {
   r.querySelectorAll("[data-vista]").forEach(b => b.onclick = () => { vista = b.dataset.vista; render(); });
   r.querySelectorAll("[data-lead]").forEach(b => { b.onclick = () => abrirLead(+b.dataset.lead); b.onkeydown = (e) => { if (e.key === "Enter") abrirLead(+b.dataset.lead); }; });
+  r.querySelectorAll("[data-ir-proy]").forEach(b => { const ir = () => { filtroProy = b.dataset.irProy; vista = "pipeline"; render(); }; b.onclick = ir; b.onkeydown = (e) => { if (e.key === "Enter") ir(); }; });
   r.querySelectorAll("[data-fproy]").forEach(b => b.onclick = () => { filtroProy = b.dataset.fproy; render(); });
   r.querySelectorAll("[data-nuevo-lead]").forEach(b => b.onclick = nuevoLead);
   const fp = $("#f-persona", r); if (fp) fp.onchange = () => { filtroPersona = fp.value; render(); };
@@ -738,8 +750,12 @@ function vPanel() {
   const pasos = act.filter(l => l.proximo_paso_fecha).sort((a, b) => a.proximo_paso_fecha.localeCompare(b.proximo_paso_fecha)).slice(0, 8);
   const h = new Date().getHours();
   const saludo = h < 14 ? "Buenos días" : h < 21 ? "Buenas tardes" : "Buenas noches";
-  const porProy = proyectos.filter(p => misProyectos.includes(p.id)).map(p => ({p, n: act.filter(l => l.proyecto_id === p.id).length, v: act.filter(l => l.proyecto_id === p.id).reduce((s, l) => s + (+l.valor || 0), 0)})).filter(x => x.n);
-  const max = Math.max(1, ...porProy.map(x => x.v));
+  const porProy = proyectos.filter(p => misProyectos.includes(p.id)).map(p => { const ls = leads.filter(l => l.proyecto_id === p.id); const a = ls.filter(l => esActivo(l));
+    return {p, n: a.length, v: a.reduce((s, l) => s + (+l.valor || 0), 0), g: ls.filter(l => l.etapa === GANADO).length, porEtapa: ETAPAS_VIVAS.map(e => a.filter(l => l.etapa === e).length)}; })
+    .filter(x => x.n || x.g).sort((a, b) => b.n - a.n || b.g - a.g || a.p.nombre.localeCompare(b.p.nombre, "es"));
+  const max = Math.max(1, ...porProy.map(x => x.n));
+  // Próximos pasos agrupados: vencidos, hoy, mañana y más adelante
+  const grupos = [["Vencidos", l => difDias(l.proximo_paso_fecha) < 0], ["Hoy", l => difDias(l.proximo_paso_fecha) === 0], ["Mañana", l => difDias(l.proximo_paso_fecha) === 1], ["Más adelante", l => difDias(l.proximo_paso_fecha) > 1]];
   return `<div class="cabecera"><div><h2>${saludo}, ${esc(yo.nombre.split(" ")[0])}</h2><div class="sub">${new Date().toLocaleDateString("es-ES", {weekday: "long", day: "numeric", month: "long"})} · ${esDir() ? "visión de todo el equipo" : "tus leads"}</div></div>
     <button class="btn btn-oro" data-nuevo-lead>+ Nuevo lead</button></div>
   <section class="cifras">
@@ -751,10 +767,14 @@ function vPanel() {
   ${bloqueReunionesHoy()}
   <section class="dos-col">
     <div class="bloque"><div class="bloque-cab"><h3>Próximos pasos</h3><button class="btn-texto" data-vista="pipeline">Abrir pipeline →</button></div>
-      ${pasos.length ? `<ul class="lista">${pasos.map(l => `<li class="clic" data-lead="${l.id}" style="cursor:pointer"><span class="crece"><b style="font-weight:500">${esc(l.proximo_paso || "Seguimiento")}</b> · ${esc(l.empresa)}<small>${esc(nomProy(l.proyecto_id))}${esDir() ? " · " + esc(nomPersona(l.closer_id)) : ""}</small></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${rel(l.proximo_paso_fecha)}</span></li>`).join("")}</ul>` : `<p class="vacia">No hay próximos pasos programados.</p>`}
+      ${pasos.length ? grupos.map(([tit, f]) => { const ls = pasos.filter(f); return ls.length ? `<div class="pp-grupo${tit === "Vencidos" ? " mal" : ""}">${tit} · ${ls.length}</div><ul class="lista">${ls.map(l => `<li class="clic" data-lead="${l.id}" style="cursor:pointer"><span class="crece"><b style="font-weight:500">${esc(l.proximo_paso || "Seguimiento")}</b> · ${esc(l.empresa)}<small>${etiquetaProy(l.proyecto_id)}${esDir() ? " · " + esc(nomPersona(l.closer_id)) : ""}</small></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${rel(l.proximo_paso_fecha)}</span></li>`).join("")}</ul>` : ""; }).join("") : `<p class="vacia">No hay próximos pasos programados.</p>`}
     </div>
-    <div class="bloque"><div class="bloque-cab"><h3>Pipeline por proyecto</h3></div>
-      ${porProy.length ? porProy.map(x => `<div class="fila-barra"><span>${esc(x.p.nombre)}</span><div class="barra"><span style="width:${x.v / max * 100}%"></span></div><span class="n">${x.n} · ${eur(x.v)}</span></div>`).join("") : `<p class="vacia">Aún no hay leads. Crea el primero con «Nuevo lead».</p>`}
+    <div class="bloque"><div class="bloque-cab"><h3>Pipeline por proyecto</h3><button class="btn-texto" data-vista="pipeline">Ver todos →</button></div>
+      ${porProy.length ? `<div class="pp-leyenda">${ETAPAS_VIVAS.map((e, i) => `<span><i style="${fondoEtapa(i)}"></i>${esc(e)}</span>`).join("")}</div>
+      ${porProy.map(x => `<div class="pp-fila clic" data-ir-proy="${x.p.id}" role="button" tabindex="0" title="Abrir el pipeline de ${esc(x.p.nombre)}">
+        <span class="pp-nom">${etiquetaProy(x.p.id)}</span>
+        <div class="pp-barra">${x.n ? x.porEtapa.map((c, i) => c ? `<div title="${esc(ETAPAS_VIVAS[i])}: ${c}" style="flex:${c};${fondoEtapa(i)}"><b>${c}</b></div>` : "").join("") + `<div style="flex:${max - x.n};background:none"></div>` : `<div style="flex:1;background:none"></div>`}</div>
+        <span class="pp-n">${x.n} ${x.n === 1 ? "activo" : "activos"}${x.v ? " · " + eur(x.v) : ""}${x.g ? `<small>${x.g} ${x.g === 1 ? "ganado" : "ganados"}</small>` : ""}</span></div>`).join("")}` : `<p class="vacia">Aún no hay leads. Crea el primero con «Nuevo lead».</p>`}
     </div>
   </section>`;
 }
