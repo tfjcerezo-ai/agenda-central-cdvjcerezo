@@ -2439,7 +2439,7 @@ function cajasComisionVenta(v) {
   const fC = cuotasDevengadas(v);
   const cajas = [caja('CDV by JCerezo', ingresoCDV(v), 'var(--dorado)', 'rgba(201,168,76,0.1)', jv ? `${eur2((+v.com_cdv||0)*fC)} empresa + ${eur2(jv)} Javier` : '')]
     .concat(otros.map(p => caja(`${p.nombre} · ${p.papel}`, p.com, p.papel==='closer'?'var(--verde)':'var(--azul)', p.papel==='closer'?'rgba(81,207,102,0.1)':'rgba(74,158,232,0.1)')));
-  return `<div style="display:grid;grid-template-columns:repeat(${Math.min(3,cajas.length)},1fr);gap:6px;margin-bottom:8px;">${cajas.join('')}</div>${v.tipo_cobro==='mensual'?`<div style="font-size:10px;color:var(--dorado);margin-bottom:6px;">🔁 ${eur2(v.importe)}/mes · ${fC} ${fC===1?'cuota devengada':'cuotas devengadas'} (${eur2(importeTotal(v))}) · comisiones acumuladas</div>`:''}${v.notas?`<div style="font-size:10px;color:var(--gris);margin-bottom:8px;">📝 ${v.notas}</div>`:''}`;
+  return `<div style="display:grid;grid-template-columns:repeat(${Math.min(3,cajas.length)},1fr);gap:6px;margin-bottom:8px;">${cajas.join('')}</div>${v.tipo_cobro==='mensual'?`<div style="font-size:10px;color:var(--dorado);margin-bottom:6px;">🔁 ${eur2(v.importe)}/mes · ${fC} ${fC===1?'cuota devengada':'cuotas devengadas'} (${eur2(importeTotal(v))}) · comisiones acumuladas${v.fin_cuotas?` · <span style="color:var(--rojo);">❌ baja ${String(v.fin_cuotas).slice(0,10).split('-').reverse().join('/')}</span>`:''}</div>`:''}${v.notas?`<div style="font-size:10px;color:var(--gris);margin-bottom:8px;">📝 ${v.notas}</div>`:''}`;
 }
 // Columnas de la tabla ventas en Supabase (todas las filas deben llevar las mismas claves)
 const COLS_VENTA = ['id','cliente','proyecto','producto','inicio_cuotas','fin_cuotas','importe','closer','setter','closer2','fecha_cobro','estado','tipo_cobro','com_cdv','com_closer','com_closer2','com_setter','com_jr','liquidado_cdv','notas'];
@@ -2526,6 +2526,16 @@ function editarVenta(id) {
           <option value="mensual" ${nv.tipo_cobro==='mensual'?'selected':''}>🔄 Cuota mensual (día 6)</option>
         </select></div>
 
+      <div id="ev_bloque_baja" style="margin-bottom:12px;display:${nv.tipo_cobro==='mensual'?'block':'none'};background:#111;border:1px solid rgba(255,107,107,0.25);border-radius:10px;padding:12px;">
+        <label style="${labelStyle}">Baja de la cuota (último mes que paga)</label>
+        <input type="date" id="ev_fin_cuotas" value="${String(nv.fin_cuotas||'').slice(0,10)}" style="${inputStyle}">
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button type="button" onclick="document.getElementById('ev_fin_cuotas').value=new Date().toISOString().slice(0,10)" style="flex:1;background:rgba(255,107,107,0.12);border:1px solid rgba(255,107,107,0.4);color:var(--rojo);border-radius:8px;padding:8px;font-size:12px;cursor:pointer;">❌ Dar de baja hoy</button>
+          <button type="button" onclick="document.getElementById('ev_fin_cuotas').value=''" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,0.15);color:var(--gris);border-radius:8px;padding:8px;font-size:12px;cursor:pointer;">Sigue activa</button>
+        </div>
+        <div style="font-size:10px;color:var(--gris);margin-top:6px;">Las cuotas y comisiones dejan de contar a partir de esa fecha. Lo ya cobrado no cambia.</div>
+      </div>
+
       <div style="margin-bottom:12px;"><label style="${labelStyle}">Importe venta (€)</label>
         <input type="number" id="ev_importe" value="${nv.importe||''}" oninput="evRecalcComisiones()" style="${inputStyle}"></div>
 
@@ -2606,6 +2616,8 @@ function evTipoCobroChange() {
   const tipo = document.getElementById('ev_tipo_cobro')?.value;
   const fechaInput = document.getElementById('ev_fecha_cobro');
   if(!fechaInput) return;
+  const bloque = document.getElementById('ev_bloque_baja');
+  if(bloque) bloque.style.display = tipo === 'mensual' ? 'block' : 'none';
   if(tipo === 'mensual') {
     fechaInput.value = proximoCobro6();
   }
@@ -2623,6 +2635,7 @@ function guardarEditVenta(id) {
     cliente: get('cliente') || ventas[idx].cliente,
     tipo_cobro,
     inicio_cuotas: tipo_cobro === 'mensual' ? (ventas[idx].inicio_cuotas || fecha_cobro) : null,
+    fin_cuotas: tipo_cobro === 'mensual' ? (get('fin_cuotas') || null) : null,
     importe: parseFloat(get('importe')) || ventas[idx].importe,
     closer: get('closer') ?? ventas[idx].closer,
     setter: get('setter') ?? ventas[idx].setter,
