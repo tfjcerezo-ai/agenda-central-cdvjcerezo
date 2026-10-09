@@ -334,6 +334,7 @@ td.num{white-space:nowrap}
       <button data-vista="calendario">Calendario</button>
       <button data-vista="contactos">Contactos</button>
       <button data-vista="ventas" data-solo-director hidden>Ventas</button>
+      <button data-vista="gastos" data-solo-director hidden>Gastos</button>
       <button data-vista="proyectos">Proyectos</button>
       <button data-vista="equipo" data-solo-director hidden>Equipo <span class="cuenta" id="c-equipo"></span></button>
       <button class="ir-agenda" data-solo-director hidden onclick="location.href='/'">📅 Mi agenda →</button>
@@ -349,6 +350,7 @@ td.num{white-space:nowrap}
     <button data-vista="contactos">Contactos</button>
     <button data-vista="proyectos">Proyectos</button>
     <button data-vista="ventas" data-solo-director hidden>Ventas</button>
+    <button data-vista="gastos" data-solo-director hidden>Gastos</button>
     <button data-vista="equipo" data-solo-director hidden>Equipo</button>
   </div>
   <main class="principal" id="principal"></main>
@@ -385,6 +387,7 @@ let facturas = [];
 let productos = [];
 let compras = [];      // crm_compras: ficha de compra de los clientes (José Bernad, CAYFI…)    // crm_productos: productos que se comercializan dentro de un proyecto (p. ej. José Bernad)     // solo director: facturas emitidas por CDV by JCerezo
 let filtroVentas = "todos";
+let gastos = [], recurrentes = [], filtroGasto = "todos";   // solo director: gastos de CDV by JCerezo
 let metricaMes = "cdv", anioMes = new Date().getFullYear();
 let semana = 0, filtroContProy = "todos", busqContactos = "";
 const TIPOS_REUNION = {reunion: "Reunión", llamada: "Llamada", visita: "Visita", demo: "Demo", otro: "Otro"};
@@ -662,6 +665,9 @@ async function cargarTodo() {
     perfiles = r[5].data; ventas = (r[6].data || []).map(escalarVenta);
     const f = await pFact; facturas = f.error ? [] : f.data || [];
     if (f.error) console.warn("Facturas no disponibles:", f.error.message);
+    const [gr, rr] = await Promise.all([sb.from("gastos").select("*").order("fecha", {ascending: false}), sb.from("gastos_recurrentes").select("*").order("proveedor")]);
+    gastos = gr.error ? [] : gr.data || []; recurrentes = rr.error ? [] : rr.data || [];
+    if (!gr.error && !rr.error) await generarRecurrentes();
   }
   misProyectos = esDir() ? proyectos.map(p => p.id) : miembros.filter(m => m.perfil_id === yo.id).map(m => m.proyecto_id);
 }
@@ -686,6 +692,7 @@ function render() {
   if (vista === "proyectos") m.innerHTML = vProyectos();
   if (vista === "contactos") m.innerHTML = vContactos();
   if (vista === "ventas" && veVentas()) m.innerHTML = vVentas();
+  if (vista === "gastos" && esDir()) m.innerHTML = vGastos();
   if (vista === "calendario") m.innerHTML = vCalendario();
   enlazar(m);
 }
@@ -704,6 +711,13 @@ function enlazar(r) {
   r.querySelectorAll("[data-fventa]").forEach(b => b.onclick = () => { filtroVentas = b.dataset.fventa; render(); });
   r.querySelectorAll("[data-mmet]").forEach(b => b.onclick = () => { metricaMes = b.dataset.mmet; render(); });
   r.querySelectorAll("[data-manio]").forEach(b => b.onclick = () => { anioMes += +b.dataset.manio; render(); });
+  r.querySelectorAll("[data-gasto]").forEach(b => b.onclick = () => editarGasto(+b.dataset.gasto));
+  r.querySelectorAll("[data-recurrente]").forEach(b => b.onclick = () => editarRecurrente(+b.dataset.recurrente));
+  const ng = $("#nuevo-gasto", r); if (ng) ng.onclick = () => editarGasto(null);
+  const nr = $("#nuevo-recurrente", r); if (nr) nr.onclick = () => editarRecurrente(null);
+  const eg = $("#exportar-gastos", r); if (eg) eg.onclick = exportarGastos;
+  r.querySelectorAll("[data-fgasto]").forEach(b => b.onclick = () => { filtroGasto = b.dataset.fgasto; render(); });
+  const cg = $("#f-cat-gasto", r); if (cg) cg.onchange = () => { filtroGasto = cg.value || "todos"; render(); };
   r.querySelectorAll("[data-fcont]").forEach(b => b.onclick = () => { filtroContProy = b.dataset.fcont; render(); });
   const bc = $("#buscar-cont", r); if (bc) bc.oninput = () => { busqContactos = bc.value; const pos = bc.selectionStart; render(); const n = $("#buscar-cont"); n.focus(); n.setSelectionRange(pos, pos); };
   const ex = $("#exportar-cont", r); if (ex) ex.onclick = exportarContactos;
@@ -1257,6 +1271,189 @@ function editarFactura(id) {
     };
     acc.prepend(b);
   }
+}
+
+/* ===== GASTOS Y RESULTADO (solo director) ===== */
+const CATEGORIAS_GASTO = ["Software y suscripciones", "Telefonía e internet", "Web y dominios", "Sala y producción de eventos", "Artistas y DJs", "Publicidad y marketing", "Comisiones a colaboradores", "Desplazamientos y dietas", "Cuota de autónomos y seguros", "Gestoría y servicios profesionales", "Material y equipos", "Formación", "Comisiones bancarias", "Otros"];
+const ESTADO_GASTO = {previsto: ["Previsto", "p-aviso"], pagado: ["Pagado", "p-ok"], descartado: ["Descartado", "p-neutro"]};
+const gastoVivo = (g) => g.estado !== "descartado";
+const nomDestino = (id) => id ? etiquetaProy(id) : "Estructura";
+const opcionesDestino = (sel) => `<option value="" ${!sel ? "selected" : ""}>Estructura (gasto general de CDV by JCerezo)</option>` +
+  [...new Set(proyectos.map(p => p.cuenta || "Sin cuenta"))].map(c => `<optgroup label="${esc(c)}">${proyectos.filter(p => (p.cuenta || "Sin cuenta") === c).map(p => `<option value="${p.id}" ${sel === p.id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</optgroup>`).join("");
+const ultimoDia = (a, m) => new Date(a, m + 1, 0).getDate();
+// Cada gasto recurrente se apunta solo cada mes (como "previsto") hasta el mes actual; al meter la factura pasa a "pagado"
+async function generarRecurrentes() {
+  const hoy = new Date(), nuevos = [];
+  recurrentes.forEach(rc => {
+    const ini = aFecha(String(rc.inicio).slice(0, 10)); if (!ini) return;
+    const fin = rc.fin ? aFecha(String(rc.fin).slice(0, 10)) : null;
+    for (let d = new Date(ini.getFullYear(), ini.getMonth(), 1); d <= hoy; d.setMonth(d.getMonth() + 1)) {
+      const a = d.getFullYear(), m = d.getMonth(), f = new Date(a, m, Math.min(rc.dia, ultimoDia(a, m)));
+      if (f < ini || (fin && f > fin)) continue;
+      const periodo = a + "-" + String(m + 1).padStart(2, "0");
+      if (gastos.some(g => g.recurrente_id === rc.id && g.periodo === periodo)) continue;
+      nuevos.push({fecha: fechaISO(f), proveedor: rc.proveedor, concepto: rc.concepto, categoria: rc.categoria, proyecto_id: rc.proyecto_id, base: rc.base, iva_pct: rc.iva_pct, irpf_pct: rc.irpf_pct, deducible_pct: rc.deducible_pct, estado: "previsto", recurrente_id: rc.id, periodo});
+    }
+  });
+  if (!nuevos.length) return;
+  const {data, error} = await sb.from("gastos").upsert(nuevos, {onConflict: "recurrente_id,periodo", ignoreDuplicates: true}).select();
+  if (error) return console.warn("No se pudieron apuntar los gastos recurrentes:", error.message);
+  gastos.push(...(data || [])); gastos.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+}
+const trimestre = (fecha) => { const d = aFecha(String(fecha || "").slice(0, 10)); return d ? Math.floor(d.getMonth() / 3) : -1; };
+function vGastos() {
+  const delAnio = (f) => String(f || "").slice(0, 4) === String(anioMes);
+  const gs = gastos.filter(g => delAnio(g.fecha) && gastoVivo(g));
+  const sum = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+  // Resultado por mes: ingresos de CDV by JCerezo (por fecha de cobro, cuotas mensuales una por mes) menos gastos (base sin IVA)
+  const ing = Array(12).fill(0), gProy = Array(12).fill(0), gEstr = Array(12).fill(0), porProy = {};
+  const acum = (id, k, v) => { const o = porProy[id] = porProy[id] || {ing: 0, gas: 0}; o[k] += v; };
+  ventas.forEach(v => apuntesMes(v).forEach(a => { const d = aFecha(a.fecha); if (!d || d.getFullYear() !== anioMes) return; ing[d.getMonth()] += a.cdv; acum(proyDeVenta(v) || "?", "ing", a.cdv); }));
+  gs.forEach(g => { const m = aFecha(String(g.fecha).slice(0, 10)).getMonth(), b = +g.base || 0; (g.proyecto_id ? gProy : gEstr)[m] += b; acum(g.proyecto_id || "", "gas", b); });
+  const ben = ing.map((x, m) => x - gProy[m] - gEstr[m]);
+  const tIng = sum(ing, x => x), tGas = sum(gProy, x => x) + sum(gEstr, x => x), previstos = gs.filter(g => g.estado === "previsto");
+  const mesAct = new Date().getFullYear() === anioMes ? new Date().getMonth() : -1;
+  const celda = (x, m, neg) => `<td class="num"${m === mesAct ? ` style="background:rgba(201,168,76,.08)"` : ""}>${x ? `<span style="color:${neg ? (x < 0 ? "var(--mal)" : "var(--bien)") : "inherit"}">${eur(x)}</span>` : `<span style="color:var(--texto3)">—</span>`}</td>`;
+  const filaMes = (tit, arr, neg, b) => `<tr${b ? ` style="border-top:2px solid var(--linea)"` : ""}><td>${b ? `<b>${tit}</b>` : tit}</td>${arr.map((x, m) => celda(x, m, neg)).join("")}<td class="num"><b style="font-weight:600;${neg ? `color:${sum(arr, x => x) < 0 ? "var(--mal)" : "var(--bien)"}` : ""}">${eur(sum(arr, x => x))}</b></td></tr>`;
+  // IVA por trimestre (orientativo): repercutido en facturas emitidas, soportado en gastos pagados (parte deducible)
+  const fv = facturas.filter(f => f.estado !== "anulada" && delAnio(f.fecha));
+  const trim = [0, 1, 2, 3].map(t => {
+    const rep = sum(fv.filter(f => trimestre(f.fecha) === t), f => +f.iva || 0);
+    const sop = sum(gs.filter(g => g.estado === "pagado" && trimestre(g.fecha) === t), g => (+g.iva || 0) * (+g.deducible_pct || 0) / 100);
+    const ret = sum(fv.filter(f => trimestre(f.fecha) === t), f => +f.irpf || 0);
+    const retTerc = sum(gs.filter(g => g.estado === "pagado" && trimestre(g.fecha) === t), g => +g.irpf || 0);
+    return {rep: r2(rep), sop: r2(sop), dif: r2(rep - sop), ret: r2(ret), retTerc: r2(retTerc)};
+  });
+  const ids = Object.keys(porProy).sort((a, b) => (a === "" ? "zz" : cuentaDe(a) + nomProy(a)).localeCompare(b === "" ? "zz" : cuentaDe(b) + nomProy(b), "es"));
+  const lista = gs.filter(g => filtroGasto === "todos" || (filtroGasto === "estructura" ? !g.proyecto_id : filtroGasto === "previstos" ? g.estado === "previsto" : g.categoria === filtroGasto));
+  return `<div class="cabecera"><div><h2>Gastos y resultado</h2><div class="sub">${anioMes} · lo que entra, lo que sale y lo que queda para CDV by JCerezo</div></div>
+    <div class="filtros"><button class="chip" data-manio="-1" aria-label="Año anterior">‹ ${anioMes - 1}</button><button class="chip" data-manio="1" aria-label="Año siguiente">${anioMes + 1} ›</button><button class="btn" id="nuevo-recurrente">+ Gasto recurrente</button><button class="btn btn-oro" id="nuevo-gasto">+ Nuevo gasto</button></div></div>
+  <section class="cifras">
+    <div class="cifra"><div class="etiq">Ingresos</div><div class="num">${eur(tIng)}</div><div class="det">comisiones y eventos, sin IVA</div></div>
+    <div class="cifra"><div class="etiq">Gastos</div><div class="num">${eur(tGas)}</div><div class="det">${gs.length} apuntes, base sin IVA</div></div>
+    <div class="cifra ${tIng - tGas >= 0 ? "bien" : ""}"><div class="etiq">Beneficio</div><div class="num" ${tIng - tGas < 0 ? `style="color:var(--mal)"` : ""}>${eur(tIng - tGas)}</div><div class="det">antes de impuestos</div></div>
+    <div class="cifra"><div class="etiq">Previstos sin factura</div><div class="num">${previstos.length}</div><div class="det">${eur(sum(previstos, g => +g.total || 0))} · recurrentes de este año</div></div>
+  </section>
+  <div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>Resultado por mes · ${anioMes}</h3></div>
+    <div class="tabla-env"><table style="font-size:12.5px"><thead><tr><th></th>${MESES.map((m, i) => `<th class="num"${i === mesAct ? ` style="color:var(--oro)"` : ""}>${m}</th>`).join("")}<th class="num">Total</th></tr></thead><tbody>
+    ${filaMes("Ingresos CDV by JCerezo", ing)}${filaMes("Gastos de proyectos", gProy.map(x => -x))}${filaMes("Gastos de estructura", gEstr.map(x => -x))}${filaMes("Beneficio", ben, true, true)}
+    </tbody></table></div>
+    <p style="font-size:12px;color:var(--texto3);margin-top:8px">Importes sin IVA. Los ingresos cuentan en el mes de su fecha de cobro; las comisiones de Elocrea aún sin liquidar también cuentan, en su fecha prevista.</p></div>
+  <div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>Por proyecto · ${anioMes}</h3></div>
+    <div class="tabla-env"><table><thead><tr><th>Proyecto</th><th class="num">Ingresos</th><th class="num">Gastos</th><th class="num">Resultado</th></tr></thead><tbody>
+    ${ids.map(id => { const o = porProy[id], r = o.ing - o.gas; return `<tr><td>${id === "?" ? "Sin proyecto" : nomDestino(id)}${id === "" ? `<small style="display:block;color:var(--texto3)">suscripciones, móvil, cuota, gestoría…</small>` : ""}</td><td class="num">${o.ing ? eur(o.ing) : "—"}</td><td class="num">${o.gas ? eur(o.gas) : "—"}</td><td class="num"><b style="font-weight:600;color:${r < 0 ? "var(--mal)" : "var(--bien)"}">${eur(r)}</b></td></tr>`; }).join("") || `<tr><td colspan="4">Sin movimientos en ${anioMes}.</td></tr>`}
+    </tbody></table></div></div>
+  <div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>IVA y retenciones por trimestre · ${anioMes}</h3></div>
+    <div class="tabla-env"><table><thead><tr><th></th>${["1T", "2T", "3T", "4T"].map(t => `<th class="num">${t}</th>`).join("")}</tr></thead><tbody>
+      <tr><td>IVA repercutido<small style="display:block;color:var(--texto3)">en tus facturas emitidas</small></td>${trim.map(t => `<td class="num">${eur(t.rep)}</td>`).join("")}</tr>
+      <tr><td>IVA soportado deducible<small style="display:block;color:var(--texto3)">en gastos pagados, según su % deducible</small></td>${trim.map(t => `<td class="num">${eur(t.sop)}</td>`).join("")}</tr>
+      <tr style="border-top:2px solid var(--linea)"><td><b>Diferencia</b><small style="display:block;color:var(--texto3)">positivo: a ingresar · negativo: a compensar</small></td>${trim.map(t => `<td class="num"><b style="color:${t.dif > 0 ? "var(--aviso)" : "var(--bien)"}">${eur(t.dif)}</b></td>`).join("")}</tr>
+      <tr><td>Retenciones que te han practicado<small style="display:block;color:var(--texto3)">IRPF de tus facturas, ya adelantado a Hacienda</small></td>${trim.map(t => `<td class="num">${eur(t.ret)}</td>`).join("")}</tr>
+      <tr><td>Retenciones que has practicado tú<small style="display:block;color:var(--texto3)">IRPF de facturas de profesionales que te facturan</small></td>${trim.map(t => `<td class="num">${eur(t.retTerc)}</td>`).join("")}</tr>
+    </tbody></table></div>
+    <p style="font-size:12px;color:var(--texto3);margin-top:8px">Orientativo, para preparar la declaración: no la sustituye. Las facturas de proveedores de fuera de España (Claude, ChatGPT…) y los gastos de uso mixto pueden tener otro tratamiento: confírmalo antes de presentar.</p></div>
+  <div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>Gastos recurrentes</h3></div>
+    ${recurrentes.length ? `<div class="tabla-env"><table><thead><tr><th>Proveedor</th><th>Categoría</th><th>Proyecto</th><th class="num">Base / mes</th><th class="num">Día</th><th>Vigencia</th></tr></thead><tbody>
+    ${recurrentes.map(rc => `<tr class="clic" data-recurrente="${rc.id}"><td>${esc(rc.proveedor)}${rc.concepto ? `<small style="display:block;color:var(--texto3)">${esc(rc.concepto)}</small>` : ""}</td><td>${esc(rc.categoria)}</td><td>${nomDestino(rc.proyecto_id)}</td><td class="num">${eur(rc.base)}</td><td class="num">${rc.dia}</td><td>${rc.fin && aFecha(String(rc.fin)) < new Date() ? `<span class="pildora p-neutro">De baja desde ${fF(rc.fin)}</span>` : `desde ${fF(rc.inicio)}${rc.fin ? " hasta " + fF(rc.fin) : ""}`}</td></tr>`).join("")}</tbody></table></div>`
+    : `<p class="vacia">Aún no hay gastos recurrentes. Da de alta aquí tus suscripciones (Claude, ChatGPT, móvil…) y se apuntarán solas cada mes.</p>`}</div>
+  <div class="barra-herr"><div class="izq"><div class="filtros">${[["todos", "Todos"], ["previstos", "Previstos"], ["estructura", "Estructura"]].map(([k, t]) => `<button class="chip" data-fgasto="${k}" aria-pressed="${filtroGasto === k}">${t}</button>`).join("")}
+    <select class="entrada" id="f-cat-gasto" aria-label="Categoría"><option value="">Por categoría…</option>${CATEGORIAS_GASTO.map(c => `<option ${filtroGasto === c ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></div></div>
+    <div class="der"><button class="btn" id="exportar-gastos">⬇ Exportar gastos</button></div></div>
+  <div class="tabla-env"><table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Categoría</th><th>Proyecto</th><th class="num">Base</th><th class="num">IVA</th><th class="num">Total</th><th>Estado</th></tr></thead><tbody>
+  ${lista.map(g => `<tr class="clic" data-gasto="${g.id}"><td>${fF(g.fecha)}</td><td>${esc(g.proveedor)}<small style="display:block;color:var(--texto3)">${esc([g.numero ? "Nº " + g.numero : "", g.concepto || ""].filter(Boolean).join(" · "))}</small></td><td>${esc(g.categoria)}</td><td>${nomDestino(g.proyecto_id)}</td><td class="num">${eur(g.base)}</td><td class="num">${eur(g.iva)}${+g.deducible_pct < 100 ? `<small style="display:block;color:var(--texto3)">deducible ${pctTxt(g.deducible_pct)}</small>` : ""}</td><td class="num"><b style="font-weight:600">${eur(g.total)}</b></td><td><span class="pildora ${(ESTADO_GASTO[g.estado] || ["", "p-neutro"])[1]}">${(ESTADO_GASTO[g.estado] || [g.estado])[0]}</span></td></tr>`).join("") || `<tr><td colspan="8">No hay gastos${filtroGasto !== "todos" ? " con este filtro" : ` en ${anioMes}`}.</td></tr>`}
+  </tbody></table></div>`;
+}
+function camposGasto(g, rec) {
+  return `<div class="campo"><label for="g-prov">Proveedor *</label><input id="g-prov" required value="${esc(g ? g.proveedor : "")}" placeholder="Anthropic, OpenAI, Movistar, Sala Siroco…"></div>
+    <div class="campo"><label for="g-cat">Categoría</label><select id="g-cat">${CATEGORIAS_GASTO.map(c => `<option ${(g ? g.categoria : rec ? "Software y suscripciones" : "Otros") === c ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></div>
+    <div class="campo" style="grid-column:1/-1"><label for="g-concepto">Concepto</label><input id="g-concepto" value="${esc(g ? g.concepto || "" : "")}"></div>
+    <div class="campo" style="grid-column:1/-1"><label for="g-proy">¿A qué se imputa?</label><select id="g-proy">${opcionesDestino(g ? g.proyecto_id : null)}</select></div>
+    <div class="campo"><label for="g-base">Base sin IVA (€) *</label><input id="g-base" type="number" step="0.01" required value="${g ? g.base : ""}"></div>
+    <div class="campo"><label for="g-iva">IVA %</label><input id="g-iva" type="number" step="0.01" min="0" value="${g ? g.iva_pct : 21}"></div>
+    <div class="campo"><label for="g-irpf">Retención IRPF %</label><input id="g-irpf" type="number" step="0.01" min="0" value="${g ? g.irpf_pct : 0}"></div>
+    <div class="campo"><label for="g-ded">% deducible</label><input id="g-ded" type="number" step="1" min="0" max="100" value="${g ? g.deducible_pct : 100}"></div>`;
+}
+const leerGasto = () => ({proveedor: $("#g-prov").value.trim(), categoria: $("#g-cat").value, concepto: $("#g-concepto").value.trim() || null, proyecto_id: $("#g-proy").value || null,
+  base: r2(parseFloat($("#g-base").value)), iva_pct: +$("#g-iva").value || 0, irpf_pct: +$("#g-irpf").value || 0, deducible_pct: Math.min(100, Math.max(0, +$("#g-ded").value || 0))});
+function totalGastoVivo(pre) {
+  const calc = () => { const b = +$("#g-base").value || 0, iv = +$("#g-iva").value || 0, ir = +$("#g-irpf").value || 0; $("#" + pre + "-total").textContent = `Total: ${eur(r2(b) + r2(b * iv / 100) - r2(b * ir / 100))} (base ${eur(b)} + IVA ${eur(b * iv / 100)}${ir ? " − IRPF " + eur(b * ir / 100) : ""})`; };
+  ["#g-base", "#g-iva", "#g-irpf"].forEach(k => $(k).oninput = calc); calc();
+}
+function botonBorrar(texto, alPulsar) {
+  const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.style.color = "var(--mal)"; b.style.marginRight = "auto"; b.textContent = texto; b.onclick = alPulsar;
+  $(".modal-acciones").prepend(b);
+}
+function editarGasto(id) {
+  const g = id ? gastos.find(x => x.id === id) : null;
+  modal(`<h3>${g ? (g.estado === "previsto" ? "Gasto previsto · " : "Gasto · ") + esc(g.proveedor) : "Nuevo gasto"}</h3>
+    ${g && g.estado === "previsto" ? `<p class="nota-ejemplo">Apunte automático de un gasto recurrente. Cuando tengas la factura, ajusta el importe y márcalo como pagado.</p>` : ""}
+    <div class="rejilla-campos">
+      <div class="campo"><label for="g-fecha">Fecha de la factura *</label><input id="g-fecha" type="date" required value="${g ? g.fecha : fechaISO(new Date())}"></div>
+      <div class="campo"><label for="g-num">Nº de factura</label><input id="g-num" value="${esc(g ? g.numero || "" : "")}"></div>
+      ${camposGasto(g, false)}
+      <div class="campo"><label for="g-nif">NIF del proveedor</label><input id="g-nif" value="${esc(g ? g.nif_proveedor || "" : "")}"></div>
+      <div class="campo"><label for="g-estado">Estado</label><select id="g-estado">${Object.entries(ESTADO_GASTO).map(([k, v]) => `<option value="${k}" ${(g ? g.estado : "pagado") === k ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>
+      <div class="campo" style="grid-column:1/-1"><label for="g-notas">Notas</label><textarea id="g-notas">${esc(g ? g.notas || "" : "")}</textarea></div>
+      <p class="nota-ejemplo" id="g-total" style="grid-column:1/-1"></p>
+    </div>`, async () => {
+    const fila = {...leerGasto(), fecha: $("#g-fecha").value, numero: $("#g-num").value.trim() || null, nif_proveedor: $("#g-nif").value.trim() || null, estado: $("#g-estado").value, notas: $("#g-notas").value.trim() || null};
+    if (!fila.proveedor || !fila.fecha || isNaN(fila.base)) return "Proveedor, fecha y base son obligatorios.";
+    const q = g ? sb.from("gastos").update(fila).eq("id", g.id) : sb.from("gastos").insert(fila);
+    const {data, error} = await q.select().single();
+    if (error) return "No se pudo guardar: " + error.message;
+    if (g) Object.assign(g, data); else gastos.push(data);
+    gastos.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+    aviso(g ? "Gasto actualizado" : "Gasto registrado");
+  }, g ? "Guardar" : "Registrar gasto");
+  totalGastoVivo("g");
+  if (g) botonBorrar(g.recurrente_id ? "Descartar este mes" : "Borrar", async () => {
+    if (g.recurrente_id) {
+      if (!confirm("¿Descartar este apunte de " + g.proveedor + "? No contará en los gastos (si te das de baja del servicio, pon la fecha de baja en el gasto recurrente).")) return;
+      const {error} = await sb.from("gastos").update({estado: "descartado"}).eq("id", g.id); if (error) return fallo(error, "No se pudo descartar");
+      g.estado = "descartado"; cerrarCapa(); render(); return aviso("Apunte descartado");
+    }
+    if (!confirm("¿Borrar el gasto de " + g.proveedor + "? Quedará en el historial de cambios.")) return;
+    const {error} = await sb.from("gastos").delete().eq("id", g.id); if (error) return fallo(error, "No se pudo borrar");
+    gastos = gastos.filter(x => x.id !== g.id); cerrarCapa(); render(); aviso("Gasto borrado");
+  });
+}
+function editarRecurrente(id) {
+  const rc = id ? recurrentes.find(x => x.id === id) : null;
+  modal(`<h3>${rc ? "Gasto recurrente · " + esc(rc.proveedor) : "Nuevo gasto recurrente"}</h3>
+    <p class="nota-ejemplo">Se apunta solo cada mes como "previsto". Cuando llegue la factura, ábrelo en la lista y márcalo como pagado.</p>
+    <div class="rejilla-campos">
+      ${camposGasto(rc, true)}
+      <div class="campo"><label for="g-dia">Día de cargo</label><input id="g-dia" type="number" min="1" max="31" value="${rc ? rc.dia : new Date().getDate()}"></div>
+      <div class="campo"><label for="g-ini">Desde</label><input id="g-ini" type="date" value="${rc ? rc.inicio : fechaISO(new Date())}"></div>
+      <div class="campo"><label for="g-fin">Fecha de baja</label><input id="g-fin" type="date" value="${rc && rc.fin ? rc.fin : ""}"></div>
+      <p class="nota-ejemplo" id="r-total" style="grid-column:1/-1"></p>
+    </div>`, async () => {
+    const fila = {...leerGasto(), dia: Math.min(31, Math.max(1, +$("#g-dia").value || 1)), inicio: $("#g-ini").value || fechaISO(new Date()), fin: $("#g-fin").value || null};
+    if (!fila.proveedor || isNaN(fila.base)) return "Proveedor y base son obligatorios.";
+    const q = rc ? sb.from("gastos_recurrentes").update(fila).eq("id", rc.id) : sb.from("gastos_recurrentes").insert(fila);
+    const {data, error} = await q.select().single();
+    if (error) return "No se pudo guardar: " + error.message;
+    if (rc) Object.assign(rc, data); else recurrentes.push(data);
+    if (rc && fila.fin) { const pend = gastos.filter(x => x.recurrente_id === rc.id && x.estado === "previsto" && x.fecha > fila.fin);
+      if (pend.length) { await sb.from("gastos").update({estado: "descartado"}).in("id", pend.map(x => x.id)); pend.forEach(x => x.estado = "descartado"); } }
+    await generarRecurrentes();
+    aviso(rc ? "Gasto recurrente actualizado" : "Gasto recurrente creado");
+  }, rc ? "Guardar" : "Crear");
+  totalGastoVivo("r");
+  if (rc) botonBorrar("Borrar", async () => {
+    if (!confirm("¿Borrar el gasto recurrente " + rc.proveedor + "? Los apuntes ya pagados se conservan; los previstos se borran. Si solo te has dado de baja, mejor pon la fecha de baja.")) return;
+    await sb.from("gastos").delete().eq("recurrente_id", rc.id).eq("estado", "previsto");
+    const {error} = await sb.from("gastos_recurrentes").delete().eq("id", rc.id); if (error) return fallo(error, "No se pudo borrar");
+    gastos = gastos.filter(x => !(x.recurrente_id === rc.id && x.estado === "previsto")); recurrentes = recurrentes.filter(x => x.id !== rc.id); cerrarCapa(); render(); aviso("Gasto recurrente borrado");
+  });
+}
+function exportarGastos() {
+  const filas = [["Fecha", "Nº factura", "Proveedor", "NIF", "Concepto", "Categoría", "Proyecto", "Base", "IVA %", "IVA", "IRPF %", "IRPF", "Total", "% deducible", "Estado", "Notas"]];
+  const n = (x) => String(+x || 0).replace(".", ",");
+  gastos.filter(g => String(g.fecha).slice(0, 4) === String(anioMes)).slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach(g => filas.push([g.fecha, g.numero || "", g.proveedor, g.nif_proveedor || "", g.concepto || "", g.categoria, g.proyecto_id ? cuentaDe(g.proyecto_id) + " · " + nomProy(g.proyecto_id) : "Estructura", n(g.base), n(g.iva_pct), n(g.iva), n(g.irpf_pct), n(g.irpf), n(g.total), n(g.deducible_pct), (ESTADO_GASTO[g.estado] || [g.estado])[0], g.notas || ""]));
+  const csv = "﻿" + filas.map(f => f.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
+  a.download = "gastos-cdv-by-jcerezo-" + anioMes + ".csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
 /* ===== CALENDARIO ===== */
