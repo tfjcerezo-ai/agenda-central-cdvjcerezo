@@ -910,7 +910,8 @@ const PLANTILLAS_WA = [
 ];
 function textoWA(plantilla, l) {
   const nombre = String(l.contacto || "").trim().split(/\s+/)[0] || "";
-  const p = (proyectos.find(x => x.id === l.proyecto_id) || {}).nombre || "";
+  const pr = proyectos.find(x => x.id === l.proyecto_id) || {};
+  const p = pr.cuenta === "Elocrea" && pr.nombre && pr.nombre !== "Elocrea" ? "Elocrea · " + pr.nombre : (pr.nombre || "");
   const r = reuniones.filter(x => x.lead_id === l.id && new Date(x.inicio) >= new Date()).sort((a, b) => String(a.inicio).localeCompare(String(b.inicio)))[0];
   const f = r ? ` del ${fF(String(r.inicio).slice(0, 10))} a las ${horaTxt(r.inicio)}` : (l.proximo_paso_fecha ? ` del ${fF(l.proximo_paso_fecha)}` : "");
   return plantilla.replace("{N}", nombre ? " " + nombre : "").replace("{YO}", (yo.nombre || "").trim()).replace("{P}", p).replace("{F}", f);
