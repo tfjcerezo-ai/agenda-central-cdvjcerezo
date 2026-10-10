@@ -390,14 +390,14 @@ const pildoraInteres = (k) => INTERES[k] ? `<span class="pildora ${INTERES[k][1]
 const opcionesInteres = (sel) => `<option value="">Sin valorar</option>` + Object.entries(INTERES).map(([k, v]) => `<option value="${k}" ${sel === k ? "selected" : ""}>${v[0]}</option>`).join("");
 // Enlace de WhatsApp: los móviles españoles de 9 cifras llevan delante el 34
 function waLink(tel) { let d = String(tel || "").replace(/\D/g, ""); if (!d) return null; if (d.startsWith("00")) d = d.slice(2); if (d.length === 9) d = "34" + d; return "https://wa.me/" + d; }
-const enlacesTel = (tel) => !tel ? `<span style="color:var(--texto3)">—</span>` : `<span class="tel-acc"><a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(tel)}</a><a class="wa" href="${waLink(tel)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Abrir WhatsApp" aria-label="WhatsApp ${esc(tel)}">WhatsApp</a></span>`;
+const enlacesTel = (tel, leadId) => !tel ? `<span style="color:var(--texto3)">—</span>` : `<span class="tel-acc"><a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(tel)}</a><a class="wa" href="${waLink(tel)}" target="_blank" rel="noopener" onclick="event.stopPropagation()${leadId ? `;event.preventDefault();elegirWhatsApp(${+leadId})` : ""}" title="Escribir por WhatsApp" aria-label="WhatsApp ${esc(tel)}">WhatsApp</a></span>`;
 const ETAPAS_VIVAS = ETAPAS.slice(0, 6), OPAC_ETAPA = [22, 34, 48, 62, 80, 100];
 const fondoEtapa = (i) => `background:color-mix(in srgb, var(--oro) ${OPAC_ETAPA[i]}%, transparent);color:${OPAC_ETAPA[i] >= 62 ? "var(--negro)" : "var(--texto)"}`;
 const PROB = {Nuevo:10,"No contactado":5,Contactado:20,"Reunión":40,Propuesta:60,"Negociación":80,[GANADO]:100,[PERDIDO]:0,[NO_INTERESA]:0};
 const MOTIVOS_NO = ["No cumple requisitos","No es el perfil de cliente","No le interesa","Ya tiene una solución","Otro"];
 const ORIGENES = ["Llamada en frío","Referido","Web","LinkedIn","Evento","Calendly","Kit Digital","Otro"];
 const MOTIVOS = ["Precio","Sin presupuesto ahora","Eligió otra opción","No responde","No era el momento","Otro"];
-const TIPOS_NOTA = {nota:"Nota",llamada:"Llamada",etapa:"Cambio de etapa",paso:"Próximo paso",asignacion:"Asignación"};
+const TIPOS_NOTA = {nota:"Nota",llamada:"Llamada",whatsapp:"WhatsApp",etapa:"Cambio de etapa",paso:"Próximo paso",asignacion:"Asignación"};
 
 let yo = null;          // perfil del usuario conectado
 let proyectos = [];     // crm_proyectos
@@ -894,8 +894,50 @@ function vLista(Ls) {
   <div class="tabla-env"><table class="tabla-lista"><thead><tr><th>Empresa</th><th>Proyecto</th><th>Etapa</th><th>Interés</th><th>Próximo paso</th><th>Teléfono</th><th>Comercial</th><th class="num">Valor</th></tr></thead><tbody>
   ${ls.map(l => `<tr class="clic" data-lead="${l.id}"><td><b style="font-weight:600">${esc(l.empresa)}</b><small style="display:block;color:var(--texto3)">${esc(l.contacto || "Sin contacto")}</small></td><td>${etiquetaProy(l.proyecto_id)}</td><td>${esc(l.etapa)}</td><td>${pildoraInteres(l.interes) || `<span style="color:var(--texto3)">—</span>`}</td>
     <td>${l.proximo_paso_fecha ? `${esc(l.proximo_paso || "Seguimiento")}<small style="display:block"><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${rel(l.proximo_paso_fecha)}</span></small>` : `<span style="color:var(--aviso)">Sin programar</span>`}</td>
-    <td>${enlacesTel(l.telefono)}</td><td>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}${l.setter_id ? `<small style="display:block;color:var(--texto3)">setter ${esc(nomPersona(l.setter_id))}</small>` : ""}</td><td class="num">${+l.valor ? eur(l.valor) : "—"}</td></tr>`).join("") || `<tr><td colspan="8">No hay leads con este filtro.</td></tr>`}
+    <td>${enlacesTel(l.telefono, l.id)}</td><td>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}${l.setter_id ? `<small style="display:block;color:var(--texto3)">setter ${esc(nomPersona(l.setter_id))}</small>` : ""}</td><td class="num">${+l.valor ? eur(l.valor) : "—"}</td></tr>`).join("") || `<tr><td colspan="8">No hay leads con este filtro.</td></tr>`}
   </tbody></table></div>`;
+}
+
+
+/* ===== WHATSAPP CON MENSAJES PREPARADOS ===== */
+const PLANTILLAS_WA = [
+  ["primer", "Primer contacto", "Hola{N}, soy {YO} de {P}. Te escribo para presentarte lo que hacemos y ver si te puede encajar. ¿Cuándo te viene bien una llamada de 5 minutos?"],
+  ["ahora", "Te llamo en un momento", "Hola{N}, soy {YO} de {P}. Te llamo en 5 minutos, ¿te viene bien?"],
+  ["nolocalizado", "No te he localizado", "Hola{N}, soy {YO} de {P}. Te he llamado hace un momento y no he podido localizarte. ¿A qué hora te viene mejor que te llame?"],
+  ["reunion", "Confirmar reunión", "Hola{N}, soy {YO} de {P}. Te confirmo nuestra reunión{F}. Si necesitas cambiarla, dímelo por aquí."],
+  ["propuesta", "Seguimiento de propuesta", "Hola{N}, soy {YO} de {P}. ¿Has podido revisar la propuesta que te envié? Quedo a tu disposición para cualquier duda."],
+  ["libre", "Mensaje libre", "Hola{N}, soy {YO} de {P}. "],
+];
+function textoWA(plantilla, l) {
+  const nombre = String(l.contacto || "").trim().split(/\s+/)[0] || "";
+  const p = (proyectos.find(x => x.id === l.proyecto_id) || {}).nombre || "";
+  const r = reuniones.filter(x => x.lead_id === l.id && new Date(x.inicio) >= new Date()).sort((a, b) => String(a.inicio).localeCompare(String(b.inicio)))[0];
+  const f = r ? ` del ${fF(String(r.inicio).slice(0, 10))} a las ${horaTxt(r.inicio)}` : (l.proximo_paso_fecha ? ` del ${fF(l.proximo_paso_fecha)}` : "");
+  return plantilla.replace("{N}", nombre ? " " + nombre : "").replace("{YO}", (yo.nombre || "").trim()).replace("{P}", p).replace("{F}", f);
+}
+function elegirWhatsApp(id) {
+  const l = leads.find(x => x.id === id); if (!l || !l.telefono) return;
+  const vieneDeFicha = !!document.querySelector("#capa .cajon");
+  modal(`<h3>WhatsApp · ${esc(l.empresa)}</h3>
+    <p class="nota-ejemplo">${esc(l.contacto || "Sin contacto")} · ${esc(l.telefono)} · ${esc(nomProy(l.proyecto_id))}</p>
+    <div class="rejilla-campos">
+      <div class="campo" style="grid-column:1/-1"><label for="wa-tipo">Mensaje</label><select id="wa-tipo">${PLANTILLAS_WA.map(([k, t]) => `<option value="${k}">${t}</option>`).join("")}</select></div>
+      <div class="campo" style="grid-column:1/-1"><label for="wa-texto">Texto (puedes cambiarlo antes de enviar)</label><textarea id="wa-texto" rows="5"></textarea></div>
+    </div>`, async () => {
+    const texto = $("#wa-texto").value.trim(); if (!texto) return "Escribe el mensaje.";
+    window.open(waLink(l.telefono) + "?text=" + encodeURIComponent(texto), "_blank", "noopener");
+    const tipo = PLANTILLAS_WA.find(x => x[0] === $("#wa-tipo").value);
+    const {error} = await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "whatsapp", texto: (tipo ? tipo[1] + ": " : "") + texto});
+    if (!error) { const {data} = await sb.from("crm_leads").update({actualizado: new Date().toISOString()}).eq("id", l.id).select().single(); if (data) Object.assign(l, data); }
+    aviso(error ? "WhatsApp abierto (no se pudo apuntar en el historial)" : "WhatsApp abierto y apuntado en el historial", !!error);
+    if (vieneDeFicha) setTimeout(() => abrirLead(l.id), 0);
+  }, "Abrir WhatsApp");
+  const poner = () => { const t = PLANTILLAS_WA.find(x => x[0] === $("#wa-tipo").value); $("#wa-texto").value = textoWA(t[2], l); };
+  $("#wa-tipo").onchange = poner;
+  const hayReunion = reuniones.some(x => x.lead_id === l.id && new Date(x.inicio) >= new Date());
+  if (l.etapa === "Propuesta" || l.etapa === "Negociación") $("#wa-tipo").value = "propuesta";
+  else if (hayReunion || l.etapa === "Reunión" || /reuni/i.test(l.proximo_paso || "")) $("#wa-tipo").value = "reunion";
+  poner();
 }
 
 /* ===== IMPORTAR LEADS (solo director) ===== */
@@ -1056,7 +1098,7 @@ async function abrirLead(id) {
   capa.innerHTML = `<div class="velo" data-cerrar></div>
   <aside class="cajon" role="dialog" aria-label="Lead ${esc(l.empresa)}">
     <div class="cajon-sup"><div class="filtros"><span class="area dir">${esc(nomProy(l.proyecto_id))}</span><span class="prio ${l.prioridad}">Prioridad ${l.prioridad}</span>${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? `<span class="pildora p-mal">${esc(l.etapa)}</span>` : ""}</div><button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
-    <div class="cajon-id"><span class="avatar g">${iniciales(l.empresa)}</span><div><h2>${esc(l.empresa)}</h2><p>${esc(l.contacto || "Sin contacto")}${l.cargo ? " · " + esc(l.cargo) : ""}</p>${l.telefono ? `<p style="margin-top:6px">${enlacesTel(l.telefono)}</p>` : ""}</div></div>
+    <div class="cajon-id"><span class="avatar g">${iniciales(l.empresa)}</span><div><h2>${esc(l.empresa)}</h2><p>${esc(l.contacto || "Sin contacto")}${l.cargo ? " · " + esc(l.cargo) : ""}</p>${l.telefono ? `<p style="margin-top:6px">${enlacesTel(l.telefono, l.id)}</p>` : ""}</div></div>
     <div class="prob-bloque"><div><b>${+l.valor ? eur(l.valor) : "—"}</b><span>valor</span></div><div><b>${PROB[l.etapa] || 0} %</b><span>probabilidad</span></div><div><b>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}</b><span>closer</span></div><div class="barra"><span style="width:${PROB[l.etapa] || 0}%"></span></div></div>
     <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span></div>
       <form class="paso-form" id="f-paso"><input class="entrada" id="paso-accion" aria-label="Acción" value="${esc(l.proximo_paso || "Llamar")}"><input class="entrada" type="date" id="paso-fecha" aria-label="Fecha" value="${l.proximo_paso_fecha || ""}"><button class="btn" type="submit">Programar</button></form></div>
