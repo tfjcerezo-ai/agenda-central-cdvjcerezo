@@ -1111,6 +1111,17 @@ async function crearTablas() {
   }
 }
 
+// Tablas cuyo último guardado en la nube falló: no se pisan con lo de la nube al recargar
+const pendientesNube = () => { try { return JSON.parse(localStorage.getItem('cdv_pend_nube') || '[]'); } catch(e) { return []; } };
+function marcarPendiente(tabla, ok) {
+  const s = new Set(pendientesNube()); if(ok) s.delete(tabla); else s.add(tabla);
+  try { localStorage.setItem('cdv_pend_nube', JSON.stringify([...s])); } catch(e) {}
+}
+const NOMBRE_TABLA = {tareas:'Tareas',eventos:'Citas',notas:'Notas',registros:'Tiempo',mov_liga:'Liga',proyectos:'Proyectos',incubacion:'Incubación',fin_personal:'Finanzas personales',fin_familiar:'Finanzas familiares',ventas:'Ventas',equipo:'Equipo'};
+// Columnas de la tabla equipo: todas las filas con las mismas claves
+const COLS_EQUIPO = ['id','nombre','cargo','rol','estado','telefono','email','proyectos','valoracion','notas'];
+function filaEquipoSB(x) { const o = {}; COLS_EQUIPO.forEach(k => { o[k] = x[k] === undefined || x[k] === '' ? (k === 'proyectos' ? [] : null) : x[k]; }); return o; }
+
 async function syncDesdeSupabase() {
   mostrarSyncStatus('⟳ Sincronizando...');
   try {
@@ -1120,13 +1131,14 @@ async function syncDesdeSupabase() {
       sbGet('fin_personal'), sbGet('fin_familiar'), sbGet('ventas'), sbGet('equipo')
     ]);
     let hayDatos = false;
-    // Solo sobreescribir si Supabase devolvió datos válidos (array con elementos)
-    if(Array.isArray(t)&&t.length) { tareas=t; localStorage.setItem('cdv_t',JSON.stringify(t)); hayDatos=true; }
-    if(Array.isArray(e)&&e.length) { eventos=e; localStorage.setItem('cdv_e',JSON.stringify(e)); hayDatos=true; }
-    if(Array.isArray(n)&&n.length) { notas=n; localStorage.setItem('cdv_n',JSON.stringify(n)); hayDatos=true; }
-    if(Array.isArray(r)&&r.length) { registros=r; localStorage.setItem('cdv_r',JSON.stringify(r)); hayDatos=true; }
-    if(Array.isArray(l)&&l.length) { movLiga=l; localStorage.setItem('cdv_l',JSON.stringify(l)); hayDatos=true; }
-    if(Array.isArray(p)&&p.length) {
+    const pend = new Set(pendientesNube());
+    // Solo sobreescribir si Supabase devolvió datos válidos (array con elementos) y no hay cambios locales sin subir
+    if(Array.isArray(t)&&t.length&&!pend.has('tareas')) { tareas=t; localStorage.setItem('cdv_t',JSON.stringify(t)); hayDatos=true; }
+    if(Array.isArray(e)&&e.length&&!pend.has('eventos')) { eventos=e; localStorage.setItem('cdv_e',JSON.stringify(e)); hayDatos=true; }
+    if(Array.isArray(n)&&n.length&&!pend.has('notas')) { notas=n; localStorage.setItem('cdv_n',JSON.stringify(n)); hayDatos=true; }
+    if(Array.isArray(r)&&r.length&&!pend.has('registros')) { registros=r; localStorage.setItem('cdv_r',JSON.stringify(r)); hayDatos=true; }
+    if(Array.isArray(l)&&l.length&&!pend.has('mov_liga')) { movLiga=l; localStorage.setItem('cdv_l',JSON.stringify(l)); hayDatos=true; }
+    if(Array.isArray(p)&&p.length&&!pend.has('proyectos')) {
       hayDatos=true;
       // Respetar orden del usuario al recargar desde Supabase
       const orden = JSON.parse(localStorage.getItem('cdv_proy_orden') || 'null');
@@ -1140,11 +1152,12 @@ async function syncDesdeSupabase() {
       }
       localStorage.setItem('cdv_proy',JSON.stringify(proyectos));
     }
-    if(Array.isArray(inc)&&inc.length) { incubacion=inc; localStorage.setItem('cdv_inc',JSON.stringify(inc)); hayDatos=true; }
-    if(Array.isArray(fp)&&fp.length) { finPersonal=fp; localStorage.setItem('cdv_fp',JSON.stringify(fp)); hayDatos=true; }
-    if(Array.isArray(ff)&&ff.length) { finFamiliar=ff; localStorage.setItem('cdv_ff',JSON.stringify(ff)); hayDatos=true; }
-    if(Array.isArray(v)&&v.length) { ventas=v; localStorage.setItem('cdv_v',JSON.stringify(v)); hayDatos=true; }
-    if(Array.isArray(eq)&&eq.length) { equipo=eq; localStorage.setItem('cdv_eq',JSON.stringify(eq)); hayDatos=true; }
+    if(Array.isArray(inc)&&inc.length&&!pend.has('incubacion')) { incubacion=inc; localStorage.setItem('cdv_inc',JSON.stringify(inc)); hayDatos=true; }
+    if(Array.isArray(fp)&&fp.length&&!pend.has('fin_personal')) { finPersonal=fp; localStorage.setItem('cdv_fp',JSON.stringify(fp)); hayDatos=true; }
+    if(Array.isArray(ff)&&ff.length&&!pend.has('fin_familiar')) { finFamiliar=ff; localStorage.setItem('cdv_ff',JSON.stringify(ff)); hayDatos=true; }
+    if(Array.isArray(v)&&v.length&&!pend.has('ventas')) { ventas=v; localStorage.setItem('cdv_v',JSON.stringify(v)); hayDatos=true; }
+    if(Array.isArray(eq)&&eq.length&&!pend.has('equipo')) { equipo=eq; localStorage.setItem('cdv_eq',JSON.stringify(eq)); hayDatos=true; }
+    if(pend.size) { console.warn('[Supabase] Cambios locales sin subir en:', [...pend]); syncASupabase(); }
     renderHoy(); renderTareas('todas'); renderProyectos(); renderCal(); renderNotas(); renderRegistros(); renderLiga(); renderIncubacion(); renderEquipo(); renderVentas(); renderMisComisiones();
     if(hayDatos) {
       mostrarSyncStatus('✅ Sincronizado desde nube');
@@ -1166,6 +1179,7 @@ async function syncDesdeSupabase() {
 
 async function syncASupabase() {
   try {
+    const tablas = ['tareas','eventos','notas','registros','mov_liga','proyectos','incubacion','fin_personal','fin_familiar','ventas','equipo'];
     const resultados = await Promise.all([
       sbUpsert('tareas', tareas),
       sbUpsert('eventos', eventos),
@@ -1177,10 +1191,14 @@ async function syncASupabase() {
       sbUpsert('fin_personal', finPersonal),
       sbUpsert('fin_familiar', finFamiliar),
       sbUpsert('ventas', ventas.map(filaVentaSB)),
-      sbUpsert('equipo', equipo),
+      sbUpsert('equipo', equipo.map(filaEquipoSB)),
     ]);
+    tablas.forEach((t,i)=>marcarPendiente(t, resultados[i]));
+    const fallidas = tablas.filter((t,i)=>!resultados[i]);
     const alguno = resultados.some(r=>r);
-    if(alguno) {
+    if(alguno && fallidas.length) {
+      avisoNube(fallidas);
+    } else if(alguno) {
       mostrarSyncStatus('✅ Guardado en la nube');
     } else {
       mostrarSyncStatus('⚠️ Sin conexión — solo guardado local');
@@ -1228,6 +1246,13 @@ async function ejecutarDiagnostico() {
   }
 }
 
+function avisoNube(fallidas) {
+  const txt = '⚠️ No se pudo guardar en la nube: ' + fallidas.map(t=>NOMBRE_TABLA[t]||t).join(', ') + '. Está guardado en este dispositivo y se reintentará solo.';
+  mostrarSyncStatus('⚠️ Sin guardar en nube: ' + fallidas.map(t=>NOMBRE_TABLA[t]||t).join(', '));
+  let b = document.getElementById('avisoNube');
+  if(!b) { b = document.createElement('div'); b.id = 'avisoNube'; b.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:10000;background:#2a1414;border:1px solid rgba(255,107,107,.5);color:#ffb3b3;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.5)'; b.onclick = () => b.remove(); document.body.appendChild(b); }
+  b.textContent = txt + ' (toca para cerrar)';
+}
 function mostrarSyncStatus(msg) {
   let el = document.getElementById('syncStatus');
   if(!el) return;
