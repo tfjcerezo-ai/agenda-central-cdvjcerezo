@@ -594,6 +594,9 @@ const CLAVE_CUENTA = {"elocrea": "elocrea", "josé bernad": "jbernad", "jose ber
 const colorCuenta = (c) => COLOR_PROY[CLAVE_CUENTA[String(c || "").toLowerCase()]] || COLOR_PROY.cdv;
 const colorProy = (id) => { const k = CLAVE_ID[id] || (/lidia|yiux/i.test(id || "") ? "yiux" : null); return k ? COLOR_PROY[k] : colorCuenta((proyectos.find(p => p.id === id) || {}).cuenta); };
 const puntoColor = (col) => `<span class="punto" style="background:${col};box-shadow:0 0 0 1px rgba(255,255,255,.18);margin-right:6px;vertical-align:middle"></span>`;
+const rgbaHex = (hex, a) => { const n = parseInt(String(hex).slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
+const textoLegible = (hex) => { const n = parseInt(String(hex).slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255; if ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 >= 0.35) return hex; const m = (x) => Math.round(x + (255 - x) * 0.35); return `rgb(${m(r)},${m(g)},${m(b)})`; };
+const etiquetaColor = (id, socio) => { const c = colorProy(id); return `<span class="pildora" style="background:${rgbaHex(c, .18)};color:${textoLegible(c)};border:1px solid ${rgbaHex(c, .5)};white-space:nowrap">${esc(nomProy(id))}${socio ? " · socio" : ""}</span>`; };
 const etiquetaProy = (id) => { const c = cuentaDe(id), n = nomProy(id); return puntoColor(colorProy(id)) + (c && c !== n && c !== "Sin cuenta" ? `${esc(c)} · ${esc(n)}` : esc(n)); };
 const nomProy = (id) => (proyectos.find(p => p.id === id) || {}).nombre || "Sin proyecto";
 const nomPersona = (id) => (equipo.find(p => p.id === id) || perfiles.find(p => p.id === id) || {}).nombre || "—";
@@ -1218,10 +1221,10 @@ function modal(html, alEnviar, txtOk) {
 function vEquipo() {
   const pend = perfiles.filter(p => !p.activo), act = perfiles.filter(p => p.activo);
   const fila = (p) => {
-    const ps = miembros.filter(m => m.perfil_id === p.id).map(m => nomProy(m.proyecto_id) + (m.socio ? " (socio)" : ""));
+    const ps = miembros.filter(m => m.perfil_id === p.id).map(m => etiquetaColor(m.proyecto_id, m.socio));
     const nl = leads.filter(l => l.closer_id === p.id || l.setter_id === p.id).length;
     return `<tr class="clic" data-perfil="${p.id}"><td><div class="celda-nom"><span class="avatar">${iniciales(p.nombre)}</span><div>${esc(p.nombre)}<small>${esc(p.email || "")}</small></div></div></td>
-      <td>${{director: "Director", closer: "Closer", setter: "Setter"}[p.rol]}</td><td>${p.rol === "director" ? "Todos" : ps.length ? esc(ps.join(", ")) : `<span style="color:var(--aviso)">Ninguno</span>`}</td>
+      <td>${{director: "Director", closer: "Closer", setter: "Setter"}[p.rol]}</td><td>${p.rol === "director" ? "Todos" : ps.length ? `<div class="filtros" style="gap:5px">${ps.join("")}</div>` : `<span style="color:var(--aviso)">Ninguno</span>`}</td>
       <td class="num">${nl}</td><td>${p.activo ? `<span class="pildora p-ok">Activo</span>` : `<span class="pildora p-aviso">Pendiente</span>`}</td></tr>`;
   };
   return `<div class="cabecera"><div><h2>Equipo</h2><div class="sub">Activa a los comerciales, elige su papel y en qué proyectos trabajan</div></div></div>
