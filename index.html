@@ -19,9 +19,9 @@
   --dorado-oscuro:#9A7A2A; --blanco:#FFFFFF; --blanco-suave:#F5F5F0;
   --gris:#888888; --gris-claro:#CCCCCC;
   --verde:#51CF66; --azul:#4A9EE8; --rojo:#FF6B6B;
-  --elocrea:#2A4A9E; --elocrea-claro:#4A7ADE;
-  --liga:#B8960C; --liga-claro:#D4B020;
-  --consultoria:#444444; --incubacion:#6B2AA0;
+  --elocrea:#1F5BA0; --elocrea-claro:#4F86C6;
+  --liga:#C9AE10; --liga-claro:#F2D21B;
+  --consultoria:#808080; --incubacion:#6B2AA0;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-serif;min-height:100vh;overflow-x:hidden;}
@@ -1991,7 +1991,7 @@ function toggleFormProyecto(id) {
       document.getElementById('pDesc').value=p.desc;
       document.getElementById('pEstado').value=p.estado;
       document.getElementById('pProgreso').value=p.progreso;
-      document.getElementById('pColor').value=p.color;
+      document.getElementById('pColor').value=claveAG(p.color);
       document.getElementById('pEditId').value=p.id;
     }
   } else {
@@ -3451,35 +3451,41 @@ function mostrarMensaje(msg) {
 // =====================
 // PROYECTOS Y COLORES (añadido oct. 2026)
 // =====================
+// Colores de proyecto: los mismos que en el CRM
 const PROY_AG=[
-  {k:'blanco',nombre:'Blanco',color:'#F5F5F5'},
-  {k:'azul-oscuro',nombre:'Azul Oscuro',color:'#1F5BA0'},
-  {k:'azul-claro',nombre:'Azul Claro',color:'#4DB8E8'},
-  {k:'verde-claro',nombre:'Verde Claro',color:'#A8D08D'},
-  {k:'morado',nombre:'Morado',color:'#9B59B6'},
-  {k:'marron',nombre:'Marrón',color:'#A0714F'},
-  {k:'rojo',nombre:'Rojo',color:'#E63946'},
-  {k:'dorado',nombre:'Dorado',color:'#D4AF37'},
-  {k:'verde-oscuro',nombre:'Verde Oscuro',color:'#2D5016'},
-  {k:'rosa',nombre:'Rosa',color:'#E89BB5'},
-  {k:'naranja',nombre:'Naranja',color:'#FF8C42'},
-  {k:'cian',nombre:'Cian',color:'#00CED1'},
-  {k:'gris',nombre:'Gris',color:'#808080'},
-  {k:'violeta',nombre:'Violeta',color:'#7851A9'},
-  {k:'turquesa',nombre:'Turquesa',color:'#40B0A6'}
+  {k:'elocrea',nombre:'Elocrea',color:'#1F5BA0'},
+  {k:'kinelia',nombre:'Kinelia',color:'#F5F5F5'},
+  {k:'jbernad',nombre:'José Bernad',color:'#4DB8E8'},
+  {k:'zeren',nombre:'Zeren Clinic',color:'#A8D08D'},
+  {k:'cayfi',nombre:'CAYFI',color:'#E63946'},
+  {k:'yiux',nombre:'YIUX · SAT de Lidia',color:'#A0714F'},
+  {k:'consultoria',nombre:'Consultoría',color:'#808080'},
+  {k:'liga',nombre:'Liga DJ',color:'#F2D21B'},
+  {k:'eventos',nombre:'Eventos',color:'#9B59B6'},
+  {k:'cdv',nombre:'CDV by JCerezo',color:'#C9A84C'},
+  {k:'incubacion',nombre:'IA / Tech',color:'#40B0A6'},
+  {k:'personal',nombre:'Personal',color:'#00CED1'}
 ];
+// Claves antiguas (colores sueltos y proyectos con otro nombre) → proyecto actual, para que las citas ya guardadas se vean bien
+const ALIAS_AG={'azul-oscuro':'elocrea','azul':'elocrea','blanco':'kinelia','azul-claro':'jbernad','verde-claro':'zeren','rojo':'cayfi','marron':'yiux','lidia':'yiux','gris':'consultoria','morado':'eventos','violeta':'eventos','dorado':'cdv','medico':'personal','deca':'elocrea','elogistic':'elocrea','heru':'elocrea','turquesa':'incubacion'};
+const COLORES_SUELTOS={'verde-oscuro':['Verde oscuro','#2D5016'],'rosa':['Rosa','#E89BB5'],'naranja':['Naranja','#FF8C42'],'cian':['Cian','#00CED1']};
+const claveAG=k=>ALIAS_AG[k]||k;
 const P_COLOR=Object.fromEntries(PROY_AG.map(p=>[p.k,p.color]));
+Object.entries(ALIAS_AG).forEach(([a,k])=>{P_COLOR[a]=P_COLOR[k];});
+Object.entries(COLORES_SUELTOS).forEach(([k,[n,c]])=>{P_COLOR[k]=c;});
 function colorProyecto(k){return P_COLOR[k]||'#C9A84C'}
 function hexRgba(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`}
 
 (function estilosProyectos(){
   let css='';
-  PROY_AG.forEach(({k,color})=>{
-    css+=`.ptag-${k}{background:${hexRgba(color,.15)};color:${color};border:1px solid ${hexRgba(color,.4)};}
+  // En colores oscuros (Elocrea) el texto se aclara un poco para que se lea sobre el fondo negro
+  const texto=(hex)=>{const n=parseInt(hex.slice(1),16),r=n>>16&255,g=n>>8&255,b=n&255,l=(0.2126*r+0.7152*g+0.0722*b)/255;if(l>=0.35)return hex;const m=x=>Math.round(x+(255-x)*0.35);return `rgb(${m(r)},${m(g)},${m(b)})`;};
+  Object.entries(P_COLOR).map(([k,color])=>({k,color})).forEach(({k,color})=>{
+    css+=`.ptag-${k}{background:${hexRgba(color,.18)};color:${texto(color)};border:1px solid ${hexRgba(color,.5)};}
 .evento-item.${k}{border-left-color:${color};}
-.evento-item.${k} .evento-hora{color:${color};}
+.evento-item.${k} .evento-hora{color:${texto(color)};}
 .proyecto-card.${k}{border-left-color:${color};}
-.proyecto-card.${k} .proyecto-nombre{color:${color};}
+.proyecto-card.${k} .proyecto-nombre{color:${texto(color)};}
 .proyecto-card.${k} .progreso-fill{background:linear-gradient(90deg,${hexRgba(color,.55)},${color});}
 `;});
   const s=document.createElement('style'); s.textContent=css; document.head.appendChild(s);
@@ -3487,6 +3493,7 @@ function hexRgba(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16&2
 
 // Nombres para las etiquetas
 PROY_AG.forEach(p=>{ PNOMBRES[p.k]=p.nombre; if(p.k!=='personal'&&p.k!=='medico') PNOMBRES_EQ[p.k]=p.nombre; });
+Object.keys(ALIAS_AG).forEach(a=>{ PNOMBRES[a]=PNOMBRES[ALIAS_AG[a]]; }); Object.entries(COLORES_SUELTOS).forEach(([k,[n]])=>{ PNOMBRES[k]=n; });
 
 // Desplegables de proyecto con todas las opciones
 (function rellenarDesplegables(){
@@ -3537,7 +3544,7 @@ function editarEvento(id){
   document.getElementById('neFecha').value=e.fecha||'';
   document.getElementById('neHora').value=e.hora||'';
   document.getElementById('neDesc').value=e.desc||'';
-  const tipo=document.getElementById('neTipo'); tipo.value=e.tipo; if(tipo.value!==e.tipo) tipo.value='cdv';
+  const tipo=document.getElementById('neTipo'); tipo.value=claveAG(e.tipo); if(tipo.value!==claveAG(e.tipo)) tipo.value='cdv';
   const vis=document.getElementById('neVisible'); vis.value=e.visible||'todos'; if(!vis.value) vis.value='todos';
   document.getElementById('modalEvento').classList.add('open');
 }

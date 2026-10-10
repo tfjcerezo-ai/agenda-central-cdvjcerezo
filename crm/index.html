@@ -581,13 +581,20 @@ function chipsProyecto(attr, f) {
   const fila1 = `<button class="chip" data-${attr}="todos" aria-pressed="${f === "todos"}">Todos</button>` + cuentas.map(c => {
     const prods = vis.filter(p => (p.cuenta || "Sin cuenta") === c);
     const val = prods.length > 1 ? "cuenta:" + c : prods[0].id;
-    return `<button class="chip" data-${attr}="${esc(val)}" aria-pressed="${cuentaSel === c}">${esc(prods.length > 1 ? c : prods[0].nombre)}${prods.length > 1 ? " ▾" : ""}</button>`;
+    return `<button class="chip" data-${attr}="${esc(val)}" aria-pressed="${cuentaSel === c}">${puntoColor(prods.length > 1 ? colorCuenta(c) : colorProy(prods[0].id))}${esc(prods.length > 1 ? c : prods[0].nombre)}${prods.length > 1 ? " ▾" : ""}</button>`;
   }).join("");
   const prodsSel = cuentaSel ? vis.filter(p => (p.cuenta || "Sin cuenta") === cuentaSel) : [];
-  const fila2 = prodsSel.length > 1 ? `<div class="filtros" style="margin-top:6px;padding-left:10px;border-left:2px solid var(--oro)"><button class="chip" data-${attr}="cuenta:${esc(cuentaSel)}" aria-pressed="${f === "cuenta:" + cuentaSel}">Todo ${esc(cuentaSel)}</button>${prodsSel.map(p => `<button class="chip" data-${attr}="${p.id}" aria-pressed="${f === p.id}">${esc(p.nombre)}</button>`).join("")}</div>` : "";
+  const fila2 = prodsSel.length > 1 ? `<div class="filtros" style="margin-top:6px;padding-left:10px;border-left:2px solid var(--oro)"><button class="chip" data-${attr}="cuenta:${esc(cuentaSel)}" aria-pressed="${f === "cuenta:" + cuentaSel}">Todo ${esc(cuentaSel)}</button>${prodsSel.map(p => `<button class="chip" data-${attr}="${p.id}" aria-pressed="${f === p.id}">${puntoColor(colorProy(p.id))}${esc(p.nombre)}</button>`).join("")}</div>` : "";
   return `<div><div class="filtros" role="group" aria-label="Proyecto">${fila1}</div>${fila2}</div>`;
 }
-const etiquetaProy = (id) => { const c = cuentaDe(id), n = nomProy(id); return c && c !== n && c !== "Sin cuenta" ? `${esc(c)} · ${esc(n)}` : esc(n); };
+/* Colores de proyecto: los mismos que en la Agenda */
+const COLOR_PROY = {elocrea: "#1F5BA0", kinelia: "#F5F5F5", jbernad: "#4DB8E8", zeren: "#A8D08D", cayfi: "#E63946", yiux: "#A0714F", consultoria: "#808080", liga: "#F2D21B", eventos: "#9B59B6", cdv: "#C9A84C", personal: "#00CED1"};
+const CLAVE_ID = {kinelia: "kinelia", liga25dj: "liga", "eventos-varios": "eventos", "jose-bernad": "jbernad", jbernad: "jbernad", zeren: "zeren", cayfi: "cayfi", yiux: "yiux", lidia: "yiux", consultoria: "consultoria"};
+const CLAVE_CUENTA = {"elocrea": "elocrea", "josé bernad": "jbernad", "jose bernad": "jbernad", "eventos": "eventos", "zeren clinic": "zeren", "cayfi": "cayfi", "yiux": "yiux", "consultoría": "consultoria", "consultoria": "consultoria"};
+const colorCuenta = (c) => COLOR_PROY[CLAVE_CUENTA[String(c || "").toLowerCase()]] || COLOR_PROY.cdv;
+const colorProy = (id) => { const k = CLAVE_ID[id] || (/lidia|yiux/i.test(id || "") ? "yiux" : null); return k ? COLOR_PROY[k] : colorCuenta((proyectos.find(p => p.id === id) || {}).cuenta); };
+const puntoColor = (col) => `<span class="punto" style="background:${col};box-shadow:0 0 0 1px rgba(255,255,255,.18);margin-right:6px;vertical-align:middle"></span>`;
+const etiquetaProy = (id) => { const c = cuentaDe(id), n = nomProy(id); return puntoColor(colorProy(id)) + (c && c !== n && c !== "Sin cuenta" ? `${esc(c)} · ${esc(n)}` : esc(n)); };
 const nomProy = (id) => (proyectos.find(p => p.id === id) || {}).nombre || "Sin proyecto";
 const nomPersona = (id) => (equipo.find(p => p.id === id) || perfiles.find(p => p.id === id) || {}).nombre || "—";
 const fechaISO = (d) => { const x = new Date(d); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); };
@@ -831,9 +838,9 @@ function filtrados() {
     .filter(l => !q || [l.empresa, l.contacto, l.email, l.telefono].join(" ").toLowerCase().includes(q));
 }
 function tarjeta(l) {
-  return `<div class="lead" role="button" tabindex="0" data-lead="${l.id}">
+  return `<div class="lead" role="button" tabindex="0" data-lead="${l.id}" style="border-left:3px solid ${colorProy(l.proyecto_id)}">
     <span class="lead-sup"><span class="avatar">${iniciales(l.empresa)}</span><span class="lead-nom"><b>${esc(l.empresa)}</b><small>${esc(l.contacto || "Sin contacto")}</small></span><span class="prob">${PROB[l.etapa] || 0} %</span></span>
-    <span class="lead-serv"><span class="punto dir"></span><span>${etiquetaProy(l.proyecto_id)}</span></span>
+    <span class="lead-serv"><span>${etiquetaProy(l.proyecto_id)}</span></span>
     ${tagsProd(l.productos)}${l.interes ? `<span style="display:block;margin-top:4px">${pildoraInteres(l.interes)}</span>` : ""}
     <span class="lead-inf"><span class="valor">${+l.valor ? eur(l.valor) : "—"}</span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${esc(l.proximo_paso || "Sin próximo paso")}${l.proximo_paso_fecha ? " · " + rel(l.proximo_paso_fecha) : ""}</span></span>
     <span class="lead-cta">Closer: <b>${esc(l.closer_id ? nomPersona(l.closer_id) : "sin asignar")}</b>${l.setter_id ? " · Setter: " + esc(nomPersona(l.setter_id)) : ""}</span>
@@ -854,7 +861,7 @@ function tarjetaVenta(v) {
   const closers = [v.closer, v.closer2].filter(Boolean).join(" + ");
   return `<div class="lead" role="button" tabindex="0" data-vista="ventas" title="Ver en Ventas" style="border-left:3px solid var(--bien)">
     <span class="lead-sup"><span class="avatar">${iniciales(v.cliente)}</span><span class="lead-nom"><b>${esc(v.cliente)}</b><small>Venta cerrada${v.tipo_cobro === "mensual" ? " · cuota mensual" : ""}</small></span><span class="prob">✓</span></span>
-    <span class="lead-serv"><span class="punto dir"></span><span>${id ? etiquetaProy(id) : esc(v.proyecto || "—")}</span></span>
+    <span class="lead-serv"><span>${id ? etiquetaProy(id) : esc(v.proyecto || "—")}</span></span>
     ${prodDeVenta(v) ? tagsProd([prodDeVenta(v).nombre]) : ""}
     <span class="lead-inf"><span class="valor">${eur(v.importe)}</span><span class="pildora ${e[1]}">${e[0]}</span></span>
     <span class="lead-cta">Closer: <b>${esc(closers || "—")}</b>${v.setter ? " · Setter: " + esc(v.setter) : ""}</span>
@@ -1098,7 +1105,7 @@ async function abrirLead(id) {
   const capa = $("#capa");
   capa.innerHTML = `<div class="velo" data-cerrar></div>
   <aside class="cajon" role="dialog" aria-label="Lead ${esc(l.empresa)}">
-    <div class="cajon-sup"><div class="filtros"><span class="area dir">${esc(nomProy(l.proyecto_id))}</span><span class="prio ${l.prioridad}">Prioridad ${l.prioridad}</span>${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? `<span class="pildora p-mal">${esc(l.etapa)}</span>` : ""}</div><button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
+    <div class="cajon-sup"><div class="filtros"><span class="area dir">${etiquetaProy(l.proyecto_id)}</span><span class="prio ${l.prioridad}">Prioridad ${l.prioridad}</span>${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? `<span class="pildora p-mal">${esc(l.etapa)}</span>` : ""}</div><button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
     <div class="cajon-id"><span class="avatar g">${iniciales(l.empresa)}</span><div><h2>${esc(l.empresa)}</h2><p>${esc(l.contacto || "Sin contacto")}${l.cargo ? " · " + esc(l.cargo) : ""}</p>${l.telefono ? `<p style="margin-top:6px">${enlacesTel(l.telefono, l.id)}</p>` : ""}</div></div>
     <div class="prob-bloque"><div><b>${+l.valor ? eur(l.valor) : "—"}</b><span>valor</span></div><div><b>${PROB[l.etapa] || 0} %</b><span>probabilidad</span></div><div><b>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}</b><span>closer</span></div><div class="barra"><span style="width:${PROB[l.etapa] || 0}%"></span></div></div>
     <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span></div>
