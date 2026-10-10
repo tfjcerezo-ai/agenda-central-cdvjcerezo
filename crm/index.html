@@ -730,6 +730,7 @@ function enlazar(r) {
   r.querySelectorAll("[data-ir-proy]").forEach(b => { const ir = () => { filtroProy = b.dataset.irProy; vista = "pipeline"; render(); }; b.onclick = ir; b.onkeydown = (e) => { if (e.key === "Enter") ir(); }; });
   r.querySelectorAll("[data-fproy]").forEach(b => b.onclick = () => { filtroProy = b.dataset.fproy; render(); });
   r.querySelectorAll("[data-nuevo-lead]").forEach(b => b.onclick = nuevoLead);
+  r.querySelectorAll("[data-importar-leads]").forEach(b => b.onclick = importarLeads);
   const fp = $("#f-persona", r); if (fp) fp.onchange = () => { filtroPersona = fp.value; render(); };
   const bq = $("#buscar", r); if (bq) bq.oninput = () => { busqueda = bq.value; const pos = bq.selectionStart; render(); const n = $("#buscar"); n.focus(); n.setSelectionRange(pos, pos); };
   const vp = $("#ver-perdidos", r); if (vp) vp.onclick = () => { verPerdidos = !verPerdidos; render(); };
@@ -864,7 +865,7 @@ function vPipeline() {
   const vg = ventasGanadas();
   const personas = esDir() ? perfiles.filter(p => p.activo) : [];
   const conmutador = `<div class="filtros" role="group" aria-label="Vista"><button class="chip" data-vpipe="tablero" aria-pressed="${vistaPipe !== "lista"}">Tablero</button><button class="chip" data-vpipe="lista" aria-pressed="${vistaPipe === "lista"}">Lista</button></div>`;
-  return `<div class="cabecera"><div><h2>Pipeline</h2><div class="sub">${Ls.filter(esActivo).length} leads abiertos${vg.length ? ` · ${vg.length} ventas cerradas` : ""} · pulsa uno para ver y actualizar</div></div><div class="filtros">${conmutador}<button class="btn btn-oro" data-nuevo-lead>+ Nuevo lead</button></div></div>
+  return `<div class="cabecera"><div><h2>Pipeline</h2><div class="sub">${Ls.filter(esActivo).length} leads abiertos${vg.length ? ` · ${vg.length} ventas cerradas` : ""} · pulsa uno para ver y actualizar</div></div><div class="filtros">${conmutador}${esDir() ? `<button class="btn" data-importar-leads>⬆ Importar leads</button>` : ""}<button class="btn btn-oro" data-nuevo-lead>+ Nuevo lead</button></div></div>
   <div class="barra-herr"><div class="izq">${chipsProyecto("fproy", filtroProy)}</div>
     <div class="der">${esDir() ? `<select class="entrada" id="f-persona" aria-label="Comercial"><option value="todos">Todo el equipo</option><option value="sin" ${filtroPersona === "sin" ? "selected" : ""}>Sin asignar</option>${personas.map(p => `<option value="${p.id}" ${filtroPersona === p.id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select>` : ""}
     <input class="entrada buscar" id="buscar" type="search" placeholder="Buscar empresa o contacto" value="${esc(busqueda)}"></div></div>
@@ -896,6 +897,112 @@ function vLista(Ls) {
     <td>${enlacesTel(l.telefono)}</td><td>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}${l.setter_id ? `<small style="display:block;color:var(--texto3)">setter ${esc(nomPersona(l.setter_id))}</small>` : ""}</td><td class="num">${+l.valor ? eur(l.valor) : "—"}</td></tr>`).join("") || `<tr><td colspan="8">No hay leads con este filtro.</td></tr>`}
   </tbody></table></div>`;
 }
+
+/* ===== IMPORTAR LEADS (solo director) ===== */
+const CAMPOS_IMPORT = {
+  empresa: ["empresa", "company", "company name", "razon social", "razón social", "cliente", "organization", "organización", "account name", "nombre empresa"],
+  contacto: ["contacto", "persona de contacto", "nombre", "name", "full name", "nombre completo"],
+  nombre_pila: ["first name", "nombre de pila"],
+  apellidos: ["last name", "apellidos", "apellido"],
+  cargo: ["cargo", "title", "puesto", "job title", "posicion", "posición"],
+  telefono: ["telefono", "teléfono", "phone", "movil", "móvil", "mobile phone", "work direct phone", "corporate phone", "tel", "telefono 1", "teléfono 1"],
+  email: ["email", "correo", "e-mail", "mail", "correo electronico", "correo electrónico"],
+  ciudad: ["ciudad", "city", "provincia", "localidad", "poblacion", "población", "state"],
+  web: ["web", "website", "pagina web", "página web", "url"],
+  valor: ["valor", "importe", "valor (€)"],
+  notas: ["notas", "notes", "observaciones", "comentarios", "nota"],
+};
+function parsearTabla(txt) {
+  txt = String(txt || "").replace(/^﻿/, "").replace(/\r\n?/g, "\n").trim(); if (!txt) return [];
+  const prim = txt.split("\n")[0], sep = prim.includes("\t") ? "\t" : (prim.split(";").length > prim.split(",").length ? ";" : ",");
+  const filas = []; let fila = [], campo = "", comillas = false;
+  for (let i = 0; i < txt.length; i++) {
+    const c = txt[i];
+    if (comillas) { if (c === '"') { if (txt[i + 1] === '"') { campo += '"'; i++; } else comillas = false; } else campo += c; }
+    else if (c === '"' && campo === "") comillas = true;
+    else if (c === sep) { fila.push(campo.trim()); campo = ""; }
+    else if (c === "\n") { fila.push(campo.trim()); filas.push(fila); fila = []; campo = ""; }
+    else campo += c;
+  }
+  fila.push(campo.trim()); filas.push(fila);
+  return filas.filter(f => f.some(x => x));
+}
+const normCab = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+function leerLeadsImport(txt) {
+  const filas = parsearTabla(txt); if (filas.length < 2) return {err: "Pega al menos la fila de títulos y una fila de datos."};
+  const cab = filas[0].map(normCab), idx = {};
+  Object.entries(CAMPOS_IMPORT).forEach(([k, syn]) => { const i = cab.findIndex(c => syn.map(normCab).includes(c)); if (i >= 0) idx[k] = i; });
+  if (idx.empresa == null && idx.contacto == null && idx.nombre_pila == null) return {err: "No encuentro la columna de empresa. La primera fila debe tener títulos como Empresa, Contacto, Teléfono, Email."};
+  const v = (f, k) => idx[k] != null ? (f[idx[k]] || "").trim() : "";
+  const datos = filas.slice(1).map(f => {
+    const contacto = v(f, "contacto") || [v(f, "nombre_pila"), v(f, "apellidos")].filter(Boolean).join(" ");
+    return {empresa: v(f, "empresa") || contacto, contacto: contacto || null, cargo: v(f, "cargo") || null, telefono: v(f, "telefono") || null, email: (v(f, "email") || "").toLowerCase() || null,
+      ciudad: v(f, "ciudad"), web: v(f, "web"), notas: v(f, "notas"), valor: parseFloat(String(v(f, "valor")).replace(/\./g, "").replace(",", ".")) || null};
+  }).filter(d => d.empresa);
+  const ETQ = {empresa: "empresa", contacto: "contacto", nombre_pila: "contacto", apellidos: "contacto", cargo: "cargo", telefono: "teléfono", email: "correo", ciudad: "ciudad", web: "web", valor: "valor", notas: "notas"};
+  return {datos, columnas: [...new Set(Object.keys(idx).map(k => ETQ[k]))]};
+}
+const digitos = (t) => { let d = String(t || "").replace(/\D/g, ""); if (d.startsWith("0034")) d = d.slice(4); else if (d.startsWith("34") && d.length === 11) d = d.slice(2); return d; };
+function clasificarImport(datos, proyecto_id) {
+  const emails = new Set(leads.map(l => (l.email || "").toLowerCase()).filter(Boolean)), tels = new Set(leads.map(l => digitos(l.telefono)).filter(d => d.length >= 9));
+  const empProy = new Set(leads.filter(l => l.proyecto_id === proyecto_id).map(l => normCab(l.empresa)));
+  const nuevos = [], repes = [], vistos = new Set();
+  datos.forEach(d => {
+    const t = digitos(d.telefono), clave = (d.email || "") + "|" + t + "|" + normCab(d.empresa);
+    const dup = (d.email && emails.has(d.email)) || (t.length >= 9 && tels.has(t)) || empProy.has(normCab(d.empresa)) || vistos.has(clave);
+    vistos.add(clave); (dup ? repes : nuevos).push(d);
+  });
+  return {nuevos, repes};
+}
+function plantillaLeads() {
+  const csv = "﻿" + [["Empresa", "Contacto", "Cargo", "Teléfono", "Email", "Ciudad", "Web", "Notas"], ["Ejemplo Industrial S.L.", "Ana López", "Gerente", "600123456", "ana@ejemplo.es", "Valencia", "ejemplo.es", "Viene de la feria"]]
+    .map(f => f.map(x => `"${x}"`).join(";")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"})); a.download = "plantilla-leads-cdv-by-jcerezo.csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function importarLeads() {
+  const personas = perfiles.filter(p => p.activo), mañana = new Date(); mañana.setDate(mañana.getDate() + 1);
+  modal(`<h3>Importar leads</h3>
+    <p class="nota-ejemplo">Copia las filas desde Excel o Google Sheets (con la fila de títulos) y pégalas aquí, o sube un CSV. Reconoce columnas como Empresa, Contacto, Cargo, Teléfono, Email, Ciudad, Web y Notas, también en inglés (exportaciones de Apollo). Los repetidos (mismo correo, teléfono o empresa en el proyecto) no se cargan. <a href="#" id="imp-plantilla" style="color:var(--oro)">Descargar plantilla</a></p>
+    <div class="rejilla-campos">
+      <div class="campo"><label for="imp-proy">Proyecto *</label><select id="imp-proy">${proyectos.map(p => `<option value="${p.id}" ${filtroProy === p.id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select></div>
+      <div class="campo"><label for="imp-origen">Origen</label><select id="imp-origen">${ORIGENES.map(o => `<option ${o === "Llamada en frío" ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+      <div class="campo"><label for="imp-closer">Closer</label><select id="imp-closer"><option value="">Sin asignar</option>${personas.map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join("")}</select></div>
+      <div class="campo"><label for="imp-setter">Setter</label><select id="imp-setter"><option value="">Sin asignar</option>${personas.map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join("")}</select></div>
+      <div class="campo"><label for="imp-paso">Próximo paso</label><input id="imp-paso" value="Llamar"></div>
+      <div class="campo"><label for="imp-fecha">Fecha</label><input id="imp-fecha" type="date" value="${fechaISO(mañana)}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="imp-archivo">Archivo CSV (opcional)</label><input id="imp-archivo" type="file" accept=".csv,.txt,text/csv"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="imp-texto">Filas</label><textarea id="imp-texto" rows="7" placeholder="Empresa\tContacto\tTeléfono\tEmail…"></textarea></div>
+      <p class="nota-ejemplo" id="imp-resumen" style="grid-column:1/-1">Pega o sube los datos para ver cuántos leads se cargarán.</p>
+    </div>`, async () => {
+    const r = leerLeadsImport($("#imp-texto").value); if (r.err) return r.err;
+    const proyecto_id = $("#imp-proy").value, {nuevos} = clasificarImport(r.datos, proyecto_id);
+    if (!nuevos.length) return "No hay leads nuevos que cargar (todos están repetidos).";
+    const base = {proyecto_id, origen: $("#imp-origen").value, closer_id: $("#imp-closer").value || null, setter_id: $("#imp-setter").value || null,
+      proximo_paso: $("#imp-paso").value.trim() || null, proximo_paso_fecha: $("#imp-fecha").value || null};
+    const ticket = (proyectos.find(p => p.id === proyecto_id) || {}).ticket || 0;
+    let creados = 0;
+    for (let i = 0; i < nuevos.length; i += 100) {
+      const lote = nuevos.slice(i, i + 100);
+      const {data, error} = await sb.from("crm_leads").insert(lote.map(d => ({...base, empresa: d.empresa, contacto: d.contacto, cargo: d.cargo, telefono: d.telefono, email: d.email, valor: d.valor ?? ticket}))).select();
+      if (error) return `Se cargaron ${creados} y falló el resto: ${error.message}`;
+      creados += data.length; leads.unshift(...data);
+      const notas = data.map((l, j) => { const d = lote[j], t = [d.ciudad && "Ciudad: " + d.ciudad, d.web && "Web: " + d.web, d.notas].filter(Boolean).join(" · "); return {lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: "Importado" + (t ? ". " + t : "")}; });
+      await sb.from("crm_actividad").insert(notas);
+    }
+    aviso(`${creados} leads importados en ${nomProy(proyecto_id)}`);
+  }, "Importar");
+  const resumen = () => {
+    const r = leerLeadsImport($("#imp-texto").value), el = $("#imp-resumen");
+    if (!$("#imp-texto").value.trim()) { el.textContent = "Pega o sube los datos para ver cuántos leads se cargarán."; return; }
+    if (r.err) { el.textContent = r.err; return; }
+    const {nuevos, repes} = clasificarImport(r.datos, $("#imp-proy").value);
+    el.innerHTML = `<b>${nuevos.length}</b> leads nuevos${repes.length ? ` · ${repes.length} repetidos que no se cargarán` : ""}. Columnas reconocidas: ${r.columnas.join(", ")}.${nuevos[0] ? `<br>Primero: ${esc(nuevos[0].empresa)}${nuevos[0].contacto ? " · " + esc(nuevos[0].contacto) : ""}${nuevos[0].telefono ? " · " + esc(nuevos[0].telefono) : ""}` : ""}`;
+  };
+  $("#imp-texto").oninput = resumen; $("#imp-proy").onchange = resumen;
+  $("#imp-plantilla").onclick = (e) => { e.preventDefault(); plantillaLeads(); };
+  $("#imp-archivo").onchange = async (e) => { const f = e.target.files[0]; if (!f) return; let t = await f.text(); if (t.includes("�")) t = new TextDecoder("windows-1252").decode(await f.arrayBuffer()); $("#imp-texto").value = t; resumen(); };
+}
+
 /* ===== NUEVO LEAD ===== */
 function nuevoLead() {
   const proyVisibles = proyectos.filter(p => misProyectos.includes(p.id));
