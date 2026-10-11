@@ -1120,18 +1120,56 @@ function marcarPendiente(tabla, ok) {
 const NOMBRE_TABLA = {tareas:'Tareas',eventos:'Citas',notas:'Notas',registros:'Tiempo',mov_liga:'Liga',proyectos:'Proyectos',incubacion:'Incubación',fin_personal:'Finanzas personales',fin_familiar:'Finanzas familiares',ventas:'Ventas',equipo:'Equipo'};
 // Columnas de la tabla equipo: todas las filas con las mismas claves
 const COLS_EQUIPO = ['id','nombre','cargo','rol','estado','telefono','email','proyectos','valoracion','notas'];
+// Columnas reales de cada tabla en la nube. En citas, proyectos e incubación la app usa "desc" y la nube "descripcion"
+const COLS_NUBE = {
+  tareas:['id','texto','prioridad','proyecto','fecha','completada','asignado','creador'],
+  eventos:['id','fecha','hora','titulo','descripcion','tipo','visible'],
+  notas:['id','texto','proyecto','fecha'],
+  registros:['id','proyecto','nivel','horas','valor','descripcion','fecha','tipo'],
+  mov_liga:['id','sesion','tipo','concepto','importe','fecha'],
+  proyectos:['id','nombre','descripcion','estado','color','progreso'],
+  incubacion:['id','nombre','descripcion','estado','proyecto'],
+  fin_personal:['id','concepto','tipo','importe','fecha'],
+  fin_familiar:['id','concepto','tipo','importe','fecha'],
+};
+const CON_DESC = new Set(['eventos','proyectos','incubacion']);
+function aNube(tabla, filas) {
+  const cols = COLS_NUBE[tabla]; if(!cols) return filas;
+  return (filas||[]).filter(x => x && !x.crm).map(x => { const o = {}; cols.forEach(k => { let v = x[k]; if(k === 'descripcion' && CON_DESC.has(tabla)) v = x.desc ?? x.descripcion; o[k] = v === undefined ? null : v; }); return o; });
+}
+function desdeNube(tabla, filas) {
+  if(!CON_DESC.has(tabla) || !Array.isArray(filas)) return filas;
+  return filas.map(x => { const o = {...x}; if(o.desc === undefined) o.desc = o.descripcion ?? ''; delete o.descripcion; return o; });
+}
+// Fusión única: lo que solo existe en este dispositivo (porque nunca llegó a la nube) se conserva y se sube
+function fusionar(local, nube) {
+  const ids = new Set((nube||[]).map(x => String(x.id)));
+  const soloLocal = (local||[]).filter(x => x && !x.crm && x.id != null && !ids.has(String(x.id)));
+  return {lista: [...(nube||[]), ...soloLocal], añadidos: soloLocal.length};
+}
 function filaEquipoSB(x) { const o = {}; COLS_EQUIPO.forEach(k => { o[k] = x[k] === undefined || x[k] === '' ? (k === 'proyectos' ? [] : null) : x[k]; }); return o; }
 
 async function syncDesdeSupabase() {
   mostrarSyncStatus('⟳ Sincronizando...');
   try {
-    const [t,e,n,r,l,p,inc,fp,ff,v,eq] = await Promise.all([
+    let [t,e,n,r,l,p,inc,fp,ff,v,eq] = await Promise.all([
       sbGet('tareas'), sbGet('eventos'), sbGet('notas'), sbGet('registros'),
       sbGet('mov_liga'), sbGet('proyectos'), sbGet('incubacion'),
       sbGet('fin_personal'), sbGet('fin_familiar'), sbGet('ventas'), sbGet('equipo')
     ]);
     let hayDatos = false;
     const pend = new Set(pendientesNube());
+    // Primera vez con la corrección: juntar lo local que nunca subió con lo que hay en la nube
+    let subirFusion = false;
+    if(!localStorage.getItem('cdv_fusion_v1')) {
+      const CLAVE_LS = {tareas:'cdv_t',notas:'cdv_n',registros:'cdv_r',mov_liga:'cdv_l',incubacion:'cdv_inc',fin_personal:'cdv_fp',fin_familiar:'cdv_ff',equipo:'cdv_eq',eventos:'cdv_e',proyectos:'cdv_proy'};
+      // Solo se fusiona lo que este dispositivo tenía guardado de verdad (no los datos de ejemplo de un dispositivo nuevo)
+      const juntar = (tabla, local, nube) => { if(!Array.isArray(nube)) return nube; if(!localStorage.getItem(CLAVE_LS[tabla])) return desdeNube(tabla, nube); const f = fusionar(local, desdeNube(tabla, nube)); if(f.añadidos) subirFusion = true; return f.lista; };
+      t = juntar('tareas', tareas, t); n = juntar('notas', notas, n); r = juntar('registros', registros, r); l = juntar('mov_liga', movLiga, l);
+      inc = juntar('incubacion', incubacion, inc); fp = juntar('fin_personal', finPersonal, fp); ff = juntar('fin_familiar', finFamiliar, ff); eq = juntar('equipo', equipo, eq);
+      e = juntar('eventos', eventos, e); p = juntar('proyectos', proyectos, p);
+      try { localStorage.setItem('cdv_fusion_v1', new Date().toISOString()); } catch(err) {}
+    } else { e = desdeNube('eventos', e); p = desdeNube('proyectos', p); inc = desdeNube('incubacion', inc); }
     // Solo sobreescribir si Supabase devolvió datos válidos (array con elementos) y no hay cambios locales sin subir
     if(Array.isArray(t)&&t.length&&!pend.has('tareas')) { tareas=t; localStorage.setItem('cdv_t',JSON.stringify(t)); hayDatos=true; }
     if(Array.isArray(e)&&e.length&&!pend.has('eventos')) { eventos=e; localStorage.setItem('cdv_e',JSON.stringify(e)); hayDatos=true; }
@@ -1157,7 +1195,7 @@ async function syncDesdeSupabase() {
     if(Array.isArray(ff)&&ff.length&&!pend.has('fin_familiar')) { finFamiliar=ff; localStorage.setItem('cdv_ff',JSON.stringify(ff)); hayDatos=true; }
     if(Array.isArray(v)&&v.length&&!pend.has('ventas')) { ventas=v; localStorage.setItem('cdv_v',JSON.stringify(v)); hayDatos=true; }
     if(Array.isArray(eq)&&eq.length&&!pend.has('equipo')) { equipo=eq; localStorage.setItem('cdv_eq',JSON.stringify(eq)); hayDatos=true; }
-    if(pend.size) { console.warn('[Supabase] Cambios locales sin subir en:', [...pend]); syncASupabase(); }
+    if(pend.size || subirFusion) { console.warn('[Supabase] Subiendo cambios locales:', [...pend], subirFusion ? '+ fusión' : ''); syncASupabase(); }
     renderHoy(); renderTareas('todas'); renderProyectos(); renderCal(); renderNotas(); renderRegistros(); renderLiga(); renderIncubacion(); renderEquipo(); renderVentas(); renderMisComisiones();
     if(hayDatos) {
       mostrarSyncStatus('✅ Sincronizado desde nube');
@@ -1181,15 +1219,15 @@ async function syncASupabase() {
   try {
     const tablas = ['tareas','eventos','notas','registros','mov_liga','proyectos','incubacion','fin_personal','fin_familiar','ventas','equipo'];
     const resultados = await Promise.all([
-      sbUpsert('tareas', tareas),
-      sbUpsert('eventos', eventos),
-      sbUpsert('notas', notas),
-      sbUpsert('registros', registros),
-      sbUpsert('mov_liga', movLiga),
-      sbUpsert('proyectos', proyectos),
-      sbUpsert('incubacion', incubacion),
-      sbUpsert('fin_personal', finPersonal),
-      sbUpsert('fin_familiar', finFamiliar),
+      sbUpsert('tareas', aNube('tareas', tareas)),
+      sbUpsert('eventos', aNube('eventos', eventos)),
+      sbUpsert('notas', aNube('notas', notas)),
+      sbUpsert('registros', aNube('registros', registros)),
+      sbUpsert('mov_liga', aNube('mov_liga', movLiga)),
+      sbUpsert('proyectos', aNube('proyectos', proyectos)),
+      sbUpsert('incubacion', aNube('incubacion', incubacion)),
+      sbUpsert('fin_personal', aNube('fin_personal', finPersonal)),
+      sbUpsert('fin_familiar', aNube('fin_familiar', finFamiliar)),
       sbUpsert('ventas', ventas.map(filaVentaSB)),
       sbUpsert('equipo', equipo.map(filaEquipoSB)),
     ]);
@@ -3586,7 +3624,7 @@ function asegurarProyectosNuevos(){
   if(!faltan.length) return;
   proyectos=proyectos.concat(faltan);
   localStorage.setItem('cdv_proy',JSON.stringify(proyectos));
-  sbUpsert('proyectos',faltan);
+  sbUpsert('proyectos',aNube('proyectos',faltan));
   renderProyectos();
 }
 const _syncOriginal=syncDesdeSupabase;
