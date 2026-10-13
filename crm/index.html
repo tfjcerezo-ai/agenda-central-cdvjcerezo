@@ -410,6 +410,7 @@ let reuniones = [];
 let ventas = [];       // solo director: ventas cerradas (tabla de Agenda Central)
 let facturas = [];
 let productos = [];
+let catalogo = [], netas = {}, presupuestos = [];   // catálogo con precios para presupuestos (neta solo director y socios)
 let compras = [];      // crm_compras: ficha de compra de los clientes (José Bernad, CAYFI…)    // crm_productos: productos que se comercializan dentro de un proyecto (p. ej. José Bernad)     // solo director: facturas emitidas por CDV by JCerezo
 let filtroVentas = "todos";
 let gastos = [], recurrentes = [], filtroGasto = "todos", impuestos = [];
@@ -697,6 +698,8 @@ async function cargarTodo() {
   if (!esDir() && esSocio()) { const v = await sb.from("ventas").select("*").order("id"); ventas = v.error ? [] : (v.data || []).map(escalarVenta); }
   const pr = await sb.from("crm_productos").select("*").order("orden"); productos = pr.error ? [] : pr.data || [];
   const co = await sb.from("crm_compras").select("*").order("fecha", {ascending: false}); compras = co.error ? [] : co.data || [];
+  const [ca, ne, pz] = await Promise.all([sb.from("crm_catalogo").select("*").eq("activo", true).order("orden"), sb.from("crm_catalogo_neta").select("*"), sb.from("crm_presupuestos").select("*").order("creado", {ascending: false})]);
+  catalogo = ca.error ? [] : ca.data || []; netas = Object.fromEntries((ne.error ? [] : ne.data || []).map(x => [x.id, x])); presupuestos = pz.error ? [] : pz.data || [];
   if (esDir()) {
     perfiles = r[5].data; ventas = (r[6].data || []).map(escalarVenta);
     const f = await pFact; facturas = f.error ? [] : f.data || [];
@@ -909,6 +912,116 @@ function vLista(Ls) {
 }
 
 
+
+/* ===== PRESUPUESTOS (catálogo con precios, p. ej. José Bernad) ===== */
+const IVA_PRESU = 21, VALIDEZ_DIAS = 30;
+const ESTADO_PRESU = {borrador: ["Borrador", "p-neutro"], enviado: ["Enviado", "p-aviso"], aceptado: ["Aceptado", "p-ok"], rechazado: ["Rechazado", "p-mal"]};
+const catalogoDe = (proy) => catalogo.filter(x => x.proyecto_id === proy);
+const veNeta = (proy) => esDir() || esSocio(proy);
+const totalesPresu = (lineas, proy) => {
+  let sub = 0, neta = 0, bajoNeta = [];
+  lineas.forEach(li => { const imp = r2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100)); sub += imp;
+    const n = netas[li.id]; if (n) { const nt = (+li.cantidad || 0) * (+n.neta || 0); neta += nt; if ((+li.precio || 0) * (1 - (+li.dto || 0) / 100) < +n.neta - 0.0001) bajoNeta.push(li.ref); } });
+  sub = r2(sub); const iva = r2(sub * IVA_PRESU / 100);
+  return {sub, iva, total: r2(sub + iva), neta: r2(neta), comision: r2(sub - neta), bajoNeta, conNeta: veNeta(proy) && lineas.some(li => netas[li.id])};
+};
+function bloquePresupuestos(l) {
+  const ps = presupuestos.filter(p => p.lead_id === l.id);
+  return `<div><div class="etiq" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">Presupuestos <button class="btn" id="nuevo-presupuesto" type="button">+ Nuevo presupuesto</button></div>
+    ${ps.length ? `<ul class="lista">${ps.map(p => `<li class="clic" data-presupuesto="${p.id}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>${esc(p.numero || "Presupuesto")} · ${fF(p.fecha)}<small style="display:block;color:var(--texto3)">${(p.lineas || []).length} líneas</small></span><span style="text-align:right"><b style="font-weight:600">${eur(p.total)}</b><br><span class="pildora ${(ESTADO_PRESU[p.estado] || ["", "p-neutro"])[1]}">${(ESTADO_PRESU[p.estado] || [p.estado])[0]}</span></span></li>`).join("")}</ul>` : `<p style="font-size:13px;color:var(--texto3)">Sin presupuestos todavía.</p>`}</div>`;
+}
+function editarPresupuesto(l, id) {
+  const p = id ? presupuestos.find(x => x.id === id) : null;
+  const cat = catalogoDe(l.proyecto_id), conNeta = veNeta(l.proyecto_id);
+  let lineas = p ? JSON.parse(JSON.stringify(p.lineas || [])) : [];
+  const hoy = new Date(), val = new Date(hoy); val.setDate(val.getDate() + VALIDEZ_DIAS);
+  const cats = [...new Set(cat.map(x => x.categoria || "Otros"))];
+  modal(`<h3>${p ? "Presupuesto " + esc(p.numero || "") : "Nuevo presupuesto"} · ${esc(l.empresa)}</h3>
+    <div class="rejilla-campos">
+      <div class="campo"><label for="pz-fecha">Fecha</label><input id="pz-fecha" type="date" value="${p ? p.fecha : fechaISO(hoy)}"></div>
+      <div class="campo"><label for="pz-validez">Válido hasta</label><input id="pz-validez" type="date" value="${p ? p.validez || "" : fechaISO(val)}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="pz-buscar">Añadir producto</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="pz-cat" style="max-width:170px"><option value="">Todas las categorías</option>${cats.map(c => `<option>${esc(c)}</option>`).join("")}</select><input id="pz-buscar" placeholder="Busca por referencia o nombre: BB-TOP, zócalo, omega…" style="flex:1;min-width:180px"></div>
+        <div id="pz-sugerencias" style="max-height:190px;overflow:auto;margin-top:6px;border:1px solid var(--linea);border-radius:10px"></div></div>
+      <div style="grid-column:1/-1;overflow:auto"><table id="pz-tabla" style="font-size:12.5px;width:100%"></table></div>
+      <div id="pz-totales" style="grid-column:1/-1"></div>
+      <div class="campo"><label for="pz-estado">Estado</label><select id="pz-estado">${Object.entries(ESTADO_PRESU).map(([k, v]) => `<option value="${k}" ${(p ? p.estado : "borrador") === k ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>
+      <div class="campo" style="grid-column:1/-1"><label for="pz-notas">Condiciones / notas para el cliente</label><textarea id="pz-notas" rows="3">${esc(p ? p.notas || "" : "Precios sin IVA. Portes debidos. Plazo de entrega a confirmar con el pedido.")}</textarea></div>
+    </div>`, async () => {
+    if (!lineas.length) return "Añade al menos un producto.";
+    const t = totalesPresu(lineas, l.proyecto_id);
+    if (t.bajoNeta.length) return "Hay líneas por debajo de la tarifa neta de Bernad (" + t.bajoNeta.join(", ") + "). Reduce el descuento.";
+    const fila = {lead_id: l.id, proyecto_id: l.proyecto_id, fecha: $("#pz-fecha").value || fechaISO(hoy), validez: $("#pz-validez").value || null, estado: $("#pz-estado").value,
+      lineas: lineas.map(li => ({id: li.id, ref: li.ref, codigo: li.codigo || null, nombre: li.nombre, unidad: li.unidad, cantidad: +li.cantidad || 0, precio: +li.precio || 0, dto: +li.dto || 0})),
+      subtotal: t.sub, iva: t.iva, total: t.total, notas: $("#pz-notas").value.trim() || null};
+    const q = p ? sb.from("crm_presupuestos").update(fila).eq("id", p.id) : sb.from("crm_presupuestos").insert(fila);
+    const {data, error} = await q.select().single();
+    if (error) return "No se pudo guardar: " + error.message;
+    if (p) Object.assign(p, data); else presupuestos.unshift(data);
+    if (!p || p.estado !== data.estado) await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Presupuesto ${data.numero || ""} ${ESTADO_PRESU[data.estado][0].toLowerCase()}: ${eur(data.total)} con IVA`});
+    if (!+l.valor || data.estado === "aceptado") { const {data: ld} = await sb.from("crm_leads").update({valor: data.subtotal}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); }
+    aviso(p ? "Presupuesto actualizado" : "Presupuesto guardado"); setTimeout(() => abrirLead(l.id), 0);
+  }, p ? "Guardar" : "Guardar presupuesto");
+  const caja = $(".modal-caja"); if (caja) caja.style.maxWidth = "860px";
+  const acc = $(".modal-acciones");
+  const bPdf = document.createElement("button"); bPdf.type = "button"; bPdf.className = "btn"; bPdf.textContent = "⬇ PDF para el cliente"; bPdf.style.marginRight = "auto";
+  bPdf.onclick = () => { if (!lineas.length) return aviso("Añade productos primero", true); imprimirPresupuesto(l, {numero: p ? p.numero : "(sin guardar)", fecha: $("#pz-fecha").value, validez: $("#pz-validez").value, lineas, notas: $("#pz-notas").value, creado_por: p ? p.creado_por : yo.id}); };
+  acc.prepend(bPdf);
+  if (p && esDir()) botonBorrar("Borrar", async () => { if (!confirm("¿Borrar este presupuesto?")) return; const {error} = await sb.from("crm_presupuestos").delete().eq("id", p.id); if (error) return fallo(error, "No se pudo borrar"); presupuestos = presupuestos.filter(x => x.id !== p.id); cerrarCapa(); abrirLead(l.id); });
+  const pintar = () => {
+    const t = totalesPresu(lineas, l.proyecto_id); const er = $("#err"); if (er) er.hidden = true;
+    $("#pz-tabla").innerHTML = lineas.length ? `<thead><tr><th>Ref.</th><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Dto. %</th><th class="num">Importe</th><th></th></tr></thead><tbody>${lineas.map((li, i) => { const n = netas[li.id], bajo = n && (+li.precio || 0) * (1 - (+li.dto || 0) / 100) < +n.neta - 0.0001;
+      return `<tr${bajo ? ` style="background:rgba(255,90,90,.08)"` : ""}><td>${esc(li.ref)}</td><td>${esc(li.nombre)}<small style="display:block;color:var(--texto3)">${esc(li.unidad)}${conNeta && n ? ` · neta ${eur(n.neta)}` : ""}</small></td>
+      <td class="num"><input data-li="${i}" data-k="cantidad" type="number" min="0" step="0.01" value="${li.cantidad}" style="width:70px"></td>
+      <td class="num">${eur(li.precio)}</td>
+      <td class="num"><input data-li="${i}" data-k="dto" type="number" min="0" max="100" step="0.5" value="${li.dto || 0}" style="width:60px"></td>
+      <td class="num"><b style="font-weight:600">${eur((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</b></td>
+      <td><button type="button" class="btn-texto" data-quitar="${i}" aria-label="Quitar ${esc(li.ref)}">✕</button></td></tr>`; }).join("")}</tbody>` : `<tr><td style="color:var(--texto3)">Busca y pulsa un producto para añadirlo.</td></tr>`;
+    $("#pz-totales").innerHTML = `<div class="fila-liq"><span>Subtotal (sin IVA)</span><b>${eur(t.sub)}</b></div><div class="fila-liq"><span>IVA ${IVA_PRESU} %</span><b>${eur(t.iva)}</b></div><div class="fila-liq total"><span>Total</span><b>${eur(t.total)}</b></div>
+      ${t.conNeta ? `<div style="margin-top:10px;padding:10px 12px;border:1px dashed var(--linea);border-radius:10px;font-size:12.5px"><b>Solo para ti (no sale en el PDF):</b> neta Bernad ${eur(t.neta)} · comisión total <b style="color:var(--bien)">${eur(t.comision)}</b> · tu parte (50 %) <b>${eur(t.comision / 2)}</b>${t.bajoNeta.length ? `<br><span style="color:var(--mal)">⚠ Por debajo de la neta: ${esc(t.bajoNeta.join(", "))}. No se puede guardar así.</span>` : ""}</div>` : ""}`;
+    $("#pz-tabla").querySelectorAll("input[data-li]").forEach(inp => inp.onchange = () => { const li = lineas[+inp.dataset.li]; li[inp.dataset.k] = Math.max(0, +inp.value || 0); if (inp.dataset.k === "dto") li.dto = Math.min(100, li.dto); pintar(); });
+    $("#pz-tabla").querySelectorAll("[data-quitar]").forEach(b => b.onclick = () => { lineas.splice(+b.dataset.quitar, 1); pintar(); });
+  };
+  const sugerir = () => {
+    const q = normCab($("#pz-buscar").value), c = $("#pz-cat").value;
+    const res = cat.filter(x => (!c || (x.categoria || "Otros") === c) && (!q || normCab(x.ref + " " + x.nombre + " " + (x.codigo || "")).includes(q))).slice(0, 40);
+    $("#pz-sugerencias").innerHTML = res.map(x => `<div class="clic" data-add="${esc(x.id)}" style="display:flex;justify-content:space-between;gap:8px;padding:7px 10px;border-bottom:1px solid var(--linea);cursor:pointer;font-size:12.5px"><span><b style="font-weight:600">${esc(x.ref)}</b> · ${esc(x.nombre)}<small style="display:block;color:var(--texto3)">${esc(x.categoria || "")}${x.codigo ? " · cód. " + esc(x.codigo) : ""}</small></span><span style="white-space:nowrap">${eur(x.precio)}/${esc(x.unidad)}</span></div>`).join("") || `<div style="padding:8px 10px;color:var(--texto3);font-size:12.5px">Sin resultados.</div>`;
+    $("#pz-sugerencias").querySelectorAll("[data-add]").forEach(d => d.onclick = () => { const x = cat.find(y => y.id === d.dataset.add); const ya = lineas.find(li => li.id === x.id); if (ya) ya.cantidad = (+ya.cantidad || 0) + 1; else lineas.push({id: x.id, ref: x.ref, codigo: x.codigo, nombre: x.nombre, unidad: x.unidad, cantidad: 1, precio: +x.precio, dto: 0}); pintar(); });
+  };
+  $("#pz-buscar").oninput = sugerir; $("#pz-cat").onchange = sugerir; sugerir(); pintar();
+}
+function imprimirPresupuesto(l, d) {
+  const t = totalesPresu(d.lineas, l.proyecto_id);
+  const autor = perfiles.find(x => x.id === d.creado_por) || (d.creado_por === yo.id ? yo : null) || yo;
+  const esJavi = /javier cerezo/i.test(autor.nombre || "");
+  const firma = esJavi ? `<b>Javier Cerezo</b><br>Gestor de cuentas en desarrollo, España y Portugal<br>670 86 56 67` : `<b>${esc(autor.nombre || "")}</b><br>${esc(autor.email || "")}`;
+  const fecha = (s) => s ? new Date(s + "T00:00").toLocaleDateString("es-ES", {day: "2-digit", month: "long", year: "numeric"}) : "—";
+  const e2 = (n) => (+n || 0).toLocaleString("es-ES", {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " €";
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Presupuesto ${esc(d.numero || "")} · ${esc(l.empresa)}</title>
+  <style>@page{size:A4;margin:16mm 14mm}body{font-family:Helvetica,Arial,sans-serif;color:#1d2433;font-size:11.5px;margin:0}
+  .cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1d4f91;padding-bottom:12px;margin-bottom:18px}
+  .marca{font-size:24px;font-weight:800;letter-spacing:.5px;color:#1d4f91}.marca small{display:block;font-size:10.5px;font-weight:400;color:#5b6475;letter-spacing:0;margin-top:3px}
+  .doc{text-align:right}.doc h1{margin:0;font-size:20px;color:#1d2433}.doc div{color:#5b6475;margin-top:3px}
+  .cli{background:#f3f6fb;border-radius:8px;padding:10px 12px;margin-bottom:16px}.cli b{font-size:13px}
+  table{width:100%;border-collapse:collapse}th{background:#1d4f91;color:#fff;text-align:left;padding:7px 8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px}
+  td{padding:7px 8px;border-bottom:1px solid #e3e8f0;vertical-align:top}.n{text-align:right;white-space:nowrap}
+  .tot{margin-left:auto;width:270px;margin-top:12px}.tot div{display:flex;justify-content:space-between;padding:5px 0}.tot .g{border-top:2px solid #1d2433;font-size:14px;font-weight:700;margin-top:4px;padding-top:8px}
+  .cond{margin-top:22px;font-size:10.5px;color:#4a5263;white-space:pre-line}.firma{margin-top:30px;font-size:11px;line-height:1.5}
+  .pie{margin-top:26px;border-top:1px solid #e3e8f0;padding-top:8px;font-size:9.5px;color:#8a93a3;text-align:center}</style></head><body>
+  <div class="cab"><div class="marca">JOSÉ BERNAD<small>José Bernad S.L. · Protecciones industriales y perfilería sanitaria<br>www.josebernad.com · comercial@josebernad.com</small></div>
+  <div class="doc"><h1>PRESUPUESTO</h1><div>Nº ${esc(d.numero || "—")}</div><div>Fecha: ${fecha(d.fecha)}</div><div>Válido hasta: ${fecha(d.validez)}</div></div></div>
+  <div class="cli">Cliente<br><b>${esc(l.empresa)}</b>${l.contacto ? `<br>A la atención de ${esc(l.contacto)}` : ""}${l.email ? `<br>${esc(l.email)}` : ""}${l.telefono ? ` · ${esc(l.telefono)}` : ""}</div>
+  <table><thead><tr><th>Referencia</th><th>Descripción</th><th class="n">Cantidad</th><th class="n">Precio</th><th class="n">Dto.</th><th class="n">Importe</th></tr></thead><tbody>
+  ${d.lineas.map(li => `<tr><td>${esc(li.ref)}${li.codigo ? `<br><span style="color:#8a93a3;font-size:9.5px">${esc(li.codigo)}</span>` : ""}</td><td>${esc(li.nombre)}</td><td class="n">${(+li.cantidad || 0).toLocaleString("es-ES")} ${esc(li.unidad)}</td><td class="n">${e2(li.precio)}</td><td class="n">${+li.dto ? (+li.dto).toLocaleString("es-ES") + " %" : "—"}</td><td class="n">${e2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</td></tr>`).join("")}
+  </tbody></table>
+  <div class="tot"><div><span>Base imponible</span><span>${e2(t.sub)}</span></div><div><span>IVA ${IVA_PRESU} %</span><span>${e2(t.iva)}</span></div><div class="g"><span>TOTAL</span><span>${e2(t.total)}</span></div></div>
+  ${d.notas ? `<div class="cond"><b>Condiciones</b>\n${esc(d.notas)}</div>` : ""}
+  <div class="firma">${firma}</div>
+  <div class="pie">Presupuesto sujeto a disponibilidad de material y a la tarifa vigente en la fecha del pedido.</div>
+  <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`;
+  const w = window.open("", "_blank"); if (!w) return aviso("Permite las ventanas emergentes para descargar el PDF", true);
+  w.document.open(); w.document.write(html); w.document.close();
+}
+
 /* ===== WHATSAPP CON MENSAJES PREPARADOS ===== */
 const PLANTILLAS_WA = [
   ["primer", "Primer contacto", "Hola{N}, soy {YO} de {P}. Te escribo para presentarte lo que hacemos y ver si te puede encajar. ¿Cuándo te viene bien una llamada de 5 minutos?"],
@@ -1114,6 +1227,7 @@ async function abrirLead(id) {
     <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span></div>
       <form class="paso-form" id="f-paso"><input class="entrada" id="paso-accion" aria-label="Acción" value="${esc(l.proximo_paso || "Llamar")}"><input class="entrada" type="date" id="paso-fecha" aria-label="Fecha" value="${l.proximo_paso_fecha || ""}"><button class="btn" type="submit">Programar</button></form></div>
     <button class="btn" id="reunion-lead" style="align-self:flex-start">📅 Programar reunión</button>
+    ${catalogoDe(l.proyecto_id).length ? bloquePresupuestos(l) : ""}
     ${tieneFicha(l.proyecto_id) ? bloqueCompras(l) : ""}
     <div><div class="etiq" style="margin-bottom:8px">Registrar llamada</div><div class="filtros">${["Contestó", "No contestó", "Volver a llamar"].map(t => `<button class="chip" data-llamada="${t}">${t}</button>`).join("")}</div></div>
     <form id="f-nota"><div class="campo"><label for="nota-txt">Añadir nota</label><textarea id="nota-txt" placeholder="Qué ha pasado"></textarea></div><button class="btn" type="submit">Guardar nota</button></form>
@@ -1138,6 +1252,8 @@ async function abrirLead(id) {
   capa.querySelectorAll("[data-cerrar]").forEach(b => b.onclick = cerrarCapa);
   $("#reunion-lead").onclick = () => editarReunion(null, {lead_id: l.id});
   const nc = $("#nueva-compra"); if (nc) nc.onclick = () => editarCompra(l, null);
+  const np = $("#nuevo-presupuesto"); if (np) np.onclick = () => editarPresupuesto(l, null);
+  capa.querySelectorAll("[data-presupuesto]").forEach(b => b.onclick = () => editarPresupuesto(l, +b.dataset.presupuesto));
   capa.querySelectorAll("[data-compra]").forEach(b => b.onclick = () => editarCompra(l, +b.dataset.compra));
   const nota = async (tipo, texto) => {
     const {error} = await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo, texto});
