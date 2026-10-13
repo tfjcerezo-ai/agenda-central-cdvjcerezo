@@ -1007,7 +1007,7 @@ function imprimirPresupuesto(l, d) {
   .tot{margin-left:auto;width:270px;margin-top:12px}.tot div{display:flex;justify-content:space-between;padding:5px 0}.tot .g{border-top:2px solid #1d2433;font-size:14px;font-weight:700;margin-top:4px;padding-top:8px}
   .cond{margin-top:22px;font-size:10.5px;color:#4a5263;white-space:pre-line}.firma{margin-top:30px;font-size:11px;line-height:1.5}
   .pie{margin-top:26px;border-top:1px solid #e3e8f0;padding-top:8px;font-size:9.5px;color:#8a93a3;text-align:center}</style></head><body>
-  <div class="cab"><div class="marca">JOSÉ BERNAD<small>José Bernad S.L. · Protecciones industriales y perfilería sanitaria<br>www.josebernad.com · comercial@josebernad.com</small></div>
+  <div class="cab"><div class="marca"><img src="${location.origin}/crm/logo-bernad.png" alt="Bernad" style="height:70px;display:block;margin-bottom:4px"><small>José Bernad S.L. · Protecciones industriales y perfilería sanitaria<br>www.josebernad.com · comercial@josebernad.com</small></div>
   <div class="doc"><h1>PRESUPUESTO</h1><div>Nº ${esc(d.numero || "—")}</div><div>Fecha: ${fecha(d.fecha)}</div><div>Válido hasta: ${fecha(d.validez)}</div></div></div>
   <div class="cli">Cliente<br><b>${esc(l.empresa)}</b>${l.contacto ? `<br>A la atención de ${esc(l.contacto)}` : ""}${l.email ? `<br>${esc(l.email)}` : ""}${l.telefono ? ` · ${esc(l.telefono)}` : ""}</div>
   <table><thead><tr><th>Referencia</th><th>Descripción</th><th class="n">Cantidad</th><th class="n">Precio</th><th class="n">Dto.</th><th class="n">Importe</th></tr></thead><tbody>
