@@ -452,7 +452,7 @@ function selectorProductos(prefijo, proyId, marcados) {
 }
 const ESTADO_COMPRA = {presupuesto: ["Presupuesto", "p-neutro"], pedido: ["Pedido", "p-aviso"], servido: ["Servido", "p-aviso"], cobrado: ["Cobrado", "p-ok"], anulado: ["Anulado", "p-mal"]};
 const tieneFicha = (proyId) => !!(proyectos.find(p => p.id === proyId) || {}).ficha_compra;
-const comisionCompra = (c, proyId) => { const pr = productos.find(x => x.proyecto_id === proyId && x.nombre === c.producto); if (pr) return r2((+c.importe || 0) * ((+pr.com_closer || 0) + (+pr.com_setter || 0) + (+pr.com_cdv || 0)) / 100); const py = proyectos.find(x => x.id === proyId); const pct = py ? (+py.com_cdv || 0) + (+py.com_closer || 0) + (+py.com_setter || 0) : 0; return pct ? r2((+c.importe || 0) * pct / 100) : null; };
+const comisionCompra = (c, proyId) => { if (c.presupuesto_id) { const pz = presupuestos.find(x => x.id === c.presupuesto_id); if (pz && veNeta(proyId)) { const t = totalesPresu(pz.lineas || [], proyId); if (t.conNeta) return t.comision; } } const pr = productos.find(x => x.proyecto_id === proyId && x.nombre === c.producto); if (pr) return r2((+c.importe || 0) * ((+pr.com_closer || 0) + (+pr.com_setter || 0) + (+pr.com_cdv || 0)) / 100); const py = proyectos.find(x => x.id === proyId); const pct = py ? (+py.com_cdv || 0) + (+py.com_closer || 0) + (+py.com_setter || 0) : 0; return pct ? r2((+c.importe || 0) * pct / 100) : null; };
 /* Cuotas mensuales (DeCA mensual): cada mes, el día de cobro, se devenga una cuota más */
 function cuotasDevengadas(v, hasta) {
   if (v.tipo_cobro !== "mensual") return 1;
@@ -502,7 +502,8 @@ function bloqueCompras(l) {
   const com = vivas.reduce((s, c) => s + (comisionCompra(c, l.proyecto_id) || 0), 0);
   const porProd = {}; vivas.forEach(c => { const k = c.producto || "Sin producto"; porProd[k] = (porProd[k] || 0) + (+c.importe || 0); });
   const top = Object.entries(porProd).sort((a, b) => b[1] - a[1]);
-  return `<div class="bloque" style="padding:14px"><div class="bloque-cab"><h3>Ficha de compra</h3><button class="btn" id="nueva-compra">+ Añadir compra</button></div>
+  return `<div class="bloque" style="padding:14px"><div class="bloque-cab"><h3>Ficha de compra</h3>${catalogoDe(l.proyecto_id).length ? `<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-oro" id="nuevo-presupuesto" type="button">+ Nueva compra</button><button class="btn" id="nueva-compra" type="button" title="Apuntar un pedido sin pasar por el catálogo">Apuntar a mano</button></span>` : `<button class="btn" id="nueva-compra">+ Añadir compra</button>`}</div>
+    ${catalogoDe(l.proyecto_id).length ? listaPropuestas(l) : ""}
     <div class="fila-liq"><span>Total comprado (${vivas.length} ${vivas.length === 1 ? "pedido" : "pedidos"})</span><b>${eur(total)}</b></div>
     ${com ? `<div class="fila-liq"><span>Comisión generada${prodsDe(l.proyecto_id).length ? " (a repartir 50/50)" : ""}</span><b>${eur(com)}${prodsDe(l.proyecto_id).length ? `<small>${eur(com / 2)} cada uno</small>` : ""}</b></div>` : ""}
     ${(() => { const st = statsCompras([l.id]); if (!st.n) return "";
@@ -517,7 +518,7 @@ function bloqueCompras(l) {
         <div style="margin:10px 0 4px" class="etiq">Compras de los últimos 12 meses</div>
         <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:70px">${meses.map(m => { const v = porMes[m.k] || 0; return `<div title="${m.t}: ${eur(v)}" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:2px"><div style="background:${v ? "var(--oro)" : "var(--linea)"};height:${v ? Math.max(6, v / maxMes * 52) : 2}px;border-radius:3px"></div><div style="font-size:9px;color:var(--texto3);text-align:center">${m.t.replace(".", "")}</div></div>`; }).join("")}</div>`; })()}
     ${top.length ? `<div style="margin:8px 0">${top.map(([n, v]) => `<div class="fila-barra"><span>${esc(n)}</span><div class="barra"><span style="width:${v / Math.max(1, total) * 100}%"></span></div><span class="n">${eur(v)}</span></div>`).join("")}</div>` : ""}
-    ${cs.length ? `<ul class="lista">${cs.map(c => { const e = ESTADO_COMPRA[c.estado] || [c.estado, "p-neutro"]; return `<li ${c._venta ? `title="Viene de la venta registrada en la agenda"` : `class="clic" data-compra="${c.id}" style="cursor:pointer"`}><span class="crece"><b style="font-weight:500">${esc(c.producto || "Compra")}</b>${c.descripcion ? " · " + esc(c.descripcion) : ""}<small>${fF(c.fecha)}${c.cantidad ? " · " + (+c.cantidad).toLocaleString("es-ES") + " " + esc(c.unidad || "") : ""}${c.notas ? " · " + esc(c.notas) : ""}</small></span><span style="text-align:right"><b style="font-weight:600">${eur(c.importe)}</b><br><span class="pildora ${e[1]}">${e[0]}</span></span></li>`; }).join("")}</ul>` : `<p class="vacia">Todavía no hay compras. Apunta cada pedido para tener su histórico.</p>`}
+    ${cs.length ? `<ul class="lista">${cs.map(c => { const e = ESTADO_COMPRA[c.estado] || [c.estado, "p-neutro"]; return `<li ${c._venta ? `title="Viene de la venta registrada en la agenda"` : `class="clic" data-compra="${c.id}" style="cursor:pointer"`}><span class="crece"><b style="font-weight:500">${esc(c.producto || "Compra")}</b>${c.descripcion ? " · " + esc(c.descripcion) : ""}<small>${c.presupuesto_id ? "Desde propuesta aceptada · " : ""}${fF(c.fecha)}${c.cantidad ? " · " + (+c.cantidad).toLocaleString("es-ES") + " " + esc(c.unidad || "") : ""}${c.notas ? " · " + esc(c.notas) : ""}</small></span><span style="text-align:right"><b style="font-weight:600">${eur(c.importe)}</b><br><span class="pildora ${e[1]}">${e[0]}</span></span></li>`; }).join("")}</ul>` : `<p class="vacia">${catalogoDe(l.proyecto_id).length ? "Todavía no hay compras. Pulsa «+ Nueva compra», elige los productos del catálogo y saca la propuesta; cuando el cliente la acepte, pasa a venta aquí." : "Todavía no hay compras. Apunta cada pedido para tener su histórico."}</p>`}
   </div>`;
 }
 function editarCompra(l, id) {
@@ -926,10 +927,32 @@ const totalesPresu = (lineas, proy) => {
   sub = r2(sub); const iva = r2(sub * IVA_PRESU / 100);
   return {sub, iva, total: r2(sub + iva), neta: r2(neta), comision: r2(sub - neta), bajoNeta, conNeta: veNeta(proy) && lineas.some(li => netas[li.id])};
 };
+const compraDePresu = (pid) => compras.find(c => c.presupuesto_id === pid);
+function listaPropuestas(l) {
+  const ps = presupuestos.filter(p => p.lead_id === l.id && !(p.estado === "aceptado" && compraDePresu(p.id)));
+  if (!ps.length) return "";
+  return `<div class="etiq" style="margin:4px 0 6px">Propuestas en curso</div><ul class="lista" style="margin-bottom:10px">${ps.map(p => `<li class="clic" data-presupuesto="${p.id}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>Propuesta ${esc(p.numero || "")} · ${fF(p.fecha)}<small style="display:block;color:var(--texto3)">${(p.lineas || []).length} productos · ${eur(p.subtotal)} sin IVA${p.validez ? " · válida hasta " + fF(p.validez) : ""}</small></span><span style="text-align:right"><b style="font-weight:600">${eur(p.total)}</b><br><span class="pildora ${(ESTADO_PRESU[p.estado] || ["", "p-neutro"])[1]}">${(ESTADO_PRESU[p.estado] || [p.estado])[0]}</span></span></li>`).join("")}</ul>`;
+}
 function bloquePresupuestos(l) {
   const ps = presupuestos.filter(p => p.lead_id === l.id);
   return `<div><div class="etiq" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">Presupuestos <button class="btn" id="nuevo-presupuesto" type="button">+ Nuevo presupuesto</button></div>
     ${ps.length ? `<ul class="lista">${ps.map(p => `<li class="clic" data-presupuesto="${p.id}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>${esc(p.numero || "Presupuesto")} · ${fF(p.fecha)}<small style="display:block;color:var(--texto3)">${(p.lineas || []).length} líneas</small></span><span style="text-align:right"><b style="font-weight:600">${eur(p.total)}</b><br><span class="pildora ${(ESTADO_PRESU[p.estado] || ["", "p-neutro"])[1]}">${(ESTADO_PRESU[p.estado] || [p.estado])[0]}</span></span></li>`).join("")}</ul>` : `<p style="font-size:13px;color:var(--texto3)">Sin presupuestos todavía.</p>`}</div>`;
+}
+/* Propuesta aceptada → venta: se apunta en la ficha de compra (pedido) y el lead pasa a Cierre ganado */
+async function pasarAVenta(l, pz) {
+  const lin = pz.lineas || [];
+  const resumen = lin.slice(0, 3).map(li => `${(+li.cantidad || 0).toLocaleString("es-ES")} ${li.unidad || ""} ${li.ref}`.replace(/\s+/g, " ")).join(", ") + (lin.length > 3 ? ` y ${lin.length - 3} más` : "");
+  const fila = {lead_id: l.id, fecha: fechaISO(new Date()), estado: "pedido", producto: `Propuesta ${pz.numero || ""}`.trim(), descripcion: resumen || null, importe: +pz.subtotal || 0, presupuesto_id: pz.id, notas: null};
+  const ya = compraDePresu(pz.id);
+  const q = ya ? sb.from("crm_compras").update({importe: fila.importe, descripcion: fila.descripcion}).eq("id", ya.id) : sb.from("crm_compras").insert(fila);
+  const {data, error} = await q.select().single();
+  if (error) return "La propuesta se guardó, pero no se pudo pasar a venta: " + error.message;
+  if (ya) Object.assign(ya, data); else compras.unshift(data);
+  if (!ya) {
+    const {data: ld} = await sb.from("crm_leads").update({etapa: GANADO, valor: +pz.subtotal || 0}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld);
+    await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Propuesta ${pz.numero || ""} aceptada: pasa a venta por ${eur(pz.subtotal)} sin IVA`});
+  }
+  return null;
 }
 function editarPresupuesto(l, id) {
   const p = id ? presupuestos.find(x => x.id === id) : null;
@@ -937,12 +960,14 @@ function editarPresupuesto(l, id) {
   let lineas = p ? JSON.parse(JSON.stringify(p.lineas || [])) : [];
   const hoy = new Date(), val = new Date(hoy); val.setDate(val.getDate() + VALIDEZ_DIAS);
   const cats = [...new Set(cat.map(x => x.categoria || "Otros"))];
-  modal(`<h3>${p ? "Presupuesto " + esc(p.numero || "") : "Nuevo presupuesto"} · ${esc(l.empresa)}</h3>
+  const ficha = tieneFicha(l.proyecto_id), vendida = p && compraDePresu(p.id);
+  modal(`<h3>${p ? (ficha ? "Propuesta " : "Presupuesto ") + esc(p.numero || "") : (ficha ? "Nueva compra · propuesta" : "Nuevo presupuesto")} · ${esc(l.empresa)}</h3>
+    ${vendida ? `<p class="nota-ejemplo" style="margin-bottom:10px">✓ Esta propuesta ya está aceptada y apuntada como venta en la ficha de compra.</p>` : ""}
     <div class="rejilla-campos">
       <div class="campo"><label for="pz-fecha">Fecha</label><input id="pz-fecha" type="date" value="${p ? p.fecha : fechaISO(hoy)}"></div>
       <div class="campo"><label for="pz-validez">Válido hasta</label><input id="pz-validez" type="date" value="${p ? p.validez || "" : fechaISO(val)}"></div>
-      <div class="campo" style="grid-column:1/-1"><label for="pz-buscar">Añadir producto</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="pz-cat" style="max-width:170px"><option value="">Todas las categorías</option>${cats.map(c => `<option>${esc(c)}</option>`).join("")}</select><input id="pz-buscar" placeholder="Busca por referencia o nombre: BB-TOP, zócalo, omega…" style="flex:1;min-width:180px"></div>
-        <div id="pz-sugerencias" style="max-height:190px;overflow:auto;margin-top:6px;border:1px solid var(--linea);border-radius:10px"></div></div>
+      <div class="campo" style="grid-column:1/-1"><label for="pz-buscar">Catálogo ${esc(nomProy(l.proyecto_id))} · pulsa un producto para añadirlo</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="pz-cat" style="max-width:170px"><option value="">Todas las categorías</option>${cats.map(c => `<option>${esc(c)}</option>`).join("")}</select><input id="pz-buscar" placeholder="Busca por referencia o nombre: BB-TOP, zócalo, omega…" style="flex:1;min-width:180px"></div>
+        <div id="pz-sugerencias" style="max-height:300px;overflow:auto;margin-top:6px;border:1px solid var(--linea);border-radius:10px"></div></div>
       <div style="grid-column:1/-1;overflow:auto"><table id="pz-tabla" style="font-size:12.5px;width:100%"></table></div>
       <div id="pz-totales" style="grid-column:1/-1"></div>
       <div class="campo"><label for="pz-estado">Estado</label><select id="pz-estado">${Object.entries(ESTADO_PRESU).map(([k, v]) => `<option value="${k}" ${(p ? p.estado : "borrador") === k ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>
@@ -961,13 +986,17 @@ function editarPresupuesto(l, id) {
     if (p) Object.assign(p, data); else presupuestos.unshift(data);
     if (!p || p.estado !== data.estado) await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Presupuesto ${data.numero || ""} ${ESTADO_PRESU[data.estado][0].toLowerCase()}: ${eur(data.total)} con IVA`});
     if (!+l.valor || data.estado === "aceptado") { const {data: ld} = await sb.from("crm_leads").update({valor: data.subtotal}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); }
-    aviso(p ? "Presupuesto actualizado" : "Presupuesto guardado"); setTimeout(() => abrirLead(l.id), 0);
-  }, p ? "Guardar" : "Guardar presupuesto");
+    if (data.estado === "aceptado" && ficha) { const e = await pasarAVenta(l, data); if (e) return e; aviso("Propuesta aceptada: ya está en ventas"); }
+    else aviso(p ? "Propuesta actualizada" : "Propuesta guardada");
+    setTimeout(() => abrirLead(l.id), 0);
+  }, p ? "Guardar" : (ficha ? "Guardar propuesta" : "Guardar presupuesto"));
   const caja = $(".modal-caja"); if (caja) caja.style.maxWidth = "860px";
   const acc = $(".modal-acciones");
   const bPdf = document.createElement("button"); bPdf.type = "button"; bPdf.className = "btn"; bPdf.textContent = "⬇ PDF para el cliente"; bPdf.style.marginRight = "auto";
   bPdf.onclick = () => { if (!lineas.length) return aviso("Añade productos primero", true); imprimirPresupuesto(l, {numero: p ? p.numero : "(sin guardar)", fecha: $("#pz-fecha").value, validez: $("#pz-validez").value, lineas, notas: $("#pz-notas").value, creado_por: p ? p.creado_por : yo.id}); };
   acc.prepend(bPdf);
+  if (ficha && !vendida) { const bV = document.createElement("button"); bV.type = "button"; bV.className = "btn"; bV.style.color = "var(--ok)"; bV.textContent = "✓ Aceptada: pasar a venta"; bV.title = "Marca la propuesta como aceptada y la apunta como venta en la ficha de compra";
+    bV.onclick = () => { $("#pz-estado").value = "aceptado"; const ok = $(".modal-acciones button[type=submit]") || [...document.querySelectorAll(".modal-acciones button")].pop(); if (ok) ok.click(); }; bPdf.after(bV); }
   if (p && esDir()) botonBorrar("Borrar", async () => { if (!confirm("¿Borrar este presupuesto?")) return; const {error} = await sb.from("crm_presupuestos").delete().eq("id", p.id); if (error) return fallo(error, "No se pudo borrar"); presupuestos = presupuestos.filter(x => x.id !== p.id); cerrarCapa(); abrirLead(l.id); });
   const pintar = () => {
     const t = totalesPresu(lineas, l.proyecto_id); const er = $("#err"); if (er) er.hidden = true;
@@ -985,9 +1014,12 @@ function editarPresupuesto(l, id) {
   };
   const sugerir = () => {
     const q = normCab($("#pz-buscar").value), c = $("#pz-cat").value;
-    const res = cat.filter(x => (!c || (x.categoria || "Otros") === c) && (!q || normCab(x.ref + " " + x.nombre + " " + (x.codigo || "")).includes(q))).slice(0, 40);
-    $("#pz-sugerencias").innerHTML = res.map(x => `<div class="clic" data-add="${esc(x.id)}" style="display:flex;justify-content:space-between;gap:8px;padding:7px 10px;border-bottom:1px solid var(--linea);cursor:pointer;font-size:12.5px"><span><b style="font-weight:600">${esc(x.ref)}</b> · ${esc(x.nombre)}<small style="display:block;color:var(--texto3)">${esc(x.categoria || "")}${x.codigo ? " · cód. " + esc(x.codigo) : ""}</small></span><span style="white-space:nowrap">${x.precio_libre ? "Según proyecto" : eur(x.precio) + "/" + esc(x.unidad)}</span></div>`).join("") || `<div style="padding:8px 10px;color:var(--texto3);font-size:12.5px">Sin resultados.</div>`;
-    $("#pz-sugerencias").querySelectorAll("[data-add]").forEach(d => d.onclick = () => { const x = cat.find(y => y.id === d.dataset.add); const ya = lineas.find(li => li.id === x.id); if (ya) ya.cantidad = (+ya.cantidad || 0) + 1; else lineas.push({id: x.id, ref: x.ref, codigo: x.codigo, nombre: x.nombre, unidad: x.unidad, cantidad: 1, precio: +x.precio || 0, dto: 0, libre: !!x.precio_libre}); pintar(); });
+    const res = cat.filter(x => (!c || (x.categoria || "Otros") === c) && (!q || normCab(x.ref + " " + x.nombre + " " + (x.codigo || "") + " " + (x.detalle || "")).includes(q)));
+    let grupo = null;
+    $("#pz-sugerencias").innerHTML = res.map(x => { const g = x.categoria || "Otros", cab = g !== grupo ? `<div style="position:sticky;top:0;background:var(--panel2);padding:6px 10px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--texto2);border-bottom:1px solid var(--linea)">${esc(g)}</div>` : ""; grupo = g;
+      const ya = lineas.find(li => li.id === x.id);
+      return cab + `<div class="clic" data-add="${esc(x.id)}" style="display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-bottom:1px solid var(--linea);cursor:pointer;font-size:12.5px${ya ? ";background:rgba(201,168,76,.10)" : ""}"><span><b style="font-weight:600">${esc(x.ref)}</b> · ${esc(x.nombre)}${ya ? ` <span class="pildora p-ok">×${(+ya.cantidad || 0).toLocaleString("es-ES")}</span>` : ""}${x.detalle ? `<small style="display:block;color:var(--texto2);margin-top:2px">${esc(x.detalle)}</small>` : ""}<small style="display:block;color:var(--texto3)">${x.codigo ? "Ref. Bernad " + esc(x.codigo) : ""}</small></span><span style="white-space:nowrap;text-align:right"><b style="font-weight:600">${x.precio_libre ? "Según proyecto" : eur(x.precio)}</b>${x.precio_libre ? "" : `<small style="display:block;color:var(--texto3)">por ${esc(x.unidad)}</small>`}</span></div>`; }).join("") || `<div style="padding:8px 10px;color:var(--texto3);font-size:12.5px">Sin resultados.</div>`;
+    $("#pz-sugerencias").querySelectorAll("[data-add]").forEach(d => d.onclick = () => { const x = cat.find(y => y.id === d.dataset.add); const ya = lineas.find(li => li.id === x.id); if (ya) ya.cantidad = (+ya.cantidad || 0) + 1; else lineas.push({id: x.id, ref: x.ref, codigo: x.codigo, nombre: x.nombre, unidad: x.unidad, cantidad: 1, precio: +x.precio || 0, dto: 0, libre: !!x.precio_libre}); pintar(); sugerir(); });
   };
   $("#pz-buscar").oninput = sugerir; $("#pz-cat").onchange = sugerir; sugerir(); pintar();
 }
@@ -1013,7 +1045,7 @@ function imprimirPresupuesto(l, d) {
   <div class="doc"><h1>PRESUPUESTO</h1><div>Nº ${esc(d.numero || "—")}</div><div>Fecha: ${fecha(d.fecha)}</div><div>Válido hasta: ${fecha(d.validez)}</div></div></div>
   <div class="cli">Cliente<br><b>${esc(l.empresa)}</b>${l.contacto ? `<br>A la atención de ${esc(l.contacto)}` : ""}${l.email ? `<br>${esc(l.email)}` : ""}${l.telefono ? ` · ${esc(l.telefono)}` : ""}</div>
   <table><thead><tr><th>Referencia</th><th>Descripción</th><th class="n">Cantidad</th><th class="n">Precio</th><th class="n">Dto.</th><th class="n">Importe</th></tr></thead><tbody>
-  ${d.lineas.map(li => `<tr><td>${esc(li.ref)}${li.codigo ? `<br><span style="color:#8a93a3;font-size:9.5px">${esc(li.codigo)}</span>` : ""}</td><td>${esc(li.nombre)}</td><td class="n">${(+li.cantidad || 0).toLocaleString("es-ES")} ${esc(li.unidad)}</td><td class="n">${e2(li.precio)}</td><td class="n">${+li.dto ? (+li.dto).toLocaleString("es-ES") + " %" : "—"}</td><td class="n">${e2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</td></tr>`).join("")}
+  ${d.lineas.map(li => `<tr><td>${esc(li.ref)}${li.codigo ? `<br><span style="color:#8a93a3;font-size:9.5px">${esc(li.codigo)}</span>` : ""}</td><td>${esc(li.nombre)}${(() => { const x = catalogo.find(y => y.id === li.id); return x && x.detalle ? `<br><span style="color:#5b6475;font-size:9.5px">${esc(x.detalle)}</span>` : ""; })()}</td><td class="n">${(+li.cantidad || 0).toLocaleString("es-ES")} ${esc(li.unidad)}</td><td class="n">${e2(li.precio)}</td><td class="n">${+li.dto ? (+li.dto).toLocaleString("es-ES") + " %" : "—"}</td><td class="n">${e2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</td></tr>`).join("")}
   </tbody></table>
   <div class="tot"><div><span>Base imponible</span><span>${e2(t.sub)}</span></div><div><span>IVA ${IVA_PRESU} %</span><span>${e2(t.iva)}</span></div><div class="g"><span>TOTAL</span><span>${e2(t.total)}</span></div></div>
   ${d.notas ? `<div class="cond"><b>Condiciones</b>\n${esc(d.notas)}</div>` : ""}
@@ -1249,7 +1281,7 @@ async function abrirLead(id) {
     <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span></div>
       <form class="paso-form" id="f-paso"><input class="entrada" id="paso-accion" aria-label="Acción" value="${esc(l.proximo_paso || "Llamar")}"><input class="entrada" type="date" id="paso-fecha" aria-label="Fecha" value="${l.proximo_paso_fecha || ""}"><button class="btn" type="submit">Programar</button></form></div>
     <button class="btn" id="reunion-lead" style="align-self:flex-start">📅 Programar reunión</button>
-    ${catalogoDe(l.proyecto_id).length ? bloquePresupuestos(l) : ""}
+    ${catalogoDe(l.proyecto_id).length && !tieneFicha(l.proyecto_id) ? bloquePresupuestos(l) : ""}
     ${tieneFicha(l.proyecto_id) ? bloqueCompras(l) : ""}
     <div><div class="etiq" style="margin-bottom:8px">Registrar llamada</div><div class="filtros">${["Contestó", "No contestó", "Volver a llamar"].map(t => `<button class="chip" data-llamada="${t}">${t}</button>`).join("")}</div></div>
     <form id="f-nota"><div class="campo"><label for="nota-txt">Añadir nota</label><textarea id="nota-txt" placeholder="Qué ha pasado"></textarea></div><button class="btn" type="submit">Guardar nota</button></form>
