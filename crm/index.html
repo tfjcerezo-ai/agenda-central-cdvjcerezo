@@ -474,7 +474,7 @@ function comprasDe(leadsLista) {
   const out = [];
   leadsLista.forEach(l => {
     compras.filter(c => c.lead_id === l.id).forEach(c => out.push({...c, _lead: l}));
-    ventasDeLead(l).forEach(v => {
+    ventasDeLead(l).filter(v => !v.crm_compra_id).forEach(v => { // las que vienen de una compra del CRM ya están en la ficha
       const prod = (prodDeVenta(v) || {}).nombre || nomProy(proyDeVenta(v));
       const est = v.estado === "comision_cobrada" || v.estado === "cobrado" ? "cobrado" : "pedido";
       if (v.tipo_cobro === "mensual") fechasCuotas(v).forEach((f, i) => out.push({id: "v" + v.id + "-" + i, lead_id: l.id, fecha: f, producto: prod, descripcion: "Cuota mensual " + (i + 1), cantidad: 1, unidad: "mes", importe: v._cuota, estado: "cobrado", _venta: true, _lead: l}));
