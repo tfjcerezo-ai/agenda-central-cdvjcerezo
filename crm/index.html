@@ -350,6 +350,7 @@ td.num{white-space:nowrap}
       <button data-vista="pipeline">Pipeline <span class="cuenta" id="c-leads"></span></button>
       <button data-vista="calendario">Calendario</button>
       <button data-vista="contactos">Contactos</button>
+      <button data-vista="propuestas">Propuestas</button>
       <button data-vista="ventas" data-solo-director hidden>Ventas</button>
       <button data-vista="gastos" data-solo-director hidden>Gastos</button>
       <button data-vista="proyectos">Proyectos</button>
@@ -365,6 +366,7 @@ td.num{white-space:nowrap}
     <button data-vista="pipeline">Pipeline</button>
     <button data-vista="calendario">Calendario</button>
     <button data-vista="contactos">Contactos</button>
+    <button data-vista="propuestas">Propuestas</button>
     <button data-vista="proyectos">Proyectos</button>
     <button data-vista="ventas" data-solo-director hidden>Ventas</button>
     <button data-vista="gastos" data-solo-director hidden>Gastos</button>
@@ -733,6 +735,7 @@ function render() {
   if (vista === "equipo" && esDir()) m.innerHTML = vEquipo();
   if (vista === "proyectos") m.innerHTML = vProyectos();
   if (vista === "contactos") m.innerHTML = vContactos();
+  if (vista === "propuestas") m.innerHTML = vPropuestas();
   if (vista === "ventas" && veVentas()) m.innerHTML = vVentas();
   if (vista === "gastos" && esDir()) m.innerHTML = vGastos();
   if (vista === "calendario") m.innerHTML = vCalendario();
@@ -768,6 +771,9 @@ function enlazar(r) {
   r.querySelectorAll("[data-fgasto]").forEach(b => b.onclick = () => { filtroGasto = b.dataset.fgasto; render(); });
   const cg = $("#f-cat-gasto", r); if (cg) cg.onchange = () => { filtroGasto = cg.value || "todos"; render(); };
   r.querySelectorAll("[data-fcont]").forEach(b => b.onclick = () => { filtroContProy = b.dataset.fcont; render(); });
+  r.querySelectorAll("[data-fprop]").forEach(b => b.onclick = () => { filtroPropProy = b.dataset.fprop; render(); });
+  r.querySelectorAll("[data-fpest]").forEach(b => b.onclick = () => { filtroPropEstado = b.dataset.fpest; render(); });
+  r.querySelectorAll("[data-prop]").forEach(tr => tr.onclick = () => { const pz = presupuestos.find(x => x.id === +tr.dataset.prop); const l = pz && leads.find(x => x.id === pz.lead_id); if (l) editarPresupuesto(l, pz.id); });
   const bc = $("#buscar-cont", r); if (bc) bc.oninput = () => { busqContactos = bc.value; const pos = bc.selectionStart; render(); const n = $("#buscar-cont"); n.focus(); n.setSelectionRange(pos, pos); };
   const ex = $("#exportar-cont", r); if (ex) ex.onclick = exportarContactos;
   const exc = $("#exportar-compras", r); if (exc) exc.onclick = exportarCompras;
@@ -919,6 +925,19 @@ function vLista(Ls) {
 const IVA_PRESU = 21, VALIDEZ_DIAS = 30;
 const ESTADO_PRESU = {borrador: ["Borrador", "p-neutro"], enviado: ["Enviado", "p-aviso"], aceptado: ["Aceptado", "p-ok"], rechazado: ["Rechazado", "p-mal"]};
 const catalogoDe = (proy) => catalogo.filter(x => x.proyecto_id === proy);
+const fDMA = (s) => s ? String(s).slice(0, 10).split("-").reverse().join("-") : "";
+let filtroPropProy = "todos", filtroPropEstado = "";
+/* Avisos de precio: línea de catálogo por encima de tarifa o con más de un 10 % de descuento sobre tarifa */
+function avisosPrecio(lineas) {
+  const out = [];
+  lineas.forEach(li => { const x = catalogo.find(y => y.id === li.id); if (!x || x.precio_libre || !(+x.precio > 0) || li.fuera) return;
+    const ef = (+li.precio || 0) * (1 - (+li.dto || 0) / 100), d = ef / +x.precio - 1;
+    if (!(+li.cantidad > 0)) out.push({id: li.id, txt: `${li.ref}: cantidad 0`});
+    else if (d > 0.0005) out.push({id: li.id, txt: `${li.ref} a ${eur(ef)}, su tarifa es ${eur(x.precio)} (+${(d * 100).toLocaleString("es-ES", {maximumFractionDigits: 1})} %)`});
+    else if (d < -0.10) out.push({id: li.id, txt: `${li.ref} a ${eur(ef)}, su tarifa es ${eur(x.precio)} (${(d * 100).toLocaleString("es-ES", {maximumFractionDigits: 1})} %)`});
+  });
+  return out;
+}
 const veNeta = (proy) => esDir() || esSocio(proy);
 const totalesPresu = (lineas, proy) => {
   let sub = 0, neta = 0, subNeta = 0, sinNeta = 0, bajoNeta = [];
@@ -935,8 +954,8 @@ function listaPropuestas(l) {
 }
 function bloquePresupuestos(l) {
   const ps = presupuestos.filter(p => p.lead_id === l.id);
-  return `<div><div class="etiq" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">Presupuestos <button class="btn" id="nuevo-presupuesto" type="button">+ Nuevo presupuesto</button></div>
-    ${ps.length ? `<ul class="lista">${ps.map(p => `<li class="clic" data-presupuesto="${p.id}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>${esc(p.numero || "Presupuesto")} · ${fF(p.fecha)}<small style="display:block;color:var(--texto3)">${(p.lineas || []).length} líneas</small></span><span style="text-align:right"><b style="font-weight:600">${eur(p.total)}</b><br><span class="pildora ${(ESTADO_PRESU[p.estado] || ["", "p-neutro"])[1]}">${(ESTADO_PRESU[p.estado] || [p.estado])[0]}</span></span></li>`).join("")}</ul>` : `<p style="font-size:13px;color:var(--texto3)">Sin presupuestos todavía.</p>`}</div>`;
+  return `<div><div class="etiq" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">Propuestas <button class="btn" id="nuevo-presupuesto" type="button">+ Nueva propuesta</button></div>
+    ${ps.length ? `<ul class="lista">${ps.map(p => `<li class="clic" data-presupuesto="${p.id}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>${esc(p.numero || "Presupuesto")} · ${fF(p.fecha)}<small style="display:block;color:var(--texto3)">${(p.lineas || []).length} líneas</small></span><span style="text-align:right"><b style="font-weight:600">${eur(p.total)}</b><br><span class="pildora ${(ESTADO_PRESU[p.estado] || ["", "p-neutro"])[1]}">${(ESTADO_PRESU[p.estado] || [p.estado])[0]}</span></span></li>`).join("")}</ul>` : `<p style="font-size:13px;color:var(--texto3)">Sin propuestas todavía.</p>`}</div>`;
 }
 /* Propuesta aceptada → venta: se apunta en la ficha de compra (pedido) y el lead pasa a Cierre ganado */
 async function pasarAVenta(l, pz) {
@@ -960,6 +979,7 @@ function editarPresupuesto(l, id) {
   let lineas = p ? JSON.parse(JSON.stringify(p.lineas || [])) : [];
   const hoy = new Date(), val = new Date(hoy); val.setDate(val.getDate() + VALIDEZ_DIAS);
   const cats = [...new Set(cat.map(x => x.categoria || "Otros"))];
+  let avisosOk = "";
   const ficha = tieneFicha(l.proyecto_id), vendida = p && compraDePresu(p.id);
   modal(`<h3>${p ? (ficha ? "Propuesta " : "Presupuesto ") + esc(p.numero || "") : (ficha ? "Nueva compra · propuesta" : "Nuevo presupuesto")} · ${esc(l.empresa)}</h3>
     ${vendida ? `<p class="nota-ejemplo" style="margin-bottom:10px">✓ Esta propuesta ya está aceptada y apuntada como venta en la ficha de compra.</p>` : ""}
@@ -967,7 +987,7 @@ function editarPresupuesto(l, id) {
       <div class="campo"><label for="pz-fecha">Fecha</label><input id="pz-fecha" type="date" value="${p ? p.fecha : fechaISO(hoy)}"></div>
       <div class="campo"><label for="pz-numero">Nº de oferta</label><input id="pz-numero" value="${esc(p ? p.numero || "" : "")}" placeholder="Automático (p. ej. JB-261016-01)"></div>
       <div class="campo"><label for="pz-validez">Válido hasta</label><input id="pz-validez" type="date" value="${p ? p.validez || "" : fechaISO(val)}"></div>
-      <div class="campo" style="grid-column:1/-1"><label for="pz-buscar">Catálogo ${esc(nomProy(l.proyecto_id))} · pulsa un producto para añadirlo</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="pz-cat" style="max-width:170px"><option value="">Todas las categorías</option>${cats.map(c => `<option>${esc(c)}</option>`).join("")}</select><input id="pz-buscar" placeholder="Busca por referencia o nombre: BB-TOP, zócalo, omega…" style="flex:1;min-width:180px"></div>
+      <div class="campo" style="grid-column:1/-1${cat.length ? "" : ";display:none"}"><label for="pz-buscar">Catálogo ${esc(nomProy(l.proyecto_id))} · pulsa un producto para añadirlo</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="pz-cat" style="max-width:170px"><option value="">Todas las categorías</option>${cats.map(c => `<option>${esc(c)}</option>`).join("")}</select><input id="pz-buscar" placeholder="Busca por referencia o nombre: BB-TOP, zócalo, omega…" style="flex:1;min-width:180px"></div>
         <div id="pz-sugerencias" style="max-height:300px;overflow:auto;margin-top:6px;border:1px solid var(--linea);border-radius:10px"></div></div>
       <div style="grid-column:1/-1;overflow:auto"><table id="pz-tabla" style="font-size:12.5px;width:100%"></table></div>
       <div id="pz-totales" style="grid-column:1/-1"></div>
@@ -977,6 +997,8 @@ function editarPresupuesto(l, id) {
     if (!lineas.length) return "Añade al menos un producto.";
     if (lineas.some(li => li.libre && !(+li.precio > 0))) return "Pon el precio de las líneas sin precio de catálogo (carrilería, portes…).";
     const t = totalesPresu(lineas, l.proyecto_id);
+    const av = avisosPrecio(lineas), clave = av.map(a => a.txt).join("|");
+    if (av.length && avisosOk !== clave) { avisosOk = clave; return "⚠ Revisa estos precios antes de guardar: " + av.map(a => a.txt).join(" · ") + ". Si es intencionado, pulsa Guardar otra vez."; }
     if (t.bajoNeta.length) return "Hay líneas por debajo de la tarifa neta de Bernad (" + t.bajoNeta.join(", ") + "). Reduce el descuento.";
     const fila = {lead_id: l.id, proyecto_id: l.proyecto_id, fecha: $("#pz-fecha").value || fechaISO(hoy), validez: $("#pz-validez").value || null, estado: $("#pz-estado").value,
       lineas: lineas.map(li => ({id: li.id, ref: li.ref, codigo: li.codigo || null, nombre: li.nombre, unidad: li.unidad, cantidad: +li.cantidad || 0, precio: +li.precio || 0, dto: +li.dto || 0, libre: !!li.libre, fuera: !!li.fuera})),
@@ -986,7 +1008,8 @@ function editarPresupuesto(l, id) {
     const {data, error} = await q.select().single();
     if (error) return "No se pudo guardar: " + error.message;
     if (p) Object.assign(p, data); else presupuestos.unshift(data);
-    if (!p || p.estado !== data.estado) await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Presupuesto ${data.numero || ""} ${ESTADO_PRESU[data.estado][0].toLowerCase()}: ${eur(data.total)} con IVA`});
+    if (!p || p.estado !== data.estado) { const verbo = {borrador: "preparada", enviado: "enviada", aceptado: "aceptada", rechazado: "rechazada"}[data.estado] || data.estado;
+      await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Propuesta ${data.numero || ""} ${verbo} el ${fDMA(fechaISO(new Date()))}: ${eur(data.subtotal)} + IVA (${eur(data.total)})`}); }
     if (!+l.valor || data.estado === "aceptado") { const {data: ld} = await sb.from("crm_leads").update({valor: data.subtotal}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); }
     if (data.estado === "aceptado" && ficha) { const e = await pasarAVenta(l, data); if (e) return e; aviso("Propuesta aceptada: ya está en ventas"); }
     else aviso(p ? "Propuesta actualizada" : "Propuesta guardada");
@@ -995,10 +1018,10 @@ function editarPresupuesto(l, id) {
   const caja = $(".modal-caja"); if (caja) caja.style.maxWidth = "860px";
   const acc = $(".modal-acciones");
   const bPdf = document.createElement("button"); bPdf.type = "button"; bPdf.className = "btn"; bPdf.textContent = "⬇ PDF para el cliente"; bPdf.style.marginRight = "auto";
-  bPdf.onclick = () => { if (!lineas.length) return aviso("Añade productos primero", true); imprimirPresupuesto(l, {numero: $("#pz-numero").value.trim() || (p ? p.numero : "(sin guardar)"), fecha: $("#pz-fecha").value, validez: $("#pz-validez").value, lineas, notas: $("#pz-notas").value, creado_por: p ? p.creado_por : yo.id}); };
+  bPdf.onclick = () => { if (!lineas.length) return aviso("Añade productos primero", true); const av = avisosPrecio(lineas); if (av.length && !confirm("Revisa estos precios:\n\n" + av.map(a => "• " + a.txt).join("\n") + "\n\n¿Sacar el PDF igualmente?")) return; imprimirPresupuesto(l, {numero: $("#pz-numero").value.trim() || (p ? p.numero : "(sin guardar)"), fecha: $("#pz-fecha").value, validez: $("#pz-validez").value, lineas, notas: $("#pz-notas").value, creado_por: p ? p.creado_por : yo.id}); };
   acc.prepend(bPdf);
-  const bLib = document.createElement("button"); bLib.type = "button"; bLib.className = "btn"; bLib.textContent = "+ Portes / línea libre";
-  bLib.onclick = () => { lineas.push({id: "libre-" + Date.now(), ref: "—", codigo: null, nombre: "Portes", unidad: "ud", cantidad: 1, precio: 0, dto: 0, libre: true, fuera: true}); pintar(); };
+  const bLib = document.createElement("button"); bLib.type = "button"; bLib.className = "btn"; bLib.textContent = cat.length ? "+ Portes / línea libre" : "+ Añadir línea";
+  bLib.onclick = () => { lineas.push({id: "libre-" + Date.now(), ref: "—", codigo: null, nombre: cat.length ? "Portes" : "Concepto", unidad: "ud", cantidad: 1, precio: 0, dto: 0, libre: true, fuera: true}); pintar(); };
   bPdf.after(bLib);
   if (ficha && !vendida) { const bV = document.createElement("button"); bV.type = "button"; bV.className = "btn"; bV.style.color = "var(--ok)"; bV.textContent = "✓ Aceptada: pasar a venta"; bV.title = "Marca la propuesta como aceptada y la apunta como venta en la ficha de compra";
     bV.onclick = () => { $("#pz-estado").value = "aceptado"; const ok = $(".modal-acciones button[type=submit]") || [...document.querySelectorAll(".modal-acciones button")].pop(); if (ok) ok.click(); }; bPdf.after(bV); }
@@ -1006,13 +1029,15 @@ function editarPresupuesto(l, id) {
   const pintar = () => {
     const t = totalesPresu(lineas, l.proyecto_id); const er = $("#err"); if (er) er.hidden = true;
     $("#pz-tabla").innerHTML = lineas.length ? `<thead><tr><th>Ref.</th><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Dto. %</th><th class="num">Importe</th><th></th></tr></thead><tbody>${lineas.map((li, i) => { const n = netas[li.id], bajo = n && (+li.precio || 0) * (1 - (+li.dto || 0) / 100) < +n.neta - 0.0001;
-      return `<tr${bajo ? ` style="background:rgba(255,90,90,.08)"` : ""}><td>${esc(li.ref)}</td><td><textarea data-li="${i}" data-k="nombre" rows="${li.nombre.length > 60 ? 3 : 1}" style="width:100%;min-width:200px;font-size:12.5px;resize:vertical">${esc(li.nombre)}</textarea><small style="display:block;color:var(--texto3)">${esc(li.unidad)}${conNeta && n ? ` · neta ${eur(n.neta)}` : ""}</small></td>
+      const avi = avisosPrecio([li]).length;
+      return `<tr${bajo ? ` style="background:rgba(255,90,90,.08)"` : avi ? ` style="background:rgba(242,210,27,.10)" title="Precio fuera de tarifa: revísalo"` : ""}><td>${esc(li.ref)}</td><td><textarea data-li="${i}" data-k="nombre" rows="${li.nombre.length > 60 ? 3 : 1}" style="width:100%;min-width:200px;font-size:12.5px;resize:vertical">${esc(li.nombre)}</textarea><small style="display:block;color:var(--texto3)">${esc(li.unidad)}${conNeta && n ? ` · neta ${eur(n.neta)}` : ""}</small></td>
       <td class="num"><input data-li="${i}" data-k="cantidad" type="number" min="0" step="0.01" value="${li.cantidad}" style="width:70px"></td>
       <td class="num"><input data-li="${i}" data-k="precio" type="number" min="0" step="0.01" value="${li.precio || ""}" placeholder="Precio" style="width:84px"></td>
       <td class="num"><input data-li="${i}" data-k="dto" type="number" min="0" max="100" step="0.5" value="${li.dto || 0}" style="width:60px"></td>
       <td class="num"><b style="font-weight:600">${eur((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</b></td>
       <td><button type="button" class="btn-texto" data-quitar="${i}" aria-label="Quitar ${esc(li.ref)}">✕</button></td></tr>`; }).join("")}</tbody>` : `<tr><td style="color:var(--texto3)">Busca y pulsa un producto para añadirlo.</td></tr>`;
-    $("#pz-totales").innerHTML = `<div class="fila-liq"><span>Subtotal (sin IVA)</span><b>${eur(t.sub)}</b></div><div class="fila-liq"><span>IVA ${IVA_PRESU} %</span><b>${eur(t.iva)}</b></div><div class="fila-liq total"><span>Total</span><b>${eur(t.total)}</b></div>
+    const avs = avisosPrecio(lineas);
+    $("#pz-totales").innerHTML = (avs.length ? `<div style="margin-bottom:10px;padding:10px 12px;border:1px solid rgba(242,210,27,.5);border-radius:10px;font-size:12.5px;background:rgba(242,210,27,.07)"><b>⚠ Revisa estos precios</b> (si es aposta, no pasa nada):<br>${avs.map(a => "• " + esc(a.txt)).join("<br>")}</div>` : "") + `<div class="fila-liq"><span>Subtotal (sin IVA)</span><b>${eur(t.sub)}</b></div><div class="fila-liq"><span>IVA ${IVA_PRESU} %</span><b>${eur(t.iva)}</b></div><div class="fila-liq total"><span>Total</span><b>${eur(t.total)}</b></div>
       ${t.conNeta ? `<div style="margin-top:10px;padding:10px 12px;border:1px dashed var(--linea);border-radius:10px;font-size:12.5px"><b>Solo para ti (no sale en el PDF):</b> neta Bernad ${eur(t.neta)} · comisión total <b style="color:var(--bien)">${eur(t.comision)}</b> · tu parte (50 %) <b>${eur(t.comision / 2)}</b>${t.sinNeta ? `<br><span style="color:var(--aviso)">${t.sinNeta} línea(s) sin neta (carrilería) no cuentan en la comisión.</span>` : ""}${t.bajoNeta.length ? `<br><span style="color:var(--mal)">⚠ Por debajo de la neta: ${esc(t.bajoNeta.join(", "))}. No se puede guardar así.</span>` : ""}</div>` : ""}`;
     $("#pz-tabla").querySelectorAll("input[data-li], textarea[data-li]").forEach(inp => inp.onchange = () => { const li = lineas[+inp.dataset.li]; if (inp.dataset.k === "nombre") { li.nombre = inp.value.trim() || li.nombre; return; } li[inp.dataset.k] = Math.max(0, +inp.value || 0); if (inp.dataset.k === "dto") li.dto = Math.min(100, li.dto); pintar(); });
     $("#pz-tabla").querySelectorAll("[data-quitar]").forEach(b => b.onclick = () => { lineas.splice(+b.dataset.quitar, 1); pintar(); });
@@ -1035,6 +1060,10 @@ function imprimirPresupuesto(l, d) {
   const firma = esJavi ? `<b>Javier Cerezo</b><br>Gestor de cuentas en desarrollo, España y Portugal<br>670 86 56 67` : `<b>${esc(autor.nombre || "")}</b><br>${esc(autor.email || "")}`;
   const fecha = (s) => s ? new Date(s + "T00:00").toLocaleDateString("es-ES", {day: "2-digit", month: "long", year: "numeric"}) : "—";
   const e2 = (n) => (+n || 0).toLocaleString("es-ES", {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " €";
+  const esBernad = l.proyecto_id === "jose-bernad";
+  const logoCdv = (document.querySelector(".lateral img") || {}).src || "";
+  const cabMarca = esBernad ? `<img src="${location.origin}/crm/logo-bernad.png" alt="Bernad" style="height:70px;display:block;margin-bottom:4px"><small>José Bernad S.L. · Protecciones industriales y perfilería sanitaria<br>www.josebernad.com · comercial@josebernad.com</small>`
+    : `${logoCdv ? `<img src="${logoCdv}" alt="CDV by JCerezo" style="height:70px;display:block;margin-bottom:4px">` : "CDV by JCerezo"}<small>CDV by JCerezo · ${esc(nomProy(l.proyecto_id))}<br>www.cdvbyjcerezo.com · javier@cdvbyjcerezo.com · 670 86 56 67</small>`;
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Presupuesto ${esc(d.numero || "")} · ${esc(l.empresa)}</title>
   <style>@page{size:A4;margin:16mm 14mm}body{font-family:Helvetica,Arial,sans-serif;color:#1d2433;font-size:11.5px;margin:0}
   .cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1d4f91;padding-bottom:12px;margin-bottom:18px}
@@ -1046,7 +1075,7 @@ function imprimirPresupuesto(l, d) {
   .tot{margin-left:auto;width:270px;margin-top:12px}.tot div{display:flex;justify-content:space-between;padding:5px 0}.tot .g{border-top:2px solid #1d2433;font-size:14px;font-weight:700;margin-top:4px;padding-top:8px}
   .cond{margin-top:22px;font-size:10.5px;color:#4a5263;white-space:pre-line}.firma{margin-top:30px;font-size:11px;line-height:1.5}
   .pie{margin-top:26px;border-top:1px solid #e3e8f0;padding-top:8px;font-size:9.5px;color:#8a93a3;text-align:center}</style></head><body>
-  <div class="cab"><div class="marca"><img src="${location.origin}/crm/logo-bernad.png" alt="Bernad" style="height:70px;display:block;margin-bottom:4px"><small>José Bernad S.L. · Protecciones industriales y perfilería sanitaria<br>www.josebernad.com · comercial@josebernad.com</small></div>
+  <div class="cab"><div class="marca">${cabMarca}</div>
   <div class="doc"><h1>PRESUPUESTO</h1><div>Nº ${esc(d.numero || "—")}</div><div>Fecha: ${fecha(d.fecha)}</div><div>Válido hasta: ${fecha(d.validez)}</div></div></div>
   <div class="cli">Cliente<br><b>${esc(l.empresa)}</b>${l.contacto ? `<br>A la atención de ${esc(l.contacto)}` : ""}${l.cif ? `<br>CIF: ${esc(l.cif)}` : ""}${l.direccion ? `<br>${esc(l.direccion)}` : ""}${(l.movil || l.telefono) ? `<br>Tel.: ${esc(l.movil || l.telefono)}` : ""}${l.email ? ` · ${esc(l.email)}` : ""}</div>
   <table><thead><tr><th>Referencia</th><th>Descripción</th><th class="n">Cantidad</th><th class="n">Precio</th><th class="n">Dto.</th><th class="n">Importe</th></tr></thead><tbody>
@@ -1286,7 +1315,7 @@ async function abrirLead(id) {
     <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span></div>
       <form class="paso-form" id="f-paso"><input class="entrada" id="paso-accion" aria-label="Acción" value="${esc(l.proximo_paso || "Llamar")}"><input class="entrada" type="date" id="paso-fecha" aria-label="Fecha" value="${l.proximo_paso_fecha || ""}"><button class="btn" type="submit">Programar</button></form></div>
     <button class="btn" id="reunion-lead" style="align-self:flex-start">📅 Programar reunión</button>
-    ${catalogoDe(l.proyecto_id).length && !tieneFicha(l.proyecto_id) ? bloquePresupuestos(l) : ""}
+    ${catalogoDe(l.proyecto_id).length && tieneFicha(l.proyecto_id) ? "" : bloquePresupuestos(l)}
     ${tieneFicha(l.proyecto_id) ? bloqueCompras(l) : ""}
     <div><div class="etiq" style="margin-bottom:8px">Registrar llamada</div><div class="filtros">${["Contestó", "No contestó", "Volver a llamar"].map(t => `<button class="chip" data-llamada="${t}">${t}</button>`).join("")}</div></div>
     <form id="f-nota"><div class="campo"><label for="nota-txt">Añadir nota</label><textarea id="nota-txt" placeholder="Qué ha pasado"></textarea></div><button class="btn" type="submit">Guardar nota</button></form>
@@ -1483,6 +1512,31 @@ function contactosAgrupados() {
     .filter(c => filtroContProy === "todos" || c.leads.some(l => pasaFiltro(l.proyecto_id, filtroContProy)) || c.ventas.some(v => pasaFiltro(proyDeVenta(v), filtroContProy)))
     .filter(c => !q || [c.empresa, c.contactos.join(" "), c.cargo, c.telefono, c.movil, c.email, c.tipo, c.ciudad].join(" ").toLowerCase().includes(q))
     .sort((a, b) => (a.empresa || "").localeCompare(b.empresa || "", "es"));
+}
+function vPropuestas() {
+  const hoy = fechaISO(new Date());
+  const base = presupuestos.filter(p => { const l = leads.find(x => x.id === p.lead_id); return l && pasaFiltro(l.proyecto_id, filtroPropProy); });
+  const lista = base.filter(p => !filtroPropEstado || (filtroPropEstado === "caducada" ? (p.estado === "enviado" && p.validez && p.validez < hoy) : p.estado === filtroPropEstado))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || b.id - a.id);
+  const suma = (arr) => arr.reduce((s, p) => s + (+p.subtotal || 0), 0);
+  const env = base.filter(p => p.estado === "enviado"), ace = base.filter(p => p.estado === "aceptado"), rec = base.filter(p => p.estado === "rechazado");
+  const tasa = ace.length + rec.length ? Math.round(ace.length / (ace.length + rec.length) * 100) : null;
+  const est = (k, t) => `<button class="chip" data-fpest="${k}" aria-pressed="${filtroPropEstado === k}">${t}</button>`;
+  return `<div class="cabecera"><div><h2>Propuestas</h2><div class="sub">Todas las propuestas enviadas, de cualquier proyecto · importes sin IVA</div></div></div>
+  <div class="cifras" style="margin-bottom:14px">
+    <div class="cifra"><div class="etiq">Enviadas pendientes</div><div class="num">${env.length}</div><div class="det">${eur(suma(env))} en juego</div></div>
+    <div class="cifra bien"><div class="etiq">Aceptadas</div><div class="num">${ace.length}</div><div class="det">${eur(suma(ace))}</div></div>
+    <div class="cifra"><div class="etiq">Tasa de aceptación</div><div class="num">${tasa != null ? tasa + " %" : "—"}</div><div class="det">${ace.length} aceptadas · ${rec.length} rechazadas</div></div>
+  </div>
+  <div class="barra-herr"><div class="izq">${chipsProyecto("fprop", filtroPropProy)}</div></div>
+  <div class="filtros" style="margin-bottom:12px">${est("", "Todas")}${est("borrador", "Borrador")}${est("enviado", "Enviadas")}${est("caducada", "Caducadas sin respuesta")}${est("aceptado", "Aceptadas")}${est("rechazado", "Rechazadas")}</div>
+  <div class="tabla-env"><table><thead><tr><th>Nº</th><th>Cliente</th><th>Proyecto</th><th>Fecha</th><th>Válida hasta</th><th class="num">Base</th><th class="num">Total</th><th>Estado</th>${esDir() ? "<th>Preparada por</th>" : ""}</tr></thead><tbody>
+  ${lista.length ? lista.map(p => { const l = leads.find(x => x.id === p.lead_id) || {}; const cad = p.estado === "enviado" && p.validez && p.validez < hoy; const e = ESTADO_PRESU[p.estado] || [p.estado, "p-neutro"];
+    return `<tr class="clic" data-prop="${p.id}"><td><b style="font-weight:600">${esc(p.numero || "—")}</b></td><td>${esc(l.empresa || "")}<small style="display:block;color:var(--texto3)">${esc(l.contacto || "")}</small></td><td><span class="area dir">${etiquetaProy(l.proyecto_id)}</span></td>
+      <td>${fDMA(p.fecha)}</td><td${cad ? ` style="color:var(--mal)" title="Caducada: llama al cliente"` : ""}>${fDMA(p.validez) || "—"}${cad ? " ⚠" : ""}</td><td class="num">${eur(p.subtotal)}</td><td class="num"><b style="font-weight:600">${eur(p.total)}</b></td>
+      <td><span class="pildora ${e[1]}">${e[0]}</span>${compraDePresu(p.id) ? ` <small style="color:var(--ok)">· en ventas</small>` : ""}</td>${esDir() ? `<td>${esc(nomPersona(p.creado_por) || "—")}</td>` : ""}</tr>`; }).join("")
+    : `<tr><td colspan="9">No hay propuestas${filtroPropProy !== "todos" || filtroPropEstado ? " con este filtro" : " todavía. Se crean desde la ficha de cada lead"}.</td></tr>`}
+  </tbody></table></div>`;
 }
 function vContactos() {
   const lista = contactosAgrupados();
