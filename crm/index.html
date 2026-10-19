@@ -466,9 +466,10 @@ function cuotasDevengadas(v, hasta) {
 function fechasCuotas(v) { const ini = aFecha(String(v.inicio_cuotas || v.fecha_cobro || "").slice(0, 10)); const n = v._cuotas || 0; return [...Array(n)].map((_, i) => { const d = new Date(ini); d.setMonth(d.getMonth() + i); return fechaISO(d); }); }
 // En el CRM las ventas son solo de lectura: se escalan al cargar (importe y comisiones = cuota × cuotas devengadas)
 function escalarVenta(v) {
-  if (v.tipo_cobro !== "mensual") return {...v, _cuota: null, _cuotas: 1};
+  if (v._raw) v = v._raw;
+  if (v.tipo_cobro !== "mensual") return {...v, _raw: v, _cuota: null, _cuotas: 1};
   const f = cuotasDevengadas(v), x = (k) => r2((+v[k] || 0) * f);
-  return {...v, _cuota: +v.importe || 0, _cuotas: f, importe: x("importe"), com_cdv: x("com_cdv"), com_closer: x("com_closer"), com_closer2: x("com_closer2"), com_setter: x("com_setter")};
+  return {...v, _raw: v, _cuota: +v.importe || 0, _cuotas: f, importe: x("importe"), com_cdv: x("com_cdv"), com_closer: x("com_closer"), com_closer2: x("com_closer2"), com_setter: x("com_setter")};
 }
 // Compras de un cliente: las apuntadas a mano + las ventas registradas en la agenda (las mensuales, una por cuota)
 function ventasDeLead(l) { const k = normEmp(l.empresa); return ventas.filter(v => normEmp(v.cliente) === k && proyDeVenta(v) === l.proyecto_id); }
@@ -756,6 +757,7 @@ function enlazar(r) {
   r.querySelectorAll("[data-factura]").forEach(b => b.onclick = () => editarFactura(+b.dataset.factura));
   const nf = $("#nueva-factura", r); if (nf) nf.onclick = () => editarFactura(null);
   r.querySelectorAll("[data-fventa]").forEach(b => b.onclick = () => { filtroVentas = b.dataset.fventa; render(); });
+  r.querySelectorAll("[data-venta]").forEach(tr => tr.onclick = () => editarVenta(tr.dataset.venta));
   r.querySelectorAll("[data-mmet]").forEach(b => b.onclick = () => { metricaMes = b.dataset.mmet; render(); });
   r.querySelectorAll("[data-manio]").forEach(b => b.onclick = () => { anioMes += +b.dataset.manio; render(); });
   r.querySelectorAll("[data-vpipe]").forEach(b => b.onclick = () => { vistaPipe = b.dataset.vpipe; try { localStorage.setItem("crm_vista_pipe", vistaPipe); } catch (e) {} render(); });
@@ -1663,6 +1665,48 @@ function bloqueMeses(vs) {
     </tbody></table></div>
     <p style="font-size:12px;color:var(--texto3);margin-top:8px">${metricaMes === "cdv" ? "Lo que ingresa CDV by JCerezo: comisiones como empresa, comisiones de Javier como closer/setter e ingresos de eventos (base sin IVA)." : "Importe vendido al cliente final (en Eventos coincide con el ingreso)."} Cada venta cuenta en el mes de su fecha de cobro; las mensuales, una cuota por mes.</p></div>`;
 }
+function editarVenta(id) {
+  const v0 = ventas.find(x => String(x.id) === String(id)); if (!v0 || !esDir()) return;
+  const v = v0._raw || v0, mensual = v.tipo_cobro === "mensual";
+  const nombres = [...new Set([...perfiles.map(p => p.nombre), ...ventas.flatMap(x => [x.closer, x.setter, x.closer2])].filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+  const optP = (sel) => `<option value="">—</option>` + nombres.map(n => `<option ${n === sel ? "selected" : ""}>${esc(n)}</option>`).join("");
+  const f = (k) => v[k] == null ? "" : v[k];
+  modal(`<h3>Editar venta · ${esc(v.cliente)}</h3>
+    <p class="nota-ejemplo" style="margin-bottom:10px">${mensual ? "Venta de pago mensual: el importe y las comisiones son <b>por cuota</b>. El total se calcula solo según las cuotas que ya han vencido." : "Venta de pago único."} Los cambios se ven también en Agenda Central.</p>
+    <div class="rejilla-campos">
+      <div class="campo"><label for="ve-cliente">Cliente</label><input id="ve-cliente" value="${esc(f("cliente"))}"></div>
+      <div class="campo"><label for="ve-estado">Estado</label><select id="ve-estado">${Object.entries(ESTADO_VENTA).map(([k, e]) => `<option value="${k}" ${v.estado === k ? "selected" : ""}>${e[0]}</option>`).join("")}</select></div>
+      <div class="campo"><label for="ve-closer">Closer</label><select id="ve-closer">${optP(v.closer)}</select></div>
+      <div class="campo"><label for="ve-setter">Setter</label><select id="ve-setter">${optP(v.setter)}</select></div>
+      <div class="campo"><label for="ve-importe">${mensual ? "Cuota mensual (€)" : "Importe (€)"}</label><input id="ve-importe" type="number" step="0.01" min="0" value="${f("importe")}"></div>
+      <div class="campo"><label for="ve-cobro">Fecha de cobro</label><input id="ve-cobro" type="date" value="${String(f("fecha_cobro")).slice(0, 10)}"></div>
+      ${mensual ? `<div class="campo"><label for="ve-ini">Primera cuota</label><input id="ve-ini" type="date" value="${String(f("inicio_cuotas")).slice(0, 10)}"></div>
+      <div class="campo"><label for="ve-fin">Baja (última cuota)</label><input id="ve-fin" type="date" value="${String(f("fin_cuotas")).slice(0, 10)}"></div>` : ""}
+      <div class="campo"><label for="ve-cdv">Com. CDV by JCerezo (€${mensual ? "/cuota" : ""})</label><input id="ve-cdv" type="number" step="0.01" value="${f("com_cdv")}"></div>
+      <div class="campo"><label for="ve-ccl">Com. closer (€${mensual ? "/cuota" : ""})</label><input id="ve-ccl" type="number" step="0.01" value="${f("com_closer")}"></div>
+      <div class="campo"><label for="ve-cst">Com. setter (€${mensual ? "/cuota" : ""})</label><input id="ve-cst" type="number" step="0.01" value="${f("com_setter")}"></div>
+      <div class="campo" style="align-self:end"><button type="button" class="btn" id="ve-recalc">Recalcular con los % del proyecto</button></div>
+      <div class="campo" style="grid-column:1/-1"><label for="ve-notas">Notas</label><textarea id="ve-notas" rows="2">${esc(f("notas"))}</textarea></div>
+      <p class="nota-ejemplo" id="ve-info" style="grid-column:1/-1"></p>
+    </div>`, async () => {
+    const num = (k) => { const x = $(k).value; return x === "" ? 0 : r2(+x); };
+    const fila = {cliente: $("#ve-cliente").value.trim() || v.cliente, estado: $("#ve-estado").value, closer: $("#ve-closer").value, setter: $("#ve-setter").value,
+      importe: num("#ve-importe"), fecha_cobro: $("#ve-cobro").value || v.fecha_cobro, com_cdv: num("#ve-cdv"), com_closer: num("#ve-ccl"), com_setter: num("#ve-cst"), notas: $("#ve-notas").value.trim() || null};
+    if (mensual) { fila.inicio_cuotas = $("#ve-ini").value || null; fila.fin_cuotas = $("#ve-fin").value || null; }
+    const {data, error} = await sb.from("ventas").update(fila).eq("id", v.id).select().single();
+    if (error) return "No se pudo guardar: " + error.message;
+    const i = ventas.findIndex(x => String(x.id) === String(v.id)); if (i >= 0) ventas[i] = escalarVenta(data);
+    aviso("Venta actualizada"); setTimeout(render, 0);
+  }, "Guardar");
+  $("#ve-recalc").onclick = () => {
+    const py = proyectos.find(x => x.id === proyDeVenta(v)), pr = prodDeVenta(v), src = pr || py;
+    if (!src) { $("#ve-info").textContent = "No encuentro los porcentajes de este proyecto."; return; }
+    const imp = +$("#ve-importe").value || 0;
+    $("#ve-cdv").value = r2(imp * (+src.com_cdv || 0) / 100); $("#ve-ccl").value = r2(imp * (+src.com_closer || 0) / 100); $("#ve-cst").value = r2(imp * (+src.com_setter || 0) / 100);
+    $("#ve-info").textContent = `Aplicado: CDV by JCerezo ${+src.com_cdv || 0} %, closer ${+src.com_closer || 0} %, setter ${+src.com_setter || 0} % sobre ${eur(imp)}${mensual ? " por cuota" : ""}.`;
+  };
+  if (mensual) { const n = cuotasDevengadas(v); $("#ve-info").textContent = n ? `Cuotas vencidas hasta hoy: ${n}.` : "Todavía no ha vencido ninguna cuota: por eso la comisión sale a 0 en la lista hasta la fecha de la primera cuota."; }
+}
 function vVentas() {
   const vs = ventas.filter(v => pasaFiltro(proyDeVenta(v), filtroVentas)).sort((a, b) => String(b.fecha_cobro || "").localeCompare(String(a.fecha_cobro || "")) || String(a.cliente).localeCompare(String(b.cliente), "es"));
   const sumF = (arr, f) => arr.reduce((s, v) => s + f(v), 0);
@@ -1687,10 +1731,10 @@ function vVentas() {
   ${vs.map(v => { const id = proyDeVenta(v), e = ESTADO_VENTA[v.estado] || [v.estado, "p-neutro"], jv = comJavier(v);
     const closerTxt = v.closer2 ? `${esc(v.closer)} + ${esc(v.closer2)}` : esc(v.closer || "—");
     const comCloser = v.closer2 ? `${eur(v.com_closer)} + ${eur(v.com_closer2)}` : celdaCom(v.com_closer, v.closer);
-    return `<tr><td>${esc(v.cliente)}${v.notas ? `<small style="display:block;color:var(--texto3);max-width:260px;white-space:normal">${esc(v.notas)}</small>` : ""}</td><td><span class="area dir">${id ? etiquetaProy(id) : esc(v.proyecto || "—")}${prodDeVenta(v) ? " · " + esc(prodDeVenta(v).nombre) : ""}</span>${v.tipo_cobro === "mensual" ? ` <small style="color:var(--texto3)">mensual</small>` : ""}</td><td class="num">${v._cuota != null ? `${eur(v._cuota)}/mes<small style="display:block;color:var(--texto3)">${v._cuotas} ${v._cuotas === 1 ? "cuota" : "cuotas"} · ${eur(v.importe)}</small>` : eur(v.importe)}</td><td>${closerTxt}</td><td>${esc(v.setter || "—")}</td>
+    return `<tr class="clic" data-venta="${v.id}" title="Pulsa para editar" style="cursor:pointer"><td>${esc(v.cliente)}${v.notas ? `<small style="display:block;color:var(--texto3);max-width:260px;white-space:normal">${esc(v.notas)}</small>` : ""}</td><td><span class="area dir">${id ? etiquetaProy(id) : esc(v.proyecto || "—")}${prodDeVenta(v) ? " · " + esc(prodDeVenta(v).nombre) : ""}</span>${v.tipo_cobro === "mensual" ? ` <small style="color:var(--texto3)">mensual</small>` : ""}</td><td class="num">${v._cuota != null ? `${eur(v._cuota)}/mes<small style="display:block;color:var(--texto3)">${v._cuotas} ${v._cuotas === 1 ? "cuota" : "cuotas"} · ${eur(v.importe)}</small>` : eur(v.importe)}</td><td>${closerTxt}</td><td>${esc(v.setter || "—")}</td>
       <td class="num"><b style="font-weight:600">${eur(ingresoCDV(v))}</b>${jv ? `<small style="display:block;color:var(--texto3)">${eur(v.com_cdv)} empresa + ${eur(jv)} Javier</small>` : ""}</td><td class="num">${comCloser}</td><td class="num">${celdaCom(v.com_setter, v.setter)}</td><td><span class="pildora ${e[1]}">${e[0]}</span></td></tr>`; }).join("") || `<tr><td colspan="9">No hay ventas con este filtro.</td></tr>`}
   </tbody></table></div>
-  <p style="font-size:12px;color:var(--texto3);margin-top:10px">Para registrar o cobrar ventas sigue usando Agenda Central: aquí se ven al instante. Cuando Javier es closer o setter, su comisión se suma a CDV by JCerezo y no cuenta como pago al equipo.</p>`;
+  <p style="font-size:12px;color:var(--texto3);margin-top:10px">Pulsa una venta para corregirla (closer, setter, comisiones, cuotas, estado). Para registrar ventas nuevas sigue usando Agenda Central: aquí se ven al instante. Cuando Javier es closer o setter, su comisión se suma a CDV by JCerezo y no cuenta como pago al equipo.</p>`;
 }
 function vVentasSocio(vs, sumF, total, porProd) {
   const mia = (v) => repartoVenta(v).filter(p => esYo(p.nombre)).reduce((s, p) => s + p.com, 0);
