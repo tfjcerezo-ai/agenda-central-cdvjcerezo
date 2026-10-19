@@ -921,11 +921,11 @@ const ESTADO_PRESU = {borrador: ["Borrador", "p-neutro"], enviado: ["Enviado", "
 const catalogoDe = (proy) => catalogo.filter(x => x.proyecto_id === proy);
 const veNeta = (proy) => esDir() || esSocio(proy);
 const totalesPresu = (lineas, proy) => {
-  let sub = 0, neta = 0, bajoNeta = [];
+  let sub = 0, neta = 0, subNeta = 0, sinNeta = 0, bajoNeta = [];
   lineas.forEach(li => { const imp = r2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100)); sub += imp;
-    const n = netas[li.id]; if (n) { const nt = (+li.cantidad || 0) * (+n.neta || 0); neta += nt; if ((+li.precio || 0) * (1 - (+li.dto || 0) / 100) < +n.neta - 0.0001) bajoNeta.push(li.ref); } });
+    const n = netas[li.id]; if (!n && !li.fuera) sinNeta++; if (n) { subNeta += imp; const nt = (+li.cantidad || 0) * (+n.neta || 0); neta += nt; if ((+li.precio || 0) * (1 - (+li.dto || 0) / 100) < +n.neta - 0.0001) bajoNeta.push(li.ref); } });
   sub = r2(sub); const iva = r2(sub * IVA_PRESU / 100);
-  return {sub, iva, total: r2(sub + iva), neta: r2(neta), comision: r2(sub - neta), bajoNeta, conNeta: veNeta(proy) && lineas.some(li => netas[li.id])};
+  return {sub, iva, total: r2(sub + iva), neta: r2(neta), comision: r2(subNeta - neta), sinNeta, bajoNeta, conNeta: veNeta(proy) && lineas.some(li => netas[li.id])};
 };
 const compraDePresu = (pid) => compras.find(c => c.presupuesto_id === pid);
 function listaPropuestas(l) {
@@ -965,6 +965,7 @@ function editarPresupuesto(l, id) {
     ${vendida ? `<p class="nota-ejemplo" style="margin-bottom:10px">✓ Esta propuesta ya está aceptada y apuntada como venta en la ficha de compra.</p>` : ""}
     <div class="rejilla-campos">
       <div class="campo"><label for="pz-fecha">Fecha</label><input id="pz-fecha" type="date" value="${p ? p.fecha : fechaISO(hoy)}"></div>
+      <div class="campo"><label for="pz-numero">Nº de oferta</label><input id="pz-numero" value="${esc(p ? p.numero || "" : "")}" placeholder="Automático (p. ej. JB-261016-01)"></div>
       <div class="campo"><label for="pz-validez">Válido hasta</label><input id="pz-validez" type="date" value="${p ? p.validez || "" : fechaISO(val)}"></div>
       <div class="campo" style="grid-column:1/-1"><label for="pz-buscar">Catálogo ${esc(nomProy(l.proyecto_id))} · pulsa un producto para añadirlo</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="pz-cat" style="max-width:170px"><option value="">Todas las categorías</option>${cats.map(c => `<option>${esc(c)}</option>`).join("")}</select><input id="pz-buscar" placeholder="Busca por referencia o nombre: BB-TOP, zócalo, omega…" style="flex:1;min-width:180px"></div>
         <div id="pz-sugerencias" style="max-height:300px;overflow:auto;margin-top:6px;border:1px solid var(--linea);border-radius:10px"></div></div>
@@ -974,12 +975,13 @@ function editarPresupuesto(l, id) {
       <div class="campo" style="grid-column:1/-1"><label for="pz-notas">Condiciones / notas para el cliente</label><textarea id="pz-notas" rows="3">${esc(p ? p.notas || "" : "Precios sin IVA. Portes debidos. Plazo de entrega a confirmar con el pedido.")}</textarea></div>
     </div>`, async () => {
     if (!lineas.length) return "Añade al menos un producto.";
-    if (lineas.some(li => li.libre && !(+li.precio > 0))) return "Pon el precio de las líneas de carrilería (precio según proyecto).";
+    if (lineas.some(li => li.libre && !(+li.precio > 0))) return "Pon el precio de las líneas sin precio de catálogo (carrilería, portes…).";
     const t = totalesPresu(lineas, l.proyecto_id);
     if (t.bajoNeta.length) return "Hay líneas por debajo de la tarifa neta de Bernad (" + t.bajoNeta.join(", ") + "). Reduce el descuento.";
     const fila = {lead_id: l.id, proyecto_id: l.proyecto_id, fecha: $("#pz-fecha").value || fechaISO(hoy), validez: $("#pz-validez").value || null, estado: $("#pz-estado").value,
-      lineas: lineas.map(li => ({id: li.id, ref: li.ref, codigo: li.codigo || null, nombre: li.nombre, unidad: li.unidad, cantidad: +li.cantidad || 0, precio: +li.precio || 0, dto: +li.dto || 0, libre: !!li.libre})),
+      lineas: lineas.map(li => ({id: li.id, ref: li.ref, codigo: li.codigo || null, nombre: li.nombre, unidad: li.unidad, cantidad: +li.cantidad || 0, precio: +li.precio || 0, dto: +li.dto || 0, libre: !!li.libre, fuera: !!li.fuera})),
       subtotal: t.sub, iva: t.iva, total: t.total, notas: $("#pz-notas").value.trim() || null};
+    const num = $("#pz-numero").value.trim(); if (num) fila.numero = num;
     const q = p ? sb.from("crm_presupuestos").update(fila).eq("id", p.id) : sb.from("crm_presupuestos").insert(fila);
     const {data, error} = await q.select().single();
     if (error) return "No se pudo guardar: " + error.message;
@@ -993,23 +995,26 @@ function editarPresupuesto(l, id) {
   const caja = $(".modal-caja"); if (caja) caja.style.maxWidth = "860px";
   const acc = $(".modal-acciones");
   const bPdf = document.createElement("button"); bPdf.type = "button"; bPdf.className = "btn"; bPdf.textContent = "⬇ PDF para el cliente"; bPdf.style.marginRight = "auto";
-  bPdf.onclick = () => { if (!lineas.length) return aviso("Añade productos primero", true); imprimirPresupuesto(l, {numero: p ? p.numero : "(sin guardar)", fecha: $("#pz-fecha").value, validez: $("#pz-validez").value, lineas, notas: $("#pz-notas").value, creado_por: p ? p.creado_por : yo.id}); };
+  bPdf.onclick = () => { if (!lineas.length) return aviso("Añade productos primero", true); imprimirPresupuesto(l, {numero: $("#pz-numero").value.trim() || (p ? p.numero : "(sin guardar)"), fecha: $("#pz-fecha").value, validez: $("#pz-validez").value, lineas, notas: $("#pz-notas").value, creado_por: p ? p.creado_por : yo.id}); };
   acc.prepend(bPdf);
+  const bLib = document.createElement("button"); bLib.type = "button"; bLib.className = "btn"; bLib.textContent = "+ Portes / línea libre";
+  bLib.onclick = () => { lineas.push({id: "libre-" + Date.now(), ref: "—", codigo: null, nombre: "Portes", unidad: "ud", cantidad: 1, precio: 0, dto: 0, libre: true, fuera: true}); pintar(); };
+  bPdf.after(bLib);
   if (ficha && !vendida) { const bV = document.createElement("button"); bV.type = "button"; bV.className = "btn"; bV.style.color = "var(--ok)"; bV.textContent = "✓ Aceptada: pasar a venta"; bV.title = "Marca la propuesta como aceptada y la apunta como venta en la ficha de compra";
     bV.onclick = () => { $("#pz-estado").value = "aceptado"; const ok = $(".modal-acciones button[type=submit]") || [...document.querySelectorAll(".modal-acciones button")].pop(); if (ok) ok.click(); }; bPdf.after(bV); }
   if (p && esDir()) botonBorrar("Borrar", async () => { if (!confirm("¿Borrar este presupuesto?")) return; const {error} = await sb.from("crm_presupuestos").delete().eq("id", p.id); if (error) return fallo(error, "No se pudo borrar"); presupuestos = presupuestos.filter(x => x.id !== p.id); cerrarCapa(); abrirLead(l.id); });
   const pintar = () => {
     const t = totalesPresu(lineas, l.proyecto_id); const er = $("#err"); if (er) er.hidden = true;
     $("#pz-tabla").innerHTML = lineas.length ? `<thead><tr><th>Ref.</th><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Dto. %</th><th class="num">Importe</th><th></th></tr></thead><tbody>${lineas.map((li, i) => { const n = netas[li.id], bajo = n && (+li.precio || 0) * (1 - (+li.dto || 0) / 100) < +n.neta - 0.0001;
-      return `<tr${bajo ? ` style="background:rgba(255,90,90,.08)"` : ""}><td>${esc(li.ref)}</td><td>${esc(li.nombre)}<small style="display:block;color:var(--texto3)">${esc(li.unidad)}${conNeta && n ? ` · neta ${eur(n.neta)}` : ""}</small></td>
+      return `<tr${bajo ? ` style="background:rgba(255,90,90,.08)"` : ""}><td>${esc(li.ref)}</td><td><textarea data-li="${i}" data-k="nombre" rows="${li.nombre.length > 60 ? 3 : 1}" style="width:100%;min-width:200px;font-size:12.5px;resize:vertical">${esc(li.nombre)}</textarea><small style="display:block;color:var(--texto3)">${esc(li.unidad)}${conNeta && n ? ` · neta ${eur(n.neta)}` : ""}</small></td>
       <td class="num"><input data-li="${i}" data-k="cantidad" type="number" min="0" step="0.01" value="${li.cantidad}" style="width:70px"></td>
-      <td class="num">${li.libre ? `<input data-li="${i}" data-k="precio" type="number" min="0" step="0.01" value="${li.precio || ""}" placeholder="Precio" style="width:80px">` : eur(li.precio)}</td>
+      <td class="num"><input data-li="${i}" data-k="precio" type="number" min="0" step="0.01" value="${li.precio || ""}" placeholder="Precio" style="width:84px"></td>
       <td class="num"><input data-li="${i}" data-k="dto" type="number" min="0" max="100" step="0.5" value="${li.dto || 0}" style="width:60px"></td>
       <td class="num"><b style="font-weight:600">${eur((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</b></td>
       <td><button type="button" class="btn-texto" data-quitar="${i}" aria-label="Quitar ${esc(li.ref)}">✕</button></td></tr>`; }).join("")}</tbody>` : `<tr><td style="color:var(--texto3)">Busca y pulsa un producto para añadirlo.</td></tr>`;
     $("#pz-totales").innerHTML = `<div class="fila-liq"><span>Subtotal (sin IVA)</span><b>${eur(t.sub)}</b></div><div class="fila-liq"><span>IVA ${IVA_PRESU} %</span><b>${eur(t.iva)}</b></div><div class="fila-liq total"><span>Total</span><b>${eur(t.total)}</b></div>
-      ${t.conNeta ? `<div style="margin-top:10px;padding:10px 12px;border:1px dashed var(--linea);border-radius:10px;font-size:12.5px"><b>Solo para ti (no sale en el PDF):</b> neta Bernad ${eur(t.neta)} · comisión total <b style="color:var(--bien)">${eur(t.comision)}</b> · tu parte (50 %) <b>${eur(t.comision / 2)}</b>${t.bajoNeta.length ? `<br><span style="color:var(--mal)">⚠ Por debajo de la neta: ${esc(t.bajoNeta.join(", "))}. No se puede guardar así.</span>` : ""}</div>` : ""}`;
-    $("#pz-tabla").querySelectorAll("input[data-li]").forEach(inp => inp.onchange = () => { const li = lineas[+inp.dataset.li]; li[inp.dataset.k] = Math.max(0, +inp.value || 0); if (inp.dataset.k === "dto") li.dto = Math.min(100, li.dto); pintar(); });
+      ${t.conNeta ? `<div style="margin-top:10px;padding:10px 12px;border:1px dashed var(--linea);border-radius:10px;font-size:12.5px"><b>Solo para ti (no sale en el PDF):</b> neta Bernad ${eur(t.neta)} · comisión total <b style="color:var(--bien)">${eur(t.comision)}</b> · tu parte (50 %) <b>${eur(t.comision / 2)}</b>${t.sinNeta ? `<br><span style="color:var(--aviso)">${t.sinNeta} línea(s) sin neta (carrilería) no cuentan en la comisión.</span>` : ""}${t.bajoNeta.length ? `<br><span style="color:var(--mal)">⚠ Por debajo de la neta: ${esc(t.bajoNeta.join(", "))}. No se puede guardar así.</span>` : ""}</div>` : ""}`;
+    $("#pz-tabla").querySelectorAll("input[data-li], textarea[data-li]").forEach(inp => inp.onchange = () => { const li = lineas[+inp.dataset.li]; if (inp.dataset.k === "nombre") { li.nombre = inp.value.trim() || li.nombre; return; } li[inp.dataset.k] = Math.max(0, +inp.value || 0); if (inp.dataset.k === "dto") li.dto = Math.min(100, li.dto); pintar(); });
     $("#pz-tabla").querySelectorAll("[data-quitar]").forEach(b => b.onclick = () => { lineas.splice(+b.dataset.quitar, 1); pintar(); });
   };
   const sugerir = () => {
@@ -1043,7 +1048,7 @@ function imprimirPresupuesto(l, d) {
   .pie{margin-top:26px;border-top:1px solid #e3e8f0;padding-top:8px;font-size:9.5px;color:#8a93a3;text-align:center}</style></head><body>
   <div class="cab"><div class="marca"><img src="${location.origin}/crm/logo-bernad.png" alt="Bernad" style="height:70px;display:block;margin-bottom:4px"><small>José Bernad S.L. · Protecciones industriales y perfilería sanitaria<br>www.josebernad.com · comercial@josebernad.com</small></div>
   <div class="doc"><h1>PRESUPUESTO</h1><div>Nº ${esc(d.numero || "—")}</div><div>Fecha: ${fecha(d.fecha)}</div><div>Válido hasta: ${fecha(d.validez)}</div></div></div>
-  <div class="cli">Cliente<br><b>${esc(l.empresa)}</b>${l.contacto ? `<br>A la atención de ${esc(l.contacto)}` : ""}${l.email ? `<br>${esc(l.email)}` : ""}${l.telefono ? ` · ${esc(l.telefono)}` : ""}</div>
+  <div class="cli">Cliente<br><b>${esc(l.empresa)}</b>${l.contacto ? `<br>A la atención de ${esc(l.contacto)}` : ""}${l.cif ? `<br>CIF: ${esc(l.cif)}` : ""}${l.direccion ? `<br>${esc(l.direccion)}` : ""}${(l.movil || l.telefono) ? `<br>Tel.: ${esc(l.movil || l.telefono)}` : ""}${l.email ? ` · ${esc(l.email)}` : ""}</div>
   <table><thead><tr><th>Referencia</th><th>Descripción</th><th class="n">Cantidad</th><th class="n">Precio</th><th class="n">Dto.</th><th class="n">Importe</th></tr></thead><tbody>
   ${d.lineas.map(li => `<tr><td>${esc(li.ref)}${li.codigo ? `<br><span style="color:#8a93a3;font-size:9.5px">${esc(li.codigo)}</span>` : ""}</td><td>${esc(li.nombre)}${(() => { const x = catalogo.find(y => y.id === li.id); return x && x.detalle ? `<br><span style="color:#5b6475;font-size:9.5px">${esc(x.detalle)}</span>` : ""; })()}</td><td class="n">${(+li.cantidad || 0).toLocaleString("es-ES")} ${esc(li.unidad)}</td><td class="n">${e2(li.precio)}</td><td class="n">${+li.dto ? (+li.dto).toLocaleString("es-ES") + " %" : "—"}</td><td class="n">${e2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</td></tr>`).join("")}
   </tbody></table>
