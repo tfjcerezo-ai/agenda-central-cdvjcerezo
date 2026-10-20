@@ -994,7 +994,7 @@ function editarPresupuesto(l, id) {
       <div style="grid-column:1/-1;overflow:auto"><table id="pz-tabla" style="font-size:12.5px;width:100%"></table></div>
       <div id="pz-totales" style="grid-column:1/-1"></div>
       <div class="campo"><label for="pz-estado">Estado</label><select id="pz-estado">${Object.entries(ESTADO_PRESU).map(([k, v]) => `<option value="${k}" ${(p ? p.estado : "borrador") === k ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>
-      <div class="campo" style="grid-column:1/-1"><label for="pz-notas">Condiciones / notas para el cliente</label><textarea id="pz-notas" rows="3">${esc(p ? p.notas || "" : "Precios sin IVA. Portes debidos. Plazo de entrega a confirmar con el pedido.")}</textarea></div>
+      <div class="campo" style="grid-column:1/-1"><label for="pz-notas">Condiciones para el cliente <small style="color:var(--texto3)">(una por línea, «Concepto: texto»)</small></label><textarea id="pz-notas" rows="6">${esc(p ? p.notas || "" : condicionesPorDefecto(l.proyecto_id))}</textarea></div>
     </div>`, async () => {
     if (!lineas.length) return "Añade al menos un producto.";
     if (lineas.some(li => li.libre && !(+li.precio > 0))) return "Pon el precio de las líneas sin precio de catálogo (carrilería, portes…).";
@@ -1032,7 +1032,7 @@ function editarPresupuesto(l, id) {
     const t = totalesPresu(lineas, l.proyecto_id); const er = $("#err"); if (er) er.hidden = true;
     $("#pz-tabla").innerHTML = lineas.length ? `<thead><tr><th>Ref.</th><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Dto. %</th><th class="num">Importe</th><th></th></tr></thead><tbody>${lineas.map((li, i) => { const n = netas[li.id], bajo = n && (+li.precio || 0) * (1 - (+li.dto || 0) / 100) < +n.neta - 0.0001;
       const avi = avisosPrecio([li]).length;
-      return `<tr${bajo ? ` style="background:rgba(255,90,90,.08)"` : avi ? ` style="background:rgba(242,210,27,.10)" title="Precio fuera de tarifa: revísalo"` : ""}><td>${esc(li.ref)}</td><td><textarea data-li="${i}" data-k="nombre" rows="${li.nombre.length > 60 ? 3 : 1}" style="width:100%;min-width:200px;font-size:12.5px;resize:vertical">${esc(li.nombre)}</textarea><small style="display:block;color:var(--texto3)">${esc(li.unidad)}${conNeta && n ? ` · neta ${eur(n.neta)}` : ""}</small></td>
+      return `<tr${bajo ? ` style="background:rgba(255,90,90,.08)"` : avi ? ` style="background:rgba(242,210,27,.10)" title="Precio fuera de tarifa: revísalo"` : ""}><td>${esc(li.ref)}</td><td><textarea data-li="${i}" data-k="nombre" rows="${Math.max(li.nombre.split("\n").length + (li.nombre.length > 90 ? 1 : 0), li.nombre.length > 60 ? 3 : 1)}" title="La primera línea sale en negrita en el PDF; las siguientes, como detalle" style="width:100%;min-width:200px;font-size:12.5px;resize:vertical">${esc(li.nombre)}</textarea><small style="display:block;color:var(--texto3)">${esc(li.unidad)}${conNeta && n ? ` · neta ${eur(n.neta)}` : ""}</small></td>
       <td class="num"><input data-li="${i}" data-k="cantidad" type="number" min="0" step="0.01" value="${li.cantidad}" style="width:70px"></td>
       <td class="num"><input data-li="${i}" data-k="precio" type="number" min="0" step="0.01" value="${li.precio || ""}" placeholder="Precio" style="width:84px"></td>
       <td class="num"><input data-li="${i}" data-k="dto" type="number" min="0" max="100" step="0.5" value="${li.dto || 0}" style="width:60px"></td>
@@ -1055,39 +1055,127 @@ function editarPresupuesto(l, id) {
   };
   $("#pz-buscar").oninput = sugerir; $("#pz-cat").onchange = sugerir; sugerir(); pintar();
 }
+/* Fichas de producto que acompañan a la oferta (foto en la 1.ª página y anexo técnico) */
+const FICHAS_PRESU = {
+  "Zócalo sanitario": {
+    titulo: "Zócalo sanitario protector · PEAD 20 mm",
+    texto: "Protección de la base de la pared y del panel frente a golpes de transpaletas y carros, con acabado sanitario fácil de limpiar.",
+    fotos: [["zocalo-recto.jpg", "Tramo recto sobre panel frigorífico"], ["zocalo-esquina-int.jpg", "Esquina interior"]],
+    lamina: "zocalo-ficha.jpg",
+    tabla: [["Modelo", "Producto", "Altura (mm)", "Construcción", "Anclaje"],
+      ["ZS200 · ZS300 · ZS500", "Protección de pared con zócalo", "200 / 300 / 500", "PEAD prensado · espesor 20 mm · pieza de 2.000 mm", "Machihembrado"],
+      ["INT / EXT", "Esquina interior / exterior", "200 / 300 / 500", "PEAD prensado · alas de 150 mm", "Machihembrado"]],
+    caracteristicas: ["Polietileno prensado de alta densidad y alto peso molecular", "Alta resistencia al impacto y alta durabilidad", "Elemento higiénico de fácil limpieza, apto para uso alimentario", "Sin mantenimiento y fácilmente reemplazable", "Color blanco (otros colores bajo consulta)", "Fabricado en España, marcado CE"]
+  }
+};
+const MARCAS_PRESU = {
+  "jose-bernad": {logo: "/crm/logo-bernad.png", lema: "Equipamiento industria alimentaria", suministra: "José Bernad, S.L.", email: "comercial@josebernad.com",
+    pie: "José Bernad, S.L. · Parque Empresarial Campollano · Avda. Adeca, 17 · 02007 Albacete", acento: "#F2B705", texAcento: "#B8860B", franja: true}
+};
+function condicionesPorDefecto(proyectoId) {
+  const m = MARCAS_PRESU[proyectoId];
+  return ["Precios: en euros, IVA no incluido salvo en el total", "Portes: debidos", "Plazo de entrega: a confirmar con el pedido", "Forma de pago: a convenir",
+    "Validez: " + VALIDEZ_DIAS + " días desde la fecha de emisión", "Suministro y factura: " + (m ? m.suministra : "CDV by JCerezo")].join("\n");
+}
 function imprimirPresupuesto(l, d) {
   const t = totalesPresu(d.lineas, l.proyecto_id);
   const autor = perfiles.find(x => x.id === d.creado_por) || (d.creado_por === yo.id ? yo : null) || yo;
   const esJavi = /javier cerezo/i.test(autor.nombre || "");
-  const firma = esJavi ? `<b>Javier Cerezo</b><br>Gestor de cuentas en desarrollo, España y Portugal<br>670 86 56 67` : `<b>${esc(autor.nombre || "")}</b><br>${esc(autor.email || "")}`;
-  const fecha = (s) => s ? new Date(s + "T00:00").toLocaleDateString("es-ES", {day: "2-digit", month: "long", year: "numeric"}) : "—";
-  const e2 = (n) => (+n || 0).toLocaleString("es-ES", {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " €";
-  const esBernad = l.proyecto_id === "jose-bernad";
   const logoCdv = (document.querySelector(".lateral img") || {}).src || "";
-  const cabMarca = esBernad ? `<img src="${location.origin}/crm/logo-bernad.png" alt="Bernad" style="height:70px;display:block;margin-bottom:4px"><small>JOSÉ BERNAD, S.L. · CIF B02052058<br>Parque Empresarial Campollano, Avda. Adeca, 17 · 02007 Albacete<br>Tel. 967 219 649 · info@josebernad.com · www.josebernad.com</small>`
-    : `${logoCdv ? `<img src="${logoCdv}" alt="CDV by JCerezo" style="height:70px;display:block;margin-bottom:4px">` : "CDV by JCerezo"}<small>CDV by JCerezo · ${esc(nomProy(l.proyecto_id))}<br>www.cdvbyjcerezo.com · javier@cdvbyjcerezo.com · 670 86 56 67</small>`;
-  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Presupuesto ${esc(d.numero || "")} · ${esc(l.empresa)}</title>
-  <style>@page{size:A4;margin:16mm 14mm}body{font-family:Helvetica,Arial,sans-serif;color:#1d2433;font-size:11.5px;margin:0}
-  .cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1d4f91;padding-bottom:12px;margin-bottom:18px}
-  .marca{font-size:24px;font-weight:800;letter-spacing:.5px;color:#1d4f91}.marca small{display:block;font-size:10.5px;font-weight:400;color:#5b6475;letter-spacing:0;margin-top:3px}
-  .doc{text-align:right}.doc h1{margin:0;font-size:20px;color:#1d2433}.doc div{color:#5b6475;margin-top:3px}
-  .cli{background:#f3f6fb;border-radius:8px;padding:10px 12px;margin-bottom:16px}.cli b{font-size:13px}
-  table{width:100%;border-collapse:collapse}th{background:#1d4f91;color:#fff;text-align:left;padding:7px 8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px}
-  td{padding:7px 8px;border-bottom:1px solid #e3e8f0;vertical-align:top}.n{text-align:right;white-space:nowrap}
-  .tot{margin-left:auto;width:270px;margin-top:12px}.tot div{display:flex;justify-content:space-between;padding:5px 0}.tot .g{border-top:2px solid #1d2433;font-size:14px;font-weight:700;margin-top:4px;padding-top:8px}
-  .cond{margin-top:22px;font-size:10.5px;color:#4a5263;white-space:pre-line}.firma{margin-top:30px;font-size:11px;line-height:1.5}
-  .pie{margin-top:26px;border-top:1px solid #e3e8f0;padding-top:8px;font-size:9.5px;color:#8a93a3;text-align:center}</style></head><body>
-  <div class="cab"><div class="marca">${cabMarca}</div>
-  <div class="doc"><h1>PRESUPUESTO</h1><div>Nº ${esc(d.numero || "—")}</div><div>Fecha: ${fecha(d.fecha)}</div><div>Válido hasta: ${fecha(d.validez)}</div></div></div>
-  <div class="cli">Cliente<br><b>${esc(l.empresa)}</b>${l.contacto ? `<br>A la atención de ${esc(l.contacto)}` : ""}${l.cif ? `<br>CIF: ${esc(l.cif)}` : ""}${l.direccion ? `<br>${esc(l.direccion)}` : ""}${(l.movil || l.telefono) ? `<br>Tel.: ${esc(l.movil || l.telefono)}` : ""}${l.email ? ` · ${esc(l.email)}` : ""}</div>
-  <table><thead><tr><th>Referencia</th><th>Descripción</th><th class="n">Cantidad</th><th class="n">Precio</th><th class="n">Dto.</th><th class="n">Importe</th></tr></thead><tbody>
-  ${d.lineas.map(li => `<tr><td>${esc(li.ref)}${li.codigo ? `<br><span style="color:#8a93a3;font-size:9.5px">${esc(li.codigo)}</span>` : ""}</td><td>${esc(li.nombre)}${(() => { const x = catalogo.find(y => y.id === li.id); return x && x.detalle ? `<br><span style="color:#5b6475;font-size:9.5px">${esc(x.detalle)}</span>` : ""; })()}</td><td class="n">${(+li.cantidad || 0).toLocaleString("es-ES")} ${esc(li.unidad)}</td><td class="n">${e2(li.precio)}</td><td class="n">${+li.dto ? (+li.dto).toLocaleString("es-ES") + " %" : "—"}</td><td class="n">${e2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</td></tr>`).join("")}
-  </tbody></table>
-  <div class="tot"><div><span>Base imponible</span><span>${e2(t.sub)}</span></div><div><span>IVA ${IVA_PRESU} %</span><span>${e2(t.iva)}</span></div><div class="g"><span>TOTAL</span><span>${e2(t.total)}</span></div></div>
-  ${d.notas ? `<div class="cond"><b>Condiciones</b>\n${esc(d.notas)}</div>` : ""}
-  <div class="firma">${firma}</div>
-  <div class="pie">Presupuesto sujeto a disponibilidad de material y a la tarifa vigente en la fecha del pedido.</div>
-  <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`;
+  const m = MARCAS_PRESU[l.proyecto_id] || {logo: logoCdv, lema: nomProy(l.proyecto_id), suministra: "CDV by JCerezo", email: "javier@cdvbyjcerezo.com",
+    pie: "CDV by JCerezo · www.cdvbyjcerezo.com", acento: "#C9A84C", texAcento: "#9A7B2C", franja: false};
+  const email = esJavi ? m.email : (autor.email || m.email);
+  const telAutor = esJavi ? "+34 670 86 56 67" : (autor.telefono || autor.movil || "");
+  const fDMA2 = (s) => s ? s.split("-").reverse().join("/") : "—";
+  const dias = (d.fecha && d.validez) ? Math.round((new Date(d.validez) - new Date(d.fecha)) / 864e5) : VALIDEZ_DIAS;
+  const e2 = (n) => { const [e, dec] = Math.abs(+n || 0).toFixed(2).split("."); return ((+n || 0) < 0 ? "-" : "") + e.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + dec + " €"; };
+  const uds = (u) => ({m: "ml", ml: "ml", "m²": "m²", m2: "m²"})[u] || u || "ud";
+  const conDto = d.lineas.some(li => +li.dto);
+  // Descripción: la primera línea del texto va en negrita; el resto (o el detalle del catálogo) debajo, en gris
+  const desc = (li) => { const x = catalogo.find(y => y.id === li.id); const [tit, ...resto] = String(li.nombre || "").split("\n");
+    const sub = resto.join(" ").trim() || (x && x.detalle && !li.libre ? x.detalle : "") || (/porte/i.test(tit) ? "Transporte hasta la dirección de entrega." : "");
+    return `<b>${esc(tit)}</b>${sub ? `<span>${esc(sub)}</span>` : ""}`; };
+  const fichas = [...new Set(d.lineas.map(li => (catalogo.find(y => y.id === li.id) || {}).categoria).filter(c => FICHAS_PRESU[c]))].map(c => FICHAS_PRESU[c]);
+  const cond = String(d.notas || condicionesPorDefecto(l.proyecto_id)).split("\n").map(s => s.trim()).filter(Boolean)
+    .map(s => { const i = s.indexOf(":"); return i > 0 && i < 30 ? `<div><b>${esc(s.slice(0, i))}:</b>${esc(s.slice(i + 1))}</div>` : `<div>${esc(s)}</div>`; }).join("");
+  const img = (f) => `${location.origin}/crm/img/${f}`;
+  const prov = (String(l.ciudad || "").match(/\([^)]+\)/) || [""])[0];
+  const cliHtml = l.direccion ? esc(l.direccion).replace(/,\s*(\d{5})/, "<br>$1") + (prov && !String(l.direccion).includes(prov) ? " " + esc(prov) : "") + "<br>" : (l.ciudad ? esc(l.ciudad) + "<br>" : "");
+  const totalPags = 2 + fichas.length;
+  const cab = (titulo, sub) => `<div class="cab"><div class="logo">${m.logo ? `<img src="${m.logo.startsWith("http") || m.logo.startsWith("data:") ? m.logo : location.origin + m.logo}" alt="">` : `<b>${esc(m.suministra)}</b>`}</div>
+    <div class="tit"><h1>${titulo}</h1><div class="sub">${esc(sub)}</div></div></div>`;
+  const pie = (n) => `<div class="pie"><span>${esc(m.pie)}</span><span>${esc(email)}${telAutor ? " · " + esc(telAutor) : ""} · ${n}/${totalPags}</span></div>`;
+  const oferta = `<section class="pag">${cab("OFERTA", m.lema)}
+    <div class="pills"><span>Precios sin IVA</span><span>Validez ${dias} días</span><span>Suministra y factura ${esc(m.suministra)}</span></div>
+    <div class="cajas"><div class="caja"><div class="et">Cliente</div><div class="nom">${esc(l.empresa)}</div>
+      ${l.contacto ? `A la atención de: ${esc(l.contacto)}<br>` : ""}${l.cif ? `CIF: ${esc(l.cif)}<br>` : ""}${cliHtml}${(l.movil || l.telefono) ? `Tel.: ${esc(l.movil || l.telefono)}<br>` : ""}${l.email ? esc(l.email) : ""}</div>
+      <div class="caja"><div class="et">Datos de la oferta</div><div class="nom">Nº ${esc(d.numero || "—")}</div>
+      Fecha: ${fDMA2(d.fecha)}<br>Validez: ${dias} días<br>Atendido por: <b>${esc(esJavi ? "Javier Cerezo" : autor.nombre || "")}</b><br>
+      ${esJavi ? "Director de Desarrollo Comercial Externo<br>España y Portugal<br>" : ""}${esc(email)}${telAutor ? `<br>Tel.: ${esc(telAutor)}` : ""}</div></div>
+    ${fichas.map(f => `<div class="prod"><div><div class="et2">El producto</div><h2>${esc(f.titulo)}</h2><p>${esc(f.texto)}</p></div>
+      <div class="fotos">${f.fotos.map(([s, p]) => `<figure><img src="${img(s)}" alt=""><figcaption>${esc(p)}</figcaption></figure>`).join("")}</div></div>`).join("")}
+    <table class="lin"><thead><tr><th>Descripción</th><th class="n">Cant.</th><th>Ud.</th><th class="n">Precio</th>${conDto ? `<th class="n">Dto.</th>` : ""}<th class="n">Importe</th></tr></thead><tbody>
+    ${d.lineas.map(li => `<tr><td class="d">${desc(li)}</td><td class="n">${(+li.cantidad || 0).toLocaleString("es-ES")}</td><td>${esc(uds(li.unidad))}</td><td class="n">${e2(li.precio)}</td>${conDto ? `<td class="n">${+li.dto ? (+li.dto).toLocaleString("es-ES") + " %" : "—"}</td>` : ""}<td class="n"><b>${e2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</b></td></tr>`).join("")}
+    </tbody></table>
+    <div class="tot"><div><span>Base imponible</span><span>${e2(t.sub)}</span></div><div><span>IVA ${IVA_PRESU} %</span><span>${e2(t.iva)}</span></div><div class="g"><span>Total</span><span>${e2(t.total)}</span></div></div>
+    <div class="h3"><span>Condiciones</span></div><div class="cond">${cond}</div>
+    ${pie(1)}</section>`;
+  const anexos = fichas.map((f, i) => `<section class="pag">${cab("ANEXO TÉCNICO", f.titulo)}
+    <p class="intro">Oferta ${esc(d.numero || "")} · ${esc(l.empresa)}: dibujos, esquemas y dimensiones del producto.</p>
+    ${f.lamina ? `<div class="lamina"><img src="${img(f.lamina)}" alt=""></div>` : ""}
+    <table class="lin tec"><thead><tr>${f.tabla[0].map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${f.tabla.slice(1).map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>
+    <div class="h3"><span>Características</span></div><ul class="car">${f.caracteristicas.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
+    ${pie(2 + i)}</section>`).join("");
+  const campos = [["Razón social", l.empresa], ["CIF", l.cif], ["Dirección de facturación", "", 1], ["Dirección de entrega", "", 1], ["Persona de contacto y teléfono"], ["Email para envío de factura"], ["Nombre y apellidos del firmante"], ["DNI del firmante"], ["Cargo"], ["Fecha"]];
+  const pedido = `<section class="pag">${cab("CONFIRMACIÓN DE PEDIDO", "Aceptación del presupuesto")}
+    <div class="resumen"><div><div class="et">Oferta</div><div class="nom">Nº ${esc(d.numero || "—")}</div>${fDMA2(d.fecha)}</div>
+      <div><div class="et">Cliente</div><div class="nom">${esc(l.empresa)}</div>${l.contacto ? "A la atención de " + esc(l.contacto) : ""}</div>
+      <div><div class="et">Total (IVA incluido)</div><div class="nom">${e2(t.total)}</div>Base ${e2(t.sub)} + IVA ${e2(t.iva)}</div></div>
+    <div class="h3"><span>Datos de la empresa y de la persona que firma</span></div>
+    <p class="acepta">Con la firma de este documento, el cliente acepta la oferta nº <b>${esc(d.numero || "")}</b> por un total de <b>${e2(t.total)}</b> (IVA incluido), sus condiciones, y confirma el pedido. Devuelva esta página firmada y sellada a <b>${esc(email)}</b>.</p>
+    <div class="form">${campos.map(([k, v, ancho]) => `<div class="f${ancho ? " ancho" : ""}"><div class="et">${esc(k)}</div><div class="v">${esc(v || "")}</div></div>`).join("")}
+      <div class="firma"><div class="et">Firma</div></div><div class="firma"><div class="et">Sello de la empresa</div></div></div>
+    ${pie(totalPags)}</section>`;
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Oferta ${esc(d.numero || "")} · ${esc(l.empresa)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Libre+Franklin:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>@page{size:A4;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{margin:0;font-family:"Libre Franklin",Helvetica,Arial,sans-serif;color:#1d1d1b;font-size:10.5px;line-height:1.45;background:#fff}
+  .pag{position:relative;min-height:296mm;padding:13mm 14mm 16mm 24mm;page-break-after:always;break-after:page;display:flex;flex-direction:column}
+  .pag:last-child{page-break-after:auto;break-after:auto}
+  ${m.franja ? `.pag::before{content:"";position:absolute;left:0;top:14mm;bottom:16mm;width:7mm;background:repeating-linear-gradient(-45deg,${m.acento} 0 9px,#1d1d1b 9px 18px)}` : ""}
+  .cab{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1.5px solid #1d1d1b;padding-bottom:9px;margin-bottom:12px}
+  .logo img{height:68px;display:block}.logo b{font-size:18px}
+  .tit{text-align:right}.tit h1{font-family:Oswald,Impact,sans-serif;font-weight:700;font-size:30px;line-height:1;margin:0;letter-spacing:.3px}
+  .sub{color:${m.texAcento};font-size:8.5px;font-weight:700;letter-spacing:2.6px;text-transform:uppercase;margin-top:6px}
+  .pills{display:flex;gap:7px;margin-bottom:10px}.pills span{background:#efeee9;border-radius:20px;padding:4px 11px;font-size:8.5px;color:#4a4a45}
+  .cajas{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .caja{background:#f3f2ee;border-radius:9px;padding:12px 14px;line-height:1.6}
+  .et{font-size:7.5px;letter-spacing:2px;text-transform:uppercase;color:#7c7c75;margin-bottom:5px}
+  .nom{font-size:13px;font-weight:700;margin-bottom:3px}
+  .prod{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:start;margin-bottom:12px}
+  .et2{font-size:7.5px;letter-spacing:2px;text-transform:uppercase;color:${m.texAcento};font-weight:700}
+  .prod h2{font-size:13px;margin:2px 0 6px}.prod p{margin:0;color:#4a4a45;max-width:280px}
+  .fotos{display:flex;gap:8px}.fotos figure{margin:0;width:118px}.fotos img{width:118px;height:76px;object-fit:cover;border-radius:5px;display:block}
+  .fotos figcaption{font-size:7px;color:#7c7c75;margin-top:3px}
+  table.lin{width:100%;border-collapse:collapse;margin-top:2px}
+  .lin th{background:#1d1d1b;color:#fff;text-align:left;font-size:7.5px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;padding:7px 8px}
+  .lin td{padding:8px 8px;border-bottom:1px solid #e4e3dd;vertical-align:top}.lin .n{text-align:right;white-space:nowrap}
+  .lin td.d b{display:block;font-weight:600}.lin td.d span{display:block;color:#5b5b55;font-size:9.5px;margin-top:1px}
+  .tot{margin-left:auto;width:235px;margin-top:10px}.tot div{display:flex;justify-content:space-between;padding:4px 6px}
+  .tot .g{background:${m.acento};border-radius:6px;font-size:13px;font-weight:700;padding:8px 10px;margin-top:6px}
+  .h3{display:flex;align-items:center;gap:10px;margin:16px 0 8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase}
+  .h3::after{content:"";flex:1;border-top:1px solid #d9d8d2}
+  .cond{display:grid;grid-template-columns:1fr 1fr;gap:3px 22px}.cond b{font-weight:600}
+  .pie{margin-top:auto;padding-top:14px;display:flex;justify-content:space-between;font-size:7px;color:#5b5b55}
+  .intro{margin:0 0 10px}.lamina{border:1px solid #e4e3dd;border-radius:9px;padding:10px;margin-bottom:12px;text-align:center}.lamina img{max-width:100%;max-height:118mm}
+  .tec td{font-size:9.5px}.car{columns:2;margin:0;padding-left:16px;column-gap:26px}.car li{margin-bottom:3px}
+  .resumen{background:#f3f2ee;border-radius:9px;padding:12px 14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:6px}
+  .acepta{margin:0 0 12px}.form{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px}
+  .f .v{border-bottom:1px solid #9a9a93;min-height:18px;padding-bottom:3px}.f.ancho{grid-column:1/-1}
+  .firma{border:1px dashed #9a9a93;border-radius:7px;height:80px;padding:9px 10px}
+  @media screen{body{background:#e9e8e3}.pag{width:210mm;margin:12px auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.12)}}</style></head><body>
+  ${oferta}${anexos}${pedido}
+  <script>window.onload=()=>{(document.fonts?document.fonts.ready:Promise.resolve()).then(()=>setTimeout(()=>window.print(),400))}<\/script></body></html>`;
   const w = window.open("", "_blank"); if (!w) return aviso("Permite las ventanas emergentes para descargar el PDF", true);
   w.document.open(); w.document.write(html); w.document.close();
 }
