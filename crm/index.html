@@ -941,6 +941,17 @@ function avisosPrecio(lineas) {
   return out;
 }
 const veNeta = (proy) => esDir() || esSocio(proy);
+// Comisión prevista de una propuesta (solo quien ve la neta): total y reparto entre closer y setter del lead
+function comisionPrevista(p, l) {
+  if (!l || !veNeta(l.proyecto_id)) return null;
+  const t = totalesPresu(p.lineas || [], l.proyecto_id); if (!t.conNeta) return null;
+  const nom = (id, def) => { const n = id ? nomPersona(id) : ""; return (n && n !== "—" ? n : def).split(" ")[0]; };
+  const reparto = l.closer_id && l.setter_id && l.closer_id !== l.setter_id
+    ? [[nom(l.closer_id, "Closer"), r2(t.comision / 2)], [nom(l.setter_id, "Setter"), r2(t.comision / 2)]]
+    : [[nom(l.closer_id || l.setter_id, "Comercial"), t.comision]];
+  return {total: t.comision, reparto, sinNeta: t.sinNeta};
+}
+const txtComision = (cp) => cp ? `Comisión prevista ${eur(cp.total)}${cp.reparto.length > 1 ? " · " + cp.reparto.map(([n, v]) => `${esc(n)} ${eur(v)}`).join(" · ") : ""}` : "";
 const totalesPresu = (lineas, proy) => {
   let sub = 0, neta = 0, subNeta = 0, sinNeta = 0, bajoNeta = [];
   lineas.forEach(li => { const imp = r2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100)); sub += imp;
@@ -952,12 +963,12 @@ const compraDePresu = (pid) => compras.find(c => c.presupuesto_id === pid);
 function listaPropuestas(l) {
   const ps = presupuestos.filter(p => p.lead_id === l.id && !(p.estado === "aceptado" && compraDePresu(p.id)));
   if (!ps.length) return "";
-  return `<div class="etiq" style="margin:4px 0 6px">Propuestas en curso</div><ul class="lista" style="margin-bottom:10px">${ps.map(p => `<li class="clic" data-presupuesto="${p.id}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>Propuesta ${esc(p.numero || "")} · ${fF(p.fecha)}<small style="display:block;color:var(--texto3)">${(p.lineas || []).length} productos · ${eur(p.subtotal)} sin IVA${p.validez ? " · válida hasta " + fF(p.validez) : ""}</small></span><span style="text-align:right"><b style="font-weight:600">${eur(p.total)}</b><br><span class="pildora ${(ESTADO_PRESU[p.estado] || ["", "p-neutro"])[1]}">${(ESTADO_PRESU[p.estado] || [p.estado])[0]}</span></span></li>`).join("")}</ul>`;
+  return `<div class="etiq" style="margin:4px 0 6px">Propuestas en curso</div><ul class="lista" style="margin-bottom:10px">${ps.map(p => `<li class="clic" data-presupuesto="${p.id}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>Propuesta ${esc(p.numero || "")} · ${fF(p.fecha)}<small style="display:block;color:var(--texto3)">${(p.lineas || []).length} productos · ${eur(p.subtotal)} sin IVA${p.validez ? " · válida hasta " + fF(p.validez) : ""}</small>${(cp => cp ? `<small style="display:block;color:var(--bien);font-weight:600">${txtComision(cp)}</small>` : "")(comisionPrevista(p, l))}</span><span style="text-align:right"><b style="font-weight:600">${eur(p.total)}</b><br><span class="pildora ${(ESTADO_PRESU[p.estado] || ["", "p-neutro"])[1]}">${(ESTADO_PRESU[p.estado] || [p.estado])[0]}</span></span></li>`).join("")}</ul>`;
 }
 function bloquePresupuestos(l) {
   const ps = presupuestos.filter(p => p.lead_id === l.id);
   return `<div><div class="etiq" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">Propuestas <button class="btn" id="nuevo-presupuesto" type="button">+ Nueva propuesta</button></div>
-    ${ps.length ? `<ul class="lista">${ps.map(p => `<li class="clic" data-presupuesto="${p.id}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>${esc(p.numero || "Presupuesto")} · ${fF(p.fecha)}<small style="display:block;color:var(--texto3)">${(p.lineas || []).length} líneas</small></span><span style="text-align:right"><b style="font-weight:600">${eur(p.total)}</b><br><span class="pildora ${(ESTADO_PRESU[p.estado] || ["", "p-neutro"])[1]}">${(ESTADO_PRESU[p.estado] || [p.estado])[0]}</span></span></li>`).join("")}</ul>` : `<p style="font-size:13px;color:var(--texto3)">Sin propuestas todavía.</p>`}</div>`;
+    ${ps.length ? `<ul class="lista">${ps.map(p => `<li class="clic" data-presupuesto="${p.id}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>${esc(p.numero || "Presupuesto")} · ${fF(p.fecha)}<small style="display:block;color:var(--texto3)">${(p.lineas || []).length} líneas · ${eur(p.subtotal)} sin IVA</small>${(cp => cp ? `<small style="display:block;color:var(--bien);font-weight:600">${txtComision(cp)}</small>` : "")(comisionPrevista(p, l))}</span><span style="text-align:right"><b style="font-weight:600">${eur(p.total)}</b><br><span class="pildora ${(ESTADO_PRESU[p.estado] || ["", "p-neutro"])[1]}">${(ESTADO_PRESU[p.estado] || [p.estado])[0]}</span></span></li>`).join("")}</ul>` : `<p style="font-size:13px;color:var(--texto3)">Sin propuestas todavía.</p>`}</div>`;
 }
 /* Propuesta aceptada → venta: se apunta en la ficha de compra (pedido) y el lead pasa a Cierre ganado */
 async function pasarAVenta(l, pz) {
@@ -1040,7 +1051,7 @@ function editarPresupuesto(l, id) {
       <td><button type="button" class="btn-texto" data-quitar="${i}" aria-label="Quitar ${esc(li.ref)}">✕</button></td></tr>`; }).join("")}</tbody>` : `<tr><td style="color:var(--texto3)">Busca y pulsa un producto para añadirlo.</td></tr>`;
     const avs = avisosPrecio(lineas);
     $("#pz-totales").innerHTML = (avs.length ? `<div style="margin-bottom:10px;padding:10px 12px;border:1px solid rgba(242,210,27,.5);border-radius:10px;font-size:12.5px;background:rgba(242,210,27,.07)"><b>⚠ Revisa estos precios</b> (si es aposta, no pasa nada):<br>${avs.map(a => "• " + esc(a.txt)).join("<br>")}</div>` : "") + `<div class="fila-liq"><span>Subtotal (sin IVA)</span><b>${eur(t.sub)}</b></div><div class="fila-liq"><span>IVA ${IVA_PRESU} %</span><b>${eur(t.iva)}</b></div><div class="fila-liq total"><span>Total</span><b>${eur(t.total)}</b></div>
-      ${t.conNeta ? `<div style="margin-top:10px;padding:10px 12px;border:1px dashed var(--linea);border-radius:10px;font-size:12.5px"><b>Solo para ti (no sale en el PDF):</b> neta Bernad ${eur(t.neta)} · comisión total <b style="color:var(--bien)">${eur(t.comision)}</b> · tu parte (50 %) <b>${eur(t.comision / 2)}</b>${t.sinNeta ? `<br><span style="color:var(--aviso)">${t.sinNeta} línea(s) sin neta (carrilería) no cuentan en la comisión.</span>` : ""}${t.bajoNeta.length ? `<br><span style="color:var(--mal)">⚠ Por debajo de la neta: ${esc(t.bajoNeta.join(", "))}. No se puede guardar así.</span>` : ""}</div>` : ""}`;
+      ${t.conNeta ? `<div style="margin-top:10px;padding:10px 12px;border:1px dashed var(--linea);border-radius:10px;font-size:12.5px"><b>Solo para ti (no sale en el PDF):</b> neta Bernad ${eur(t.neta)} · comisión prevista <b style="color:var(--bien)">${eur(t.comision)}</b>${(cp => cp && cp.reparto.length > 1 ? " · " + cp.reparto.map(([n, v]) => `${esc(n)} <b>${eur(v)}</b>`).join(" · ") : "")(comisionPrevista({lineas}, l))}${t.sinNeta ? `<br><span style="color:var(--aviso)">${t.sinNeta} línea(s) sin neta (carrilería) no cuentan en la comisión.</span>` : ""}${t.bajoNeta.length ? `<br><span style="color:var(--mal)">⚠ Por debajo de la neta: ${esc(t.bajoNeta.join(", "))}. No se puede guardar así.</span>` : ""}</div>` : ""}`;
     $("#pz-tabla").querySelectorAll("input[data-li], textarea[data-li]").forEach(inp => inp.onchange = () => { const li = lineas[+inp.dataset.li]; if (inp.dataset.k === "nombre") { li.nombre = inp.value.trim() || li.nombre; return; } li[inp.dataset.k] = Math.max(0, +inp.value || 0); if (inp.dataset.k === "dto") li.dto = Math.min(100, li.dto); pintar(); });
     $("#pz-tabla").querySelectorAll("[data-quitar]").forEach(b => b.onclick = () => { lineas.splice(+b.dataset.quitar, 1); pintar(); });
   };
@@ -1070,11 +1081,16 @@ const FICHAS_PRESU = {
 };
 const MARCAS_PRESU = {
   "jose-bernad": {logo: "/crm/logo-bernad.png", lema: "Equipamiento industria alimentaria", suministra: "José Bernad, S.L.", email: "comercial@josebernad.com",
-    pie: "José Bernad, S.L. · Parque Empresarial Campollano · Avda. Adeca, 17 · 02007 Albacete", acento: "#F2B705", texAcento: "#B8860B", franja: true}
+    pie: "José Bernad, S.L. · Parque Empresarial Campollano · Avda. Adeca, 17 · 02007 Albacete", acento: "#F2B705", texAcento: "#B8860B", franja: true,
+    pago: "Transferencia (50 % a la aceptación del pedido y 50 % a la entrega), recibo domiciliado SEPA a 30 días o confirming a 30, 45 o 60 días",
+    formasPago: (tot, e2) => [
+      `<b>Transferencia bancaria:</b> 50 % a la aceptación del pedido (${e2(Math.round(tot * 50) / 100)}) y 50 % a la entrega (${e2(tot - Math.round(tot * 50) / 100)}).`,
+      `<b>Recibo domiciliado SEPA a 30 días.</b> IBAN para la domiciliación: <span class="linea-in"></span>`,
+      `<b>Confirming</b> a <span class="caja-chk"></span> 30 &nbsp;<span class="caja-chk"></span> 45 &nbsp;<span class="caja-chk"></span> 60 días. Entidad: <span class="linea-in corta"></span>`]}
 };
 function condicionesPorDefecto(proyectoId) {
   const m = MARCAS_PRESU[proyectoId];
-  return ["Precios: en euros, IVA no incluido salvo en el total", "Portes: debidos", "Plazo de entrega: a confirmar con el pedido", "Forma de pago: a convenir",
+  return ["Precios: en euros, IVA no incluido salvo en el total", "Portes: debidos", "Plazo de entrega: a confirmar con el pedido", "Forma de pago: " + (m && m.pago ? m.pago + " (a elegir en la confirmación de pedido)" : "a convenir"),
     "Validez: " + VALIDEZ_DIAS + " días desde la fecha de emisión", "Suministro y factura: " + (m ? m.suministra : "CDV by JCerezo")].join("\n");
 }
 function imprimirPresupuesto(l, d) {
@@ -1133,6 +1149,7 @@ function imprimirPresupuesto(l, d) {
       <div><div class="et">Total (IVA incluido)</div><div class="nom">${e2(t.total)}</div>Base ${e2(t.sub)} + IVA ${e2(t.iva)}</div></div>
     <div class="h3"><span>Datos de la empresa y de la persona que firma</span></div>
     <p class="acepta">Con la firma de este documento, el cliente acepta la oferta nº <b>${esc(d.numero || "")}</b> por un total de <b>${e2(t.total)}</b> (IVA incluido), sus condiciones, y confirma el pedido. Devuelva esta página firmada y sellada a <b>${esc(email)}</b>.</p>
+    ${m.formasPago ? `<div class="pago"><div class="et">Forma de pago · marque una opción</div>${m.formasPago(t.total, e2).map((x, i) => `<div class="op"><span class="caja-chk"></span><span>${i + 1}. ${x}</span></div>`).join("")}</div>` : ""}
     <div class="form">${campos.map(([k, v, ancho]) => `<div class="f${ancho ? " ancho" : ""}"><div class="et">${esc(k)}</div><div class="v">${esc(v || "")}</div></div>`).join("")}
       <div class="firma"><div class="et">Firma</div></div><div class="firma"><div class="et">Sello de la empresa</div></div></div>
     ${pie(totalPags)}</section>`;
@@ -1173,6 +1190,9 @@ function imprimirPresupuesto(l, d) {
   .acepta{margin:0 0 12px}.form{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px}
   .f .v{border-bottom:1px solid #9a9a93;min-height:18px;padding-bottom:3px}.f.ancho{grid-column:1/-1}
   .firma{border:1px dashed #9a9a93;border-radius:7px;height:80px;padding:9px 10px}
+  .pago{background:#f3f2ee;border-radius:9px;padding:10px 14px 6px;margin-bottom:14px}.pago .op{display:flex;gap:9px;align-items:flex-start;margin-bottom:7px;line-height:1.5}
+  .caja-chk{display:inline-block;width:11px;height:11px;border:1.3px solid #1d1d1b;border-radius:2px;vertical-align:-1px;flex:none;margin-top:2px;background:#fff}
+  .linea-in{display:inline-block;min-width:200px;border-bottom:1px solid #9a9a93;height:12px;vertical-align:bottom}.linea-in.corta{min-width:130px}
   @media screen{body{background:#e9e8e3}.pag{width:210mm;margin:12px auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.12)}}</style></head><body>
   ${oferta}${anexos}${pedido}
   <script>window.onload=()=>{(document.fonts?document.fonts.ready:Promise.resolve()).then(()=>setTimeout(()=>window.print(),400))}<\/script></body></html>`;
@@ -1611,21 +1631,26 @@ function vPropuestas() {
   const suma = (arr) => arr.reduce((s, p) => s + (+p.subtotal || 0), 0);
   const env = base.filter(p => p.estado === "enviado"), ace = base.filter(p => p.estado === "aceptado"), rec = base.filter(p => p.estado === "rechazado");
   const tasa = ace.length + rec.length ? Math.round(ace.length / (ace.length + rec.length) * 100) : null;
+  const cpDe = (p) => comisionPrevista(p, leads.find(x => x.id === p.lead_id));
+  const verCom = base.some(p => cpDe(p));
+  const comEnJuego = env.reduce((s, p) => s + ((cpDe(p) || {}).total || 0), 0);
+  const miParte = env.reduce((s, p) => { const cp = cpDe(p); if (!cp) return s; const l = leads.find(x => x.id === p.lead_id) || {}; return s + (cp.reparto.length > 1 ? (l.setter_id === yo.id && l.closer_id !== yo.id ? cp.reparto[1][1] : cp.reparto[0][1]) : cp.total); }, 0);
   const est = (k, t) => `<button class="chip" data-fpest="${k}" aria-pressed="${filtroPropEstado === k}">${t}</button>`;
   return `<div class="cabecera"><div><h2>Propuestas</h2><div class="sub">Todas las propuestas enviadas, de cualquier proyecto · importes sin IVA</div></div></div>
   <div class="cifras" style="margin-bottom:14px">
     <div class="cifra"><div class="etiq">Enviadas pendientes</div><div class="num">${env.length}</div><div class="det">${eur(suma(env))} en juego</div></div>
     <div class="cifra bien"><div class="etiq">Aceptadas</div><div class="num">${ace.length}</div><div class="det">${eur(suma(ace))}</div></div>
+    ${verCom ? `<div class="cifra bien"><div class="etiq">Comisión prevista en juego</div><div class="num">${eur(comEnJuego)}</div><div class="det">de las enviadas pendientes · tu parte ${eur(miParte)}</div></div>` : ""}
     <div class="cifra"><div class="etiq">Tasa de aceptación</div><div class="num">${tasa != null ? tasa + " %" : "—"}</div><div class="det">${ace.length} aceptadas · ${rec.length} rechazadas</div></div>
   </div>
   <div class="barra-herr"><div class="izq">${chipsProyecto("fprop", filtroPropProy)}</div></div>
   <div class="filtros" style="margin-bottom:12px">${est("", "Todas")}${est("borrador", "Borrador")}${est("enviado", "Enviadas")}${est("caducada", "Caducadas sin respuesta")}${est("aceptado", "Aceptadas")}${est("rechazado", "Rechazadas")}</div>
-  <div class="tabla-env"><table><thead><tr><th>Nº</th><th>Cliente</th><th>Proyecto</th><th>Fecha</th><th>Válida hasta</th><th class="num">Base</th><th class="num">Total</th><th>Estado</th>${esDir() ? "<th>Preparada por</th>" : ""}</tr></thead><tbody>
+  <div class="tabla-env"><table><thead><tr><th>Nº</th><th>Cliente</th><th>Proyecto</th><th>Fecha</th><th>Válida hasta</th><th class="num">Base</th><th class="num">Total</th>${verCom ? `<th class="num">Comisión prevista</th>` : ""}<th>Estado</th>${esDir() ? "<th>Preparada por</th>" : ""}</tr></thead><tbody>
   ${lista.length ? lista.map(p => { const l = leads.find(x => x.id === p.lead_id) || {}; const cad = p.estado === "enviado" && p.validez && p.validez < hoy; const e = ESTADO_PRESU[p.estado] || [p.estado, "p-neutro"];
     return `<tr class="clic" data-prop="${p.id}"><td><b style="font-weight:600">${esc(p.numero || "—")}</b></td><td>${esc(l.empresa || "")}<small style="display:block;color:var(--texto3)">${esc(l.contacto || "")}</small></td><td><span class="area dir">${etiquetaProy(l.proyecto_id)}</span></td>
-      <td>${fDMA(p.fecha)}</td><td${cad ? ` style="color:var(--mal)" title="Caducada: llama al cliente"` : ""}>${fDMA(p.validez) || "—"}${cad ? " ⚠" : ""}</td><td class="num">${eur(p.subtotal)}</td><td class="num"><b style="font-weight:600">${eur(p.total)}</b></td>
+      <td>${fDMA(p.fecha)}</td><td${cad ? ` style="color:var(--mal)" title="Caducada: llama al cliente"` : ""}>${fDMA(p.validez) || "—"}${cad ? " ⚠" : ""}</td><td class="num">${eur(p.subtotal)}</td><td class="num"><b style="font-weight:600">${eur(p.total)}</b></td>${verCom ? (cp => `<td class="num">${cp ? `<b style="font-weight:600;color:var(--bien)">${eur(cp.total)}</b>${cp.reparto.length > 1 ? `<small style="display:block;color:var(--texto3)">${cp.reparto.map(([n, v]) => `${esc(n)} ${eur(v)}`).join(" · ")}</small>` : ""}` : "—"}</td>`)(cpDe(p)) : ""}
       <td><span class="pildora ${e[1]}">${e[0]}</span>${compraDePresu(p.id) ? ` <small style="color:var(--ok)">· en ventas</small>` : ""}</td>${esDir() ? `<td>${esc(nomPersona(p.creado_por) || "—")}</td>` : ""}</tr>`; }).join("")
-    : `<tr><td colspan="9">No hay propuestas${filtroPropProy !== "todos" || filtroPropEstado ? " con este filtro" : " todavía. Se crean desde la ficha de cada lead"}.</td></tr>`}
+    : `<tr><td colspan="10">No hay propuestas${filtroPropProy !== "todos" || filtroPropEstado ? " con este filtro" : " todavía. Se crean desde la ficha de cada lead"}.</td></tr>`}
   </tbody></table></div>`;
 }
 function vContactos() {
