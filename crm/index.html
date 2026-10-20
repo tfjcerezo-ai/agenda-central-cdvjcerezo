@@ -1064,7 +1064,7 @@ function imprimirPresupuesto(l, d) {
   const e2 = (n) => (+n || 0).toLocaleString("es-ES", {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " €";
   const esBernad = l.proyecto_id === "jose-bernad";
   const logoCdv = (document.querySelector(".lateral img") || {}).src || "";
-  const cabMarca = esBernad ? `<img src="${location.origin}/crm/logo-bernad.png" alt="Bernad" style="height:70px;display:block;margin-bottom:4px"><small>José Bernad S.L. · Protecciones industriales y perfilería sanitaria<br>www.josebernad.com · comercial@josebernad.com</small>`
+  const cabMarca = esBernad ? `<img src="${location.origin}/crm/logo-bernad.png" alt="Bernad" style="height:70px;display:block;margin-bottom:4px"><small>JOSÉ BERNAD, S.L. · CIF B02052058<br>Parque Empresarial Campollano, Avda. Adeca, 17 · 02007 Albacete<br>Tel. 967 219 649 · info@josebernad.com · www.josebernad.com</small>`
     : `${logoCdv ? `<img src="${logoCdv}" alt="CDV by JCerezo" style="height:70px;display:block;margin-bottom:4px">` : "CDV by JCerezo"}<small>CDV by JCerezo · ${esc(nomProy(l.proyecto_id))}<br>www.cdvbyjcerezo.com · javier@cdvbyjcerezo.com · 670 86 56 67</small>`;
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Presupuesto ${esc(d.numero || "")} · ${esc(l.empresa)}</title>
   <style>@page{size:A4;margin:16mm 14mm}body{font-family:Helvetica,Arial,sans-serif;color:#1d2433;font-size:11.5px;margin:0}
