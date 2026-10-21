@@ -416,6 +416,12 @@ let productos = [];
 let catalogo = [], netas = {}, presupuestos = [];   // catálogo con precios para presupuestos (neta solo director y socios)
 let compras = [];      // crm_compras: ficha de compra de los clientes (José Bernad, CAYFI…)    // crm_productos: productos que se comercializan dentro de un proyecto (p. ej. José Bernad)     // solo director: facturas emitidas por CDV by JCerezo
 let filtroVentas = "todos";
+let filtroPrio = "todas";
+const ORDEN_PRIO = {alta: 0, media: 1, baja: 2};
+const ordenPrio = (l) => ORDEN_PRIO[l.prioridad] ?? 1;
+const linkedinDe = (l) => (l.extra && l.extra.linkedin) || "";
+const buscarLinkedin = (l) => "https://www.linkedin.com/search/results/all/?keywords=" + encodeURIComponent([l.contacto, l.empresa].filter(Boolean).join(" "));
+const pildoraPrio = (p) => `<span class="prio ${esc(p || "media")}">${esc((p || "media")[0].toUpperCase() + (p || "media").slice(1))}</span>`;
 let gastos = [], recurrentes = [], filtroGasto = "todos", impuestos = [];
 let vistaPipe = (() => { try { return localStorage.getItem("crm_vista_pipe") || "tablero"; } catch (e) { return "tablero"; } })(), filtroRapido = "todos", filtroEtapaLista = null;   // solo director: gastos de CDV by JCerezo
 let metricaMes = "cdv", anioMes = new Date().getFullYear();
@@ -762,6 +768,7 @@ function enlazar(r) {
   r.querySelectorAll("[data-manio]").forEach(b => b.onclick = () => { anioMes += +b.dataset.manio; render(); });
   r.querySelectorAll("[data-vpipe]").forEach(b => b.onclick = () => { vistaPipe = b.dataset.vpipe; try { localStorage.setItem("crm_vista_pipe", vistaPipe); } catch (e) {} render(); });
   r.querySelectorAll("[data-frapido]").forEach(b => b.onclick = () => { filtroRapido = b.dataset.frapido; render(); });
+  r.querySelectorAll("[data-fprio]").forEach(b => b.onclick = () => { filtroPrio = b.dataset.fprio; render(); });
   r.querySelectorAll("[data-fetapa]").forEach(b => b.onclick = () => { const e = b.dataset.fetapa; filtroEtapaLista = !e || filtroEtapaLista === e ? null : e; render(); });
   r.querySelectorAll("[data-impuesto]").forEach(b => b.onclick = () => editarImpuesto(+b.dataset.impuesto));
   const ni = $("#nuevo-impuesto", r); if (ni) ni.onclick = () => editarImpuesto(null);
@@ -851,12 +858,13 @@ function filtrados() {
   const q = busqueda.toLowerCase();
   return leads.filter(l => pasaFiltro(l.proyecto_id, filtroProy))
     .filter(l => filtroPersona === "todos" || (filtroPersona === "sin" ? !l.closer_id && !l.setter_id : l.closer_id === filtroPersona || l.setter_id === filtroPersona))
+    .filter(l => filtroPrio === "todas" || (l.prioridad || "media") === filtroPrio)
     .filter(l => !q || [l.empresa, l.contacto, l.email, l.telefono].join(" ").toLowerCase().includes(q));
 }
 function tarjeta(l) {
   return `<div class="lead" role="button" tabindex="0" data-lead="${l.id}" style="border-left:3px solid ${colorProy(l.proyecto_id)}">
     <span class="lead-sup"><span class="avatar">${iniciales(l.empresa)}</span><span class="lead-nom"><b>${esc(l.empresa)}</b><small>${esc(l.contacto || "Sin contacto")}</small></span><span class="prob">${PROB[l.etapa] || 0} %</span></span>
-    <span class="lead-serv"><span>${etiquetaProy(l.proyecto_id)}</span></span>
+    <span class="lead-serv"><span>${etiquetaProy(l.proyecto_id)}</span> ${pildoraPrio(l.prioridad)}${linkedinDe(l) ? ` <span title="Tiene LinkedIn" style="font-size:11px;font-weight:700;color:#4a90d9">in</span>` : ""}</span>
     ${tagsProd(l.productos)}${l.interes ? `<span style="display:block;margin-top:4px">${pildoraInteres(l.interes)}</span>` : ""}
     <span class="lead-inf"><span class="valor">${+l.valor ? eur(l.valor) : "—"}</span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${esc(l.proximo_paso || "Sin próximo paso")}${l.proximo_paso_fecha ? " · " + rel(l.proximo_paso_fecha) : ""}</span></span>
     <span class="lead-cta">Closer: <b>${esc(l.closer_id ? nomPersona(l.closer_id) : "sin asignar")}</b>${l.setter_id ? " · Setter: " + esc(nomPersona(l.setter_id)) : ""}</span>
@@ -889,11 +897,11 @@ function vPipeline() {
   const personas = esDir() ? perfiles.filter(p => p.activo) : [];
   const conmutador = `<div class="filtros" role="group" aria-label="Vista"><button class="chip" data-vpipe="tablero" aria-pressed="${vistaPipe !== "lista"}">Tablero</button><button class="chip" data-vpipe="lista" aria-pressed="${vistaPipe === "lista"}">Lista</button></div>`;
   return `<div class="cabecera"><div><h2>Pipeline</h2><div class="sub">${Ls.filter(esActivo).length} leads abiertos${vg.length ? ` · ${vg.length} ventas cerradas` : ""} · pulsa uno para ver y actualizar</div></div><div class="filtros">${conmutador}${esDir() ? `<button class="btn" data-importar-leads>⬆ Importar leads</button>` : ""}<button class="btn btn-oro" data-nuevo-lead>+ Nuevo lead</button></div></div>
-  <div class="barra-herr"><div class="izq">${chipsProyecto("fproy", filtroProy)}</div>
+  <div class="barra-herr"><div class="izq">${chipsProyecto("fproy", filtroProy)}<div class="filtros" role="group" aria-label="Prioridad" style="margin-top:8px">${[["todas", "Toda prioridad"], ["alta", "Alta"], ["media", "Media"], ["baja", "Baja"]].map(([k, t]) => `<button class="chip" data-fprio="${k}" aria-pressed="${filtroPrio === k}">${k === "todas" ? t : pildoraPrio(k)}</button>`).join("")}</div></div>
     <div class="der">${esDir() ? `<select class="entrada" id="f-persona" aria-label="Comercial"><option value="todos">Todo el equipo</option><option value="sin" ${filtroPersona === "sin" ? "selected" : ""}>Sin asignar</option>${personas.map(p => `<option value="${p.id}" ${filtroPersona === p.id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select>` : ""}
     <input class="entrada buscar" id="buscar" type="search" placeholder="Buscar empresa o contacto" value="${esc(busqueda)}"></div></div>
   ${vistaPipe === "lista" ? vLista(Ls) : `<div class="kanban-scroll"><div class="kanban">${ETAPAS.map(e => {
-    const g = Ls.filter(l => l.etapa === e).sort((a, b) => (a.proximo_paso_fecha || "9").localeCompare(b.proximo_paso_fecha || "9"));
+    const g = Ls.filter(l => l.etapa === e).sort((a, b) => ordenPrio(a) - ordenPrio(b) || (a.proximo_paso_fecha || "9").localeCompare(b.proximo_paso_fecha || "9"));
     const extra = e === GANADO ? vg : [];
     const v = g.reduce((s, l) => s + (+l.valor || 0), 0) + extra.reduce((s, x) => s + (+x.importe || 0), 0);
     const n = g.length + extra.length;
@@ -909,13 +917,13 @@ const FILTROS_RAPIDOS = [["todos", "Todos", () => true], ["vencidas", "Vencidas"
 function vLista(Ls) {
   const base = filtroEtapaLista ? Ls.filter(l => l.etapa === filtroEtapaLista) : Ls.filter(esActivo);
   const fr = FILTROS_RAPIDOS.find(f => f[0] === filtroRapido) || FILTROS_RAPIDOS[0];
-  const ls = base.filter(fr[2]).sort((a, b) => (a.proximo_paso_fecha || "9999").localeCompare(b.proximo_paso_fecha || "9999") || String(a.empresa).localeCompare(String(b.empresa), "es"));
+  const ls = base.filter(fr[2]).sort((a, b) => ordenPrio(a) - ordenPrio(b) || (a.proximo_paso_fecha || "9999").localeCompare(b.proximo_paso_fecha || "9999") || String(a.empresa).localeCompare(String(b.empresa), "es"));
   const cont = ETAPAS.map(e => [e, Ls.filter(l => l.etapa === e).length]);
   return `<div class="etapas-cont">${cont.map(([e, n]) => `<button class="etapa-cont${filtroEtapaLista === e ? " activa" : ""}${CERRADAS.includes(e) ? " cerr" : ""}" data-fetapa="${esc(e)}" aria-pressed="${filtroEtapaLista === e}"><span>${esc(e)}</span><b>${n}</b></button>`).join("")}</div>
   <div class="filtros" style="margin:10px 0">${FILTROS_RAPIDOS.map(([k, t, f]) => `<button class="chip" data-frapido="${k}" aria-pressed="${filtroRapido === k}">${t} <span style="color:var(--texto3)">${base.filter(f).length}</span></button>`).join("")}
     ${filtroEtapaLista ? `<button class="btn-texto" data-fetapa="">Quitar filtro «${esc(filtroEtapaLista)}» ×</button>` : ""}</div>
-  <div class="tabla-env"><table class="tabla-lista"><thead><tr><th>Empresa</th><th>Proyecto</th><th>Etapa</th><th>Interés</th><th>Próximo paso</th><th>Teléfono</th><th>Comercial</th><th class="num">Valor</th></tr></thead><tbody>
-  ${ls.map(l => `<tr class="clic" data-lead="${l.id}"><td><b style="font-weight:600">${esc(l.empresa)}</b><small style="display:block;color:var(--texto3)">${esc(l.contacto || "Sin contacto")}</small></td><td>${etiquetaProy(l.proyecto_id)}</td><td>${esc(l.etapa)}</td><td>${pildoraInteres(l.interes) || `<span style="color:var(--texto3)">—</span>`}</td>
+  <div class="tabla-env"><table class="tabla-lista"><thead><tr><th>Empresa</th><th>Prioridad</th><th>Proyecto</th><th>Etapa</th><th>Interés</th><th>Próximo paso</th><th>Teléfono</th><th>Comercial</th><th class="num">Valor</th></tr></thead><tbody>
+  ${ls.map(l => `<tr class="clic" data-lead="${l.id}"><td><b style="font-weight:600">${esc(l.empresa)}</b><small style="display:block;color:var(--texto3)">${esc(l.contacto || "Sin contacto")}${linkedinDe(l) ? ` · <a href="${esc(linkedinDe(l))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#4a90d9;font-weight:600">LinkedIn</a>` : ""}</small></td><td>${pildoraPrio(l.prioridad)}</td><td>${etiquetaProy(l.proyecto_id)}</td><td>${esc(l.etapa)}</td><td>${pildoraInteres(l.interes) || `<span style="color:var(--texto3)">—</span>`}</td>
     <td>${l.proximo_paso_fecha ? `${esc(l.proximo_paso || "Seguimiento")}<small style="display:block"><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${rel(l.proximo_paso_fecha)}</span></small>` : `<span style="color:var(--aviso)">Sin programar</span>`}</td>
     <td>${enlacesTel(telLead(l), l.id)}${l.movil && l.telefono ? `<small style="display:block;color:var(--texto3)">fijo ${esc(l.telefono)}</small>` : ""}</td><td>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}${l.setter_id ? `<small style="display:block;color:var(--texto3)">setter ${esc(nomPersona(l.setter_id))}</small>` : ""}</td><td class="num">${+l.valor ? eur(l.valor) : "—"}</td></tr>`).join("") || `<tr><td colspan="8">No hay leads con este filtro.</td></tr>`}
   </tbody></table></div>`;
@@ -1419,7 +1427,7 @@ async function abrirLead(id) {
   const capa = $("#capa");
   capa.innerHTML = `<div class="velo" data-cerrar></div>
   <aside class="cajon" role="dialog" aria-label="Lead ${esc(l.empresa)}">
-    <div class="cajon-sup"><div class="filtros"><span class="area dir">${etiquetaProy(l.proyecto_id)}</span><span class="prio ${l.prioridad}">Prioridad ${l.prioridad}</span>${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? `<span class="pildora p-mal">${esc(l.etapa)}</span>` : ""}</div><button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
+    <div class="cajon-sup"><div class="filtros"><span class="area dir">${etiquetaProy(l.proyecto_id)}</span><span class="prio ${l.prioridad}">Prioridad ${l.prioridad}</span>${linkedinDe(l) ? `<a class="pildora" href="${esc(linkedinDe(l))}" target="_blank" rel="noopener" style="color:#4a90d9;border:1px solid rgba(74,144,217,.5);text-decoration:none">in LinkedIn</a>` : ""}${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? `<span class="pildora p-mal">${esc(l.etapa)}</span>` : ""}</div><button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
     <div class="cajon-id"><span class="avatar g">${iniciales(l.empresa)}</span><div><h2>${esc(l.empresa)}</h2><p>${esc(l.contacto || "Sin contacto")}${l.cargo ? " · " + esc(l.cargo) : ""}</p>${l.tipo_cliente ? `<p style="margin-top:4px"><span class="pildora p-neutro">${esc(l.tipo_cliente)}</span></p>` : ""}${l.movil ? `<p style="margin-top:6px">📱 ${enlacesTel(l.movil, l.id)}</p>` : ""}${l.telefono ? `<p style="margin-top:6px">☎ ${l.movil ? `<a href="tel:${esc(l.telefono)}" style="color:var(--oro-claro)">${esc(l.telefono)}</a>` : enlacesTel(l.telefono, l.id)}</p>` : ""}</div></div>
     <div class="prob-bloque"><div><b>${+l.valor ? eur(l.valor) : "—"}</b><span>valor</span></div><div><b>${PROB[l.etapa] || 0} %</b><span>probabilidad</span></div><div><b>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}</b><span>closer</span></div><div class="barra"><span style="width:${PROB[l.etapa] || 0}%"></span></div></div>
     <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span></div>
@@ -1445,13 +1453,14 @@ async function abrirLead(id) {
       <div class="campo"><label for="l-cif">CIF</label><input id="l-cif" value="${esc(l.cif || "")}"></div>
       <div class="campo" style="grid-column:1/-1"><label for="l-direccion">Dirección</label><input id="l-direccion" value="${esc(l.direccion || "")}"></div>
       <div class="campo" style="grid-column:1/-1"><label for="l-web">Web</label><input id="l-web" value="${esc(l.web || "")}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="l-linkedin">LinkedIn (perfil del contacto o página de la empresa)</label><div style="display:flex;gap:8px"><input id="l-linkedin" type="url" placeholder="https://www.linkedin.com/in/…" value="${esc(linkedinDe(l))}" style="flex:1"><a class="btn" href="${esc(linkedinDe(l) || buscarLinkedin(l))}" target="_blank" rel="noopener">${linkedinDe(l) ? "Abrir" : "Buscar"}</a></div></div>
       ${esDir() ? `<div class="campo"><label for="l-proy">Proyecto</label><select id="l-proy">${proyectos.map(p => `<option value="${p.id}" ${p.id === l.proyecto_id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select></div>
       <div class="campo"><label for="l-closer">Closer</label><select id="l-closer"><option value="">Sin asignar</option>${personas.map(p => `<option value="${p.id}" ${p.id === l.closer_id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select></div>
       <div class="campo"><label for="l-setter">Setter</label><select id="l-setter"><option value="">Sin asignar</option>${personas.map(p => `<option value="${p.id}" ${p.id === l.setter_id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select></div>` : `<div class="campo"><label>Setter</label><input disabled value="${esc(l.setter_id ? nomPersona(l.setter_id) : "—")}"></div>`}
       ${selectorProductos("l", l.proyecto_id, l.productos)}
     </div>
     <button class="btn" id="guardar-ficha">Guardar cambios</button>
-    ${l.extra && Object.keys(l.extra).length ? `<div><div class="etiq" style="margin-bottom:8px">Otros datos (importados del Excel)</div><dl class="datos">${Object.entries(l.extra).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>` : ""}
+    ${l.extra && Object.keys(l.extra).filter(k => k !== "linkedin").length ? `<div><div class="etiq" style="margin-bottom:8px">Otros datos (importados del Excel)</div><dl class="datos">${Object.entries(l.extra).filter(([k]) => k !== "linkedin").map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>` : ""}
     <dl class="datos"><dt>Origen</dt><dd>${esc(l.origen || "—")}</dd><dt>Creado</dt><dd>${fHora(l.creado)}</dd><dt>Actualizado</dt><dd>${fHora(l.actualizado)}</dd>${l.motivo_perdida ? `<dt>Motivo</dt><dd>${esc(l.motivo_perdida)}</dd>` : ""}</dl>
     <div><div class="etiq" style="margin-bottom:10px">Historial</div><ul class="historial">${act.length ? act.map(h => `<li><div class="cuando">${fHora(h.fecha)} · ${esc(nomPersona(h.autor_id))}</div><div class="que">${esc(TIPOS_NOTA[h.tipo] || h.tipo)}</div><div>${esc(h.texto)}</div></li>`).join("") : "<li>Sin actividad todavía</li>"}</ul></div>
     ${esDir() ? `<button class="btn" id="borrar-lead" style="align-self:flex-start;color:var(--mal)">Borrar lead</button>` : ""}
@@ -1491,6 +1500,7 @@ async function abrirLead(id) {
       movil: $("#l-movil").value.trim() || null, cargo: $("#l-cargo").value.trim() || null, tipo_cliente: $("#l-tipo").value.trim() || null,
       ciudad: $("#l-ciudad").value.trim() || null, cif: $("#l-cif").value.trim() || null, direccion: $("#l-direccion").value.trim() || null, web: $("#l-web").value.trim() || null,
     };
+    { const li = $("#l-linkedin").value.trim(); if (li !== linkedinDe(l)) { const ex = {...(l.extra || {})}; if (li) ex.linkedin = /^https?:\/\//i.test(li) ? li : "https://" + li; else delete ex.linkedin; cambios.extra = ex; } }
     const empNueva = $("#l-empresa").value.trim(); if (!empNueva) return aviso("La empresa no puede quedar vacía", true); if (empNueva !== l.empresa) cambios.empresa = empNueva;
     if (document.getElementById("l-prods")) cambios.productos = leerProductos("l");
     const nuevaEtapa = $("#l-etapa").value;
