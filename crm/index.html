@@ -752,6 +752,16 @@ function render() {
 function enlazar(r) {
   r.querySelectorAll("[data-vista]").forEach(b => b.onclick = () => { vista = b.dataset.vista; render(); });
   r.querySelectorAll("[data-lead]").forEach(b => { b.onclick = () => abrirLead(+b.dataset.lead); b.onkeydown = (e) => { if (e.key === "Enter") abrirLead(+b.dataset.lead); }; });
+  // Arrastrar tarjetas entre columnas del tablero para cambiar de etapa
+  r.querySelectorAll(".kanban .lead[draggable]").forEach(t => {
+    t.ondragstart = (e) => { e.dataTransfer.setData("text/plain", t.dataset.lead); e.dataTransfer.effectAllowed = "move"; t.style.opacity = ".45"; };
+    t.ondragend = () => { t.style.opacity = ""; r.querySelectorAll(".columna").forEach(c => c.style.outline = ""); };
+  });
+  r.querySelectorAll(".kanban .columna[data-etapa]").forEach(col => {
+    col.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; col.style.outline = "2px dashed var(--oro)"; };
+    col.ondragleave = (e) => { if (!col.contains(e.relatedTarget)) col.style.outline = ""; };
+    col.ondrop = (e) => { e.preventDefault(); col.style.outline = ""; const id = +e.dataTransfer.getData("text/plain"); if (id) moverEtapa(id, col.dataset.etapa); };
+  });
   r.querySelectorAll("[data-ir-proy]").forEach(b => { const ir = () => { filtroProy = b.dataset.irProy; vista = "pipeline"; render(); }; b.onclick = ir; b.onkeydown = (e) => { if (e.key === "Enter") ir(); }; });
   r.querySelectorAll("[data-fproy]").forEach(b => b.onclick = () => { filtroProy = b.dataset.fproy; render(); });
   r.querySelectorAll("[data-nuevo-lead]").forEach(b => b.onclick = nuevoLead);
@@ -862,7 +872,7 @@ function filtrados() {
     .filter(l => !q || [l.empresa, l.contacto, l.email, l.telefono].join(" ").toLowerCase().includes(q));
 }
 function tarjeta(l) {
-  return `<div class="lead" role="button" tabindex="0" data-lead="${l.id}" style="border-left:3px solid ${colorProy(l.proyecto_id)}">
+  return `<div class="lead" role="button" tabindex="0" data-lead="${l.id}" draggable="true" title="Pulsa para abrir · arrastra para cambiar de etapa" style="border-left:3px solid ${colorProy(l.proyecto_id)};cursor:grab">
     <span class="lead-sup"><span class="avatar">${iniciales(l.empresa)}</span><span class="lead-nom"><b>${esc(l.empresa)}</b><small>${esc(l.contacto || "Sin contacto")}</small></span><span class="prob">${PROB[l.etapa] || 0} %</span></span>
     <span class="lead-serv"><span>${etiquetaProy(l.proyecto_id)}</span> ${pildoraPrio(l.prioridad)}${linkedinDe(l) ? ` <span title="Tiene LinkedIn" style="font-size:11px;font-weight:700;color:#4a90d9">in</span>` : ""}</span>
     ${tagsProd(l.productos)}${l.interes ? `<span style="display:block;margin-top:4px">${pildoraInteres(l.interes)}</span>` : ""}
@@ -890,6 +900,20 @@ function tarjetaVenta(v) {
     <span class="lead-inf"><span class="valor">${eur(v.importe)}</span><span class="pildora ${e[1]}">${e[0]}</span></span>
     <span class="lead-cta">Closer: <b>${esc(closers || "—")}</b>${v.setter ? " · Setter: " + esc(v.setter) : ""}</span>
   </div>`;
+}
+async function moverEtapa(id, etapa) {
+  const l = leads.find(x => x.id === id); if (!l || l.etapa === etapa) return;
+  const cambios = {etapa, actualizado: new Date().toISOString()}; let motivo = null;
+  if (etapa === PERDIDO) { motivo = prompt("Motivo de la pérdida (" + MOTIVOS.join(", ") + "):", "No responde"); if (motivo === null) return; cambios.motivo_perdida = motivo; }
+  if (etapa === NO_INTERESA) { motivo = prompt("Motivo (" + MOTIVOS_NO.join(", ") + "):", "No le interesa"); if (motivo === null) return; cambios.motivo_perdida = motivo; }
+  const antes = l.etapa;
+  try {
+    const {data, error} = await sb.from("crm_leads").update(cambios).eq("id", id).select().single();
+    if (error) throw error;
+    Object.assign(l, data);
+    await sb.from("crm_actividad").insert({lead_id: id, autor_id: yo.id, tipo: "etapa", texto: antes + " → " + etapa + (motivo ? " (" + motivo + ")" : "")});
+    aviso(`${l.empresa}: ${etapa}`); render();
+  } catch (err) { fallo(err, "No se pudo cambiar la etapa"); }
 }
 function vPipeline() {
   const Ls = filtrados();
