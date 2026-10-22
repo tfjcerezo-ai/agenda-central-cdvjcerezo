@@ -611,9 +611,9 @@ function chipsProyecto(attr, f) {
   return `<div><div class="filtros" role="group" aria-label="Proyecto">${fila1}</div>${fila2}</div>`;
 }
 /* Colores de proyecto: los mismos que en la Agenda */
-const COLOR_PROY = {elocrea: "#1F5BA0", kinelia: "#F5F5F5", jbernad: "#4DB8E8", zeren: "#A8D08D", cayfi: "#E63946", yiux: "#A0714F", consultoria: "#808080", liga: "#F2D21B", eventos: "#9B59B6", cdv: "#C9A84C", personal: "#00CED1"};
+const COLOR_PROY = {elocrea: "#1F5BA0", kinelia: "#F5F5F5", jbernad: "#4DB8E8", zeren: "#A8D08D", cayfi: "#E63946", yiux: "#A0714F", consultoria: "#808080", liga: "#F2D21B", eventos: "#9B59B6", cdv: "#C9A84C", personal: "#00CED1", induvec: "#0E7C9E"};
 const CLAVE_ID = {kinelia: "kinelia", liga25dj: "liga", "eventos-varios": "eventos", "jose-bernad": "jbernad", jbernad: "jbernad", zeren: "zeren", cayfi: "cayfi", yiux: "yiux", lidia: "yiux", consultoria: "consultoria"};
-const CLAVE_CUENTA = {"elocrea": "elocrea", "josé bernad": "jbernad", "jose bernad": "jbernad", "eventos": "eventos", "zeren clinic": "zeren", "cayfi": "cayfi", "yiux": "yiux", "consultoría": "consultoria", "consultoria": "consultoria"};
+const CLAVE_CUENTA = {"induvec": "induvec", "elocrea": "elocrea", "josé bernad": "jbernad", "jose bernad": "jbernad", "eventos": "eventos", "zeren clinic": "zeren", "cayfi": "cayfi", "yiux": "yiux", "consultoría": "consultoria", "consultoria": "consultoria"};
 const colorCuenta = (c) => COLOR_PROY[CLAVE_CUENTA[String(c || "").toLowerCase()]] || COLOR_PROY.cdv;
 const colorProy = (id) => { const k = CLAVE_ID[id] || (/lidia|yiux/i.test(id || "") ? "yiux" : null); return k ? COLOR_PROY[k] : colorCuenta((proyectos.find(p => p.id === id) || {}).cuenta); };
 const puntoColor = (col) => `<span class="punto" style="background:${col};box-shadow:0 0 0 1px rgba(255,255,255,.18);margin-right:6px;vertical-align:middle"></span>`;
