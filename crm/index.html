@@ -478,6 +478,10 @@ function escalarVenta(v) {
   return {...v, _raw: v, _cuota: +v.importe || 0, _cuotas: f, importe: x("importe"), com_cdv: x("com_cdv"), com_closer: x("com_closer"), com_closer2: x("com_closer2"), com_setter: x("com_setter")};
 }
 // Compras de un cliente: las apuntadas a mano + las ventas registradas en la agenda (las mensuales, una por cuota)
+const otrosDelCliente = (l) => leads.filter(x => x.id !== l.id && normEmp(x.empresa) === normEmp(l.empresa));
+const ventasDelCliente = (l) => veVentas() ? ventas.filter(v => normEmp(v.cliente) === normEmp(l.empresa)) : [];
+const propuestasEnCurso = (l) => presupuestos.filter(p => p.lead_id === l.id && (p.estado === "enviado" || p.estado === "borrador") && !compraDePresu(p.id));
+const totalComprado = (l) => r2(compras.filter(c => c.lead_id === l.id).reduce((s, c) => s + (+c.importe || 0), 0));
 function ventasDeLead(l) { const k = normEmp(l.empresa); return ventas.filter(v => normEmp(v.cliente) === k && proyDeVenta(v) === l.proyecto_id); }
 function comprasDe(leadsLista) {
   const out = [];
@@ -875,7 +879,7 @@ function tarjeta(l) {
   return `<div class="lead" role="button" tabindex="0" data-lead="${l.id}" draggable="true" title="Pulsa para abrir · arrastra para cambiar de etapa" style="border-left:3px solid ${colorProy(l.proyecto_id)};cursor:grab">
     <span class="lead-sup"><span class="avatar">${iniciales(l.empresa)}</span><span class="lead-nom"><b>${esc(l.empresa)}</b><small>${esc(l.contacto || "Sin contacto")}</small></span><span class="prob">${PROB[l.etapa] || 0} %</span></span>
     <span class="lead-serv"><span>${etiquetaProy(l.proyecto_id)}</span> ${pildoraPrio(l.prioridad)}${linkedinDe(l) ? ` <span title="Tiene LinkedIn" style="font-size:11px;font-weight:700;color:#4a90d9">in</span>` : ""}</span>
-    ${tagsProd(l.productos)}${l.interes ? `<span style="display:block;margin-top:4px">${pildoraInteres(l.interes)}</span>` : ""}
+    ${tagsProd(l.productos)}${l.interes ? `<span style="display:block;margin-top:4px">${pildoraInteres(l.interes)}</span>` : ""}${l.etapa === GANADO && propuestasEnCurso(l).length ? `<span class="pildora p-aviso" style="display:inline-block;margin-top:4px">Propuesta en curso: ${eur(propuestasEnCurso(l).reduce((s, p) => s + (+p.subtotal || 0), 0))}</span>` : ""}${otrosDelCliente(l).length ? `<span style="display:block;margin-top:4px;font-size:11px;color:var(--texto3)">+${otrosDelCliente(l).length} oportunidad${otrosDelCliente(l).length > 1 ? "es" : ""} con este cliente</span>` : ""}
     <span class="lead-inf"><span class="valor">${+l.valor ? eur(l.valor) : "—"}</span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${esc(l.proximo_paso || "Sin próximo paso")}${l.proximo_paso_fecha ? " · " + rel(l.proximo_paso_fecha) : ""}</span></span>
     <span class="lead-cta">Closer: <b>${esc(l.closer_id ? nomPersona(l.closer_id) : "sin asignar")}</b>${l.setter_id ? " · Setter: " + esc(nomPersona(l.setter_id)) : ""}</span>
   </div>`;
@@ -1012,8 +1016,8 @@ async function pasarAVenta(l, pz) {
   const {data, error} = await q.select().single();
   if (error) return "La propuesta se guardó, pero no se pudo pasar a venta: " + error.message;
   if (ya) Object.assign(ya, data); else compras.unshift(data);
+  { const {data: ld} = await sb.from("crm_leads").update({etapa: GANADO, valor: totalComprado(l)}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); }
   if (!ya) {
-    const {data: ld} = await sb.from("crm_leads").update({etapa: GANADO, valor: +pz.subtotal || 0}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld);
     await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Propuesta ${pz.numero || ""} aceptada: pasa a venta por ${eur(pz.subtotal)} sin IVA`});
   }
   return null;
@@ -1445,8 +1449,15 @@ function nuevoLead() {
 /* ===== FICHA DEL LEAD ===== */
 async function abrirLead(id) {
   const l = leads.find(x => x.id === id); if (!l) return;
-  const {data: act, error} = await sb.from("crm_actividad").select("*").eq("lead_id", id).order("fecha", {ascending: false});
+  const otros = otrosDelCliente(l), idsCli = [id, ...otros.map(x => x.id)];
+  const {data: actTodo, error} = await sb.from("crm_actividad").select("*").in("lead_id", idsCli).order("fecha", {ascending: false});
   if (error) return fallo(error, "No se pudo cargar el historial");
+  const act = actTodo.filter(h => h.lead_id === id);
+  const vCli = ventasDelCliente(l);
+  const filaHist = (h, conProy) => `<li><div class="cuando">${fHora(h.fecha)} · ${esc(nomPersona(h.autor_id))}${conProy ? ` · ${etiquetaProy((leads.find(x => x.id === h.lead_id) || {}).proyecto_id)}` : ""}</div><div class="que">${esc(TIPOS_NOTA[h.tipo] || h.tipo)}</div><div>${esc(h.texto)}</div></li>`;
+  const bloqueCliente = `<div class="bloque" style="padding:12px 14px"><div class="etiq" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">Este cliente <button class="btn" type="button" id="nueva-oport">+ Nueva oportunidad con este cliente</button></div>
+    ${otros.length ? `<ul class="lista" style="margin-bottom:8px">${otros.map(o => `<li class="clic" data-abrir-lead="${o.id}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>${etiquetaProy(o.proyecto_id)} <small style="color:var(--texto3)">${esc(o.etapa)}</small></span><b style="font-weight:600">${+o.valor ? eur(o.valor) : "—"}</b></li>`).join("")}</ul>` : `<p style="font-size:12.5px;color:var(--texto3);margin:0 0 6px">Sin otras oportunidades con esta empresa.</p>`}
+    ${vCli.length ? `<div class="etiq" style="margin:8px 0 6px">Ventas cerradas con este cliente</div><ul class="lista">${vCli.map(v => { const e = ESTADO_VENTA[v.estado] || [v.estado, "p-neutro"]; return `<li style="display:flex;justify-content:space-between;gap:8px"><span>${esc(v.proyecto || nomProy(proyDeVenta(v)))}${v.tipo_cobro === "mensual" ? " · cuota mensual" : ""}<small style="display:block;color:var(--texto3)">${fF(v.fecha_cobro || v.inicio_cuotas)}</small></span><span style="text-align:right"><b style="font-weight:600">${eur((v._raw || v).importe)}</b><br><span class="pildora ${e[1]}">${e[0]}</span></span></li>`; }).join("")}</ul>` : ""}</div>`;
   const personas = perfiles.filter(p => p.activo);
   const capa = $("#capa");
   capa.innerHTML = `<div class="velo" data-cerrar></div>
@@ -1456,6 +1467,7 @@ async function abrirLead(id) {
     <div class="prob-bloque"><div><b>${+l.valor ? eur(l.valor) : "—"}</b><span>valor</span></div><div><b>${PROB[l.etapa] || 0} %</b><span>probabilidad</span></div><div><b>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}</b><span>closer</span></div><div class="barra"><span style="width:${PROB[l.etapa] || 0}%"></span></div></div>
     <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span></div>
       <form class="paso-form" id="f-paso"><input class="entrada" id="paso-accion" aria-label="Acción" value="${esc(l.proximo_paso || "Llamar")}"><input class="entrada" type="date" id="paso-fecha" aria-label="Fecha" value="${l.proximo_paso_fecha || ""}"><button class="btn" type="submit">Programar</button></form></div>
+    ${bloqueCliente}
     <button class="btn" id="reunion-lead" style="align-self:flex-start">📅 Programar reunión</button>
     ${catalogoDe(l.proyecto_id).length && tieneFicha(l.proyecto_id) ? "" : bloquePresupuestos(l)}
     ${tieneFicha(l.proyecto_id) ? bloqueCompras(l) : ""}
@@ -1486,10 +1498,15 @@ async function abrirLead(id) {
     <button class="btn" id="guardar-ficha">Guardar cambios</button>
     ${l.extra && Object.keys(l.extra).filter(k => k !== "linkedin").length ? `<div><div class="etiq" style="margin-bottom:8px">Otros datos (importados del Excel)</div><dl class="datos">${Object.entries(l.extra).filter(([k]) => k !== "linkedin").map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>` : ""}
     <dl class="datos"><dt>Origen</dt><dd>${esc(l.origen || "—")}</dd><dt>Creado</dt><dd>${fHora(l.creado)}</dd><dt>Actualizado</dt><dd>${fHora(l.actualizado)}</dd>${l.motivo_perdida ? `<dt>Motivo</dt><dd>${esc(l.motivo_perdida)}</dd>` : ""}</dl>
-    <div><div class="etiq" style="margin-bottom:10px">Historial</div><ul class="historial">${act.length ? act.map(h => `<li><div class="cuando">${fHora(h.fecha)} · ${esc(nomPersona(h.autor_id))}</div><div class="que">${esc(TIPOS_NOTA[h.tipo] || h.tipo)}</div><div>${esc(h.texto)}</div></li>`).join("") : "<li>Sin actividad todavía</li>"}</ul></div>
+    <div><div class="etiq" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px">Historial${otros.length ? `<label style="font-size:12px;text-transform:none;letter-spacing:0;display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="hist-todo" style="width:auto;margin:0"> Ver todo el historial del cliente</label>` : ""}</div>
+      <ul class="historial" id="hist-lead">${act.length ? act.map(h => filaHist(h, false)).join("") : "<li>Sin actividad todavía</li>"}</ul>
+      ${otros.length ? `<ul class="historial" id="hist-cliente" hidden>${actTodo.map(h => filaHist(h, true)).join("") || "<li>Sin actividad todavía</li>"}</ul>` : ""}</div>
     ${esDir() ? `<button class="btn" id="borrar-lead" style="align-self:flex-start;color:var(--mal)">Borrar lead</button>` : ""}
   </aside>`;
   capa.querySelectorAll("[data-cerrar]").forEach(b => b.onclick = cerrarCapa);
+  capa.querySelectorAll("[data-abrir-lead]").forEach(b => b.onclick = () => abrirLead(+b.dataset.abrirLead));
+  { const ht = capa.querySelector("#hist-todo"); if (ht) ht.onchange = () => { capa.querySelector("#hist-lead").hidden = ht.checked; capa.querySelector("#hist-cliente").hidden = !ht.checked; }; }
+  { const no = capa.querySelector("#nueva-oport"); if (no) no.onclick = () => nuevaOportunidad(l); }
   $("#reunion-lead").onclick = () => editarReunion(null, {lead_id: l.id});
   const nc = $("#nueva-compra"); if (nc) nc.onclick = () => editarCompra(l, null);
   const np = $("#nuevo-presupuesto"); if (np) np.onclick = () => editarPresupuesto(l, null);
@@ -1545,6 +1562,7 @@ async function abrirLead(id) {
     try {
       const etapaAntes = l.etapa;
       await actualizar(cambios);
+      await sincronizarCliente(l, cambios);
       if (cambios.etapa) await nota("etapa", etapaAntes + " → " + cambios.etapa + (motivo ? " (" + motivo + ")" : ""));
       if (reasigna.length) await nota("asignacion", reasigna.join(" · "));
       aviso("Cambios guardados"); abrirLead(l.id); render();
@@ -1552,6 +1570,8 @@ async function abrirLead(id) {
   };
   const bl = $("#borrar-lead");
   if (bl) bl.onclick = async () => {
+    if (compras.some(c => c.lead_id === l.id) || ventasDeLead(l).length || presupuestos.some(p => p.lead_id === l.id && p.estado === "aceptado"))
+      return aviso("No se puede borrar: este lead tiene ventas, compras o propuestas aceptadas. Si ya no se trabaja, déjalo en su etapa final.", true);
     if (!confirm("¿Borrar el lead " + l.empresa + "? Quedará guardado en el historial de cambios por si hubiera que recuperarlo.")) return;
     const {error} = await sb.from("crm_leads").delete().eq("id", l.id);
     if (error) return fallo(error, "No se pudo borrar");
@@ -1559,6 +1579,49 @@ async function abrirLead(id) {
   };
 }
 const cerrarCapa = () => $("#capa").innerHTML = "";
+const CAMPOS_CLIENTE = ["contacto", "cargo", "telefono", "movil", "email", "cif", "direccion", "ciudad", "web", "tipo_cliente"];
+function nuevaOportunidad(l) {
+  const propios = proyectos.filter(p => misProyectos.includes(p.id));
+  modal(`<h3>Nueva oportunidad con ${esc(l.empresa)}</h3>
+    <p style="font-size:13px;color:var(--texto2);margin:0 0 12px">Se crea un lead nuevo con los datos de este cliente (contacto, teléfonos, correo, dirección, CIF, web y LinkedIn). La oportunidad actual no se toca.</p>
+    <div class="rejilla-campos">
+      <div class="campo"><label for="no-proy">Proyecto / producto *</label><select id="no-proy">${propios.map(p => `<option value="${p.id}" ${p.id !== l.proyecto_id ? "" : "disabled"}>${esc(p.nombre)}${p.id === l.proyecto_id ? " (el actual)" : ""}</option>`).join("")}</select></div>
+      <div class="campo"><label for="no-valor">Valor estimado (€)</label><input id="no-valor" type="number" min="0" step="0.01"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="no-nota">Nota inicial</label><input id="no-nota" placeholder="Qué le interesa de este producto"></div>
+    </div>`, async () => {
+    const proyecto_id = $("#no-proy").value; if (!proyecto_id || proyecto_id === l.proyecto_id) return "Elige un proyecto distinto del actual.";
+    const fila = {empresa: l.empresa, proyecto_id, etapa: "Nuevo", prioridad: l.prioridad || "media", origen: "Cliente existente",
+      valor: $("#no-valor").value ? r2(parseFloat($("#no-valor").value)) : 0, proximo_paso: "Llamar", proximo_paso_fecha: fechaISO(new Date())};
+    CAMPOS_CLIENTE.forEach(k => { if (l[k]) fila[k] = l[k]; });
+    if (linkedinDe(l)) fila.extra = {linkedin: linkedinDe(l)};
+    if (esDir()) { fila.closer_id = l.closer_id || null; fila.setter_id = l.setter_id || null; }
+    else if (yo.rol === "setter") fila.setter_id = yo.id; else fila.closer_id = yo.id;
+    const {data, error} = await sb.from("crm_leads").insert(fila).select().single();
+    if (error) return "No se pudo crear: " + error.message;
+    leads.unshift(data);
+    const nota = $("#no-nota").value.trim();
+    await sb.from("crm_actividad").insert([
+      {lead_id: data.id, autor_id: yo.id, tipo: "nota", texto: `Nueva oportunidad (${nomProy(proyecto_id)}) con un cliente existente: viene de ${nomProy(l.proyecto_id)} · ${l.etapa}${nota ? ". " + nota : ""}`},
+      {lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Abierta nueva oportunidad con este cliente en ${nomProy(proyecto_id)}`}]);
+    aviso("Oportunidad creada"); setTimeout(() => abrirLead(data.id), 50);
+  }, "Crear oportunidad");
+}
+// Si cambian los datos del cliente en una ficha, ofrece copiarlos a sus otras oportunidades
+async function sincronizarCliente(l, cambios) {
+  const otros = otrosDelCliente(l); if (!otros.length) return;
+  const comunes = {}; CAMPOS_CLIENTE.forEach(k => { if (k in cambios) comunes[k] = cambios[k]; });
+  const li = cambios.extra ? (cambios.extra.linkedin || "") : null;
+  const difieren = otros.filter(o => Object.entries(comunes).some(([k, v]) => (o[k] || null) !== (v || null)) || (li !== null && linkedinDe(o) !== li));
+  if (!difieren.length) return;
+  if (!confirm(`Este cliente tiene ${difieren.length} oportunidad${difieren.length > 1 ? "es" : ""} más. ¿Actualizar también allí los datos de contacto?`)) return;
+  let fallos = 0;
+  for (const o of difieren) {
+    const c = {...comunes}; if (li !== null) { const ex = {...(o.extra || {})}; if (li) ex.linkedin = li; else delete ex.linkedin; c.extra = ex; }
+    const {data, error} = await sb.from("crm_leads").update(c).eq("id", o.id).select().single();
+    if (error || !data) fallos++; else Object.assign(o, data);
+  }
+  if (fallos) aviso(`${fallos} oportunidad(es) no se pudieron actualizar (puede que no tengas acceso a ese proyecto).`, true);
+}
 
 /* ===== MODAL ===== */
 function modal(html, alEnviar, txtOk) {
@@ -1696,7 +1759,7 @@ function vContactos() {
     <div class="der"><input class="entrada buscar" id="buscar-cont" type="search" placeholder="Buscar empresa, persona, teléfono o correo" value="${esc(busqContactos)}"></div></div>
   <div class="tabla-env"><table><thead><tr><th>Empresa</th><th>Contacto</th><th>Móvil / teléfono</th><th>Correo</th><th>Productos</th><th class="num">Compras</th>${esDir() ? "<th>Comercial</th>" : ""}<th>Situación</th></tr></thead><tbody>
   ${lista.length ? lista.map(c => {
-    const l0 = c.leads[0];
+    const l0 = [...c.leads].sort((a, b) => String(b.actualizado || b.creado || "").localeCompare(String(a.actualizado || a.creado || "")))[0];
     const coms = [...new Set(c.leads.flatMap(l => [l.closer_id, l.setter_id]).filter(Boolean).map(nomPersona).concat(c.ventas.flatMap(v => [v.closer, v.setter]).filter(Boolean)))];
     const prods = [...new Set(c.ventas.map(v => proyDeVenta(v)).filter(Boolean))];
     const prodsLead = [...new Set(c.leads.map(l => l.proyecto_id).filter(id => id && !prods.includes(id)))];
