@@ -1398,22 +1398,84 @@ function enlazarPedidos(r, alCambiar) {
   r.querySelectorAll("[data-pf-res]").forEach(b => b.onclick = (e) => { e.stopPropagation(); imprimirResumenPedido(grupoPedido(pz(b, "pfRes"))); });
   r.querySelectorAll("[data-pf-mail]").forEach(b => b.onclick = (e) => { e.stopPropagation(); correoPedidoFab(pz(b, "pfMail")); });
   r.querySelectorAll("[data-pf-env]").forEach(b => b.onclick = async (e) => { e.stopPropagation(); const p = pz(b, "pfEnv"); const quitar = !!b.dataset.quitar;
-    const val = quitar ? null : new Date().toISOString();
-    const {data, error} = await sb.from("crm_presupuestos").update({enviado_fab: val}).eq("id", p.id).select().single(); if (error) return fallo(error, "No se pudo guardar");
-    Object.assign(p, data);
-    if (!quitar) { await sb.from("crm_actividad").insert({lead_id: p.lead_id, autor_id: yo.id, tipo: "nota", texto: `Pedido ${p.numero} enviado a ${FAB_PEDIDO[p.proyecto_id].corto}`});
-      const l = leads.find(x => x.id === p.lead_id); if (l && /^Enviar pedido/.test(l.proximo_paso || "")) { const {data: ld} = await sb.from("crm_leads").update({proximo_paso: null, proximo_paso_fecha: null}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); } }
+    const err = await marcarEnviado(p, quitar, ""); if (err) return;
     aviso(quitar ? "Marcado como pendiente de enviar" : `Pedido ${p.numero} marcado como enviado`); (alCambiar || render)(); });
+  correoTrasEnviar = alCambiar || render;
+}
+let correoTrasEnviar = null;
+async function marcarEnviado(p, quitar, como) {
+  const {data, error} = await sb.from("crm_presupuestos").update({enviado_fab: quitar ? null : new Date().toISOString()}).eq("id", p.id).select().single();
+  if (error) { fallo(error, "No se pudo guardar"); return error.message; }
+  Object.assign(p, data);
+  if (!quitar) { await sb.from("crm_actividad").insert({lead_id: p.lead_id, autor_id: yo.id, tipo: "nota", texto: `Pedido ${p.numero} enviado a ${FAB_PEDIDO[p.proyecto_id].corto}${como ? " " + como : ""}`});
+    const l = leads.find(x => x.id === p.lead_id); if (l && /^Enviar pedido/.test(l.proximo_paso || "")) { const {data: ld} = await sb.from("crm_leads").update({proximo_paso: null, proximo_paso_fecha: null}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); } }
+  return null;
 }
 
-function correoPedidoFab(pz) {
-  const f = FAB_PEDIDO[pz.proyecto_id], l = leads.find(x => x.id === pz.lead_id) || {};
-  const asunto = `Pedido INDUVEC ${pz.numero} · ${l.empresa || ""}`;
-  const cuerpo = [`Hola,`, ``, `Os paso el pedido ${pz.numero} de INDUVEC. Adjunto el PDF.`, ``,
+function textoCorreoPedido(pz) {
+  const l = leads.find(x => x.id === pz.lead_id) || {};
+  return [`Hola,`, ``, `Os paso el pedido ${pz.numero} de INDUVEC. Va adjunto en PDF.`, ``,
     `Cliente final (facturar y entregar a): ${l.empresa || ""}${l.cif ? " · CIF " + l.cif : ""}`, l.direccion ? `Entrega: ${l.direccion}` : "", [l.contacto, l.telefono || l.movil, l.email].filter(Boolean).join(" · "), ``,
     ...(pz.lineas || []).map(li => `- ${li.codigo || li.ref} · ${String(li.nombre).split("\n")[0]} · ${(+li.cantidad).toLocaleString("es-ES")} ${li.unidad} × ${e2p(li.precio)} = ${e2p(li.cantidad * li.precio)}`),
-    ``, `Base imponible: ${e2p(pz.subtotal)} · IVA 21 %: ${e2p(pz.iva)} · Total: ${e2p(pz.total)}`, ``, `Por favor, confirmadme recepción y fecha prevista de entrega.`, ``, `Un saludo,`, `Javier Cerezo · Director Comercial · INDUVEC`, `javier@induvec.com · +34 670 86 56 67`].filter(x => x !== null).join("\n");
-  location.href = `mailto:${encodeURIComponent(f.email || "")}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    ``, `Base imponible: ${e2p(pz.subtotal)} · IVA 21 %: ${e2p(pz.iva)} · Total: ${e2p(pz.total)}`, ``, `Por favor, confirmadme la recepción y la fecha prevista de entrega.`, ``, `Un saludo,`, ``, `Javier Cerezo`, `Director Comercial · INDUVEC`, `javier@induvec.com · +34 670 86 56 67`].join("\n");
+}
+const emailOk = (s) => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(s);
+/* Borrador del correo al fabricante: se revisa en el CRM y se envía desde javier@induvec.com con el PDF adjunto */
+function correoPedidoFab(pz) {
+  const f = FAB_PEDIDO[pz.proyecto_id], l = leads.find(x => x.id === pz.lead_id) || {};
+  const nombrePdf = `Pedido ${pz.numero} - ${f.corto} - ${String(l.empresa || "").replace(/\.+$/, "")}.pdf`.replace(/[\\/:*?"<>|]/g, "");
+  modal(`<h3>Correo a ${esc(f.corto)} · pedido ${esc(pz.numero)}</h3>
+    ${pz.enviado_fab ? `<p class="nota-ejemplo" style="margin-bottom:10px">⚠ Este pedido ya se marcó como enviado el ${fF(pz.enviado_fab)}. Si lo vuelves a enviar, le llegará otra vez.</p>` : ""}
+    <div class="rejilla-campos">
+      <div class="campo" style="grid-column:1/-1"><label for="co-para">Para</label><input id="co-para" type="email" value="${esc(f.email || "")}" placeholder="correo de ${esc(f.dest.split(" · ")[0])}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="co-asunto">Asunto</label><input id="co-asunto" value="${esc(`Pedido INDUVEC ${pz.numero} · ${l.empresa || ""}`)}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="co-texto">Texto</label><textarea id="co-texto" rows="16" style="font-size:12.5px">${esc(textoCorreoPedido(pz))}</textarea></div>
+    </div>
+    <p style="font-size:12.5px;color:var(--texto2);margin:6px 0 0">📎 Adjunto: <b>${esc(nombrePdf)}</b> · <a href="#" id="co-ver">ver PDF</a><br>Sale desde <b>javier@induvec.com</b> y te llega una copia oculta. Al enviarlo, el pedido se marca como enviado.</p>`,
+  async () => {
+    const para = $("#co-para").value.trim(), asunto = $("#co-asunto").value.trim(), texto = $("#co-texto").value;
+    if (!emailOk(para)) return "Pon un correo de destino válido.";
+    if (!asunto) return "Falta el asunto.";
+    const bt = [...document.querySelectorAll(".modal-acciones button")].pop(); if (bt) { bt.disabled = true; bt.textContent = "Enviando…"; }
+    try {
+      const pdf = await pdfPedidoBase64(pz);
+      const {data, error} = await sb.functions.invoke("enviar-pedido", {body: {presupuesto_id: pz.id, para, asunto, texto, pdf_base64: pdf, pdf_nombre: nombrePdf}});
+      if (error || !data || !data.ok) { if (bt) { bt.disabled = false; bt.textContent = "Enviar"; } return "No se pudo enviar: " + ((data && data.error) || (error && error.message) || "error desconocido") + ". No se ha marcado como enviado."; }
+    } catch (e) { if (bt) { bt.disabled = false; bt.textContent = "Enviar"; } return "No se pudo preparar el envío: " + e.message; }
+    await marcarEnviado(pz, false, "por correo a " + para);
+    aviso(`Pedido ${pz.numero} enviado a ${para}`);
+    setTimeout(() => (correoTrasEnviar || render)(), 0);
+  }, "Enviar");
+  const caja = $(".modal-caja"); if (caja) caja.style.maxWidth = "760px";
+  const ver = $("#co-ver"); if (ver) ver.onclick = (e) => { e.preventDefault(); imprimirPedidoFab(pz); };
+  const acc = $(".modal-acciones");
+  if (acc) { const bm = document.createElement("button"); bm.type = "button"; bm.className = "btn"; bm.textContent = "Abrir en mi correo"; bm.style.marginRight = "auto"; bm.title = "Sin adjunto: abre tu programa de correo con el texto";
+    bm.onclick = () => { location.href = `mailto:${encodeURIComponent($("#co-para").value.trim())}?subject=${encodeURIComponent($("#co-asunto").value)}&body=${encodeURIComponent($("#co-texto").value)}`; }; acc.prepend(bm); }
+}
+/* PDF del pedido generado en el navegador (html2pdf) para adjuntarlo al correo */
+let cargaHtml2pdf = null;
+function html2pdfListo() {
+  if (window.html2pdf) return Promise.resolve();
+  if (!cargaHtml2pdf) cargaHtml2pdf = new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"; s.onload = ok; s.onerror = () => { cargaHtml2pdf = null; ko(new Error("no se pudo cargar el generador de PDF")); }; document.head.appendChild(s); });
+  return cargaHtml2pdf;
+}
+// Limita los estilos del PDF a su contenedor para no alterar el resto del CRM mientras se genera
+function cssAcotado(css, raiz) {
+  return css.replace(/@media screen\{[^{}]*\{[^{}]*\}[^{}]*\}/g, "").replace(/@page\{[^{}]*\}/g, "")
+    .replace(/(^|\})\s*([^{}@]+)\{/g, (m, b, sel) => b + sel.split(",").map(s => { s = s.trim(); return s === "body" ? raiz : s === "*" ? raiz + " *," + raiz : raiz + " " + s; }).join(",") + "{");
+}
+async function pdfPedidoBase64(pz) {
+  await html2pdfListo();
+  const cont = document.createElement("div"); cont.style.cssText = "position:fixed;left:-10000px;top:0;width:210mm;background:#fff";
+  cont.innerHTML = `<style>${cssAcotado(CSS_PEDIDO, ".pdfped")}.pdfped .pag{width:210mm;height:295mm;min-height:0;overflow:hidden;page-break-after:auto}.pdfped h1,.pdfped h2,.pdfped h3{font-family:Helvetica,Arial,sans-serif;letter-spacing:normal}</style><div class="pdfped">${htmlPedidoFab(pz)}</div>`;
+  document.body.appendChild(cont);
+  try {
+    await Promise.all([...cont.querySelectorAll("img")].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
+    const pdf = await window.html2pdf().set({margin: 0, image: {type: "jpeg", quality: 0.95}, html2canvas: {scale: 2, useCORS: true, backgroundColor: "#ffffff"}, jsPDF: {unit: "mm", format: "a4", orientation: "portrait"}, pagebreak: {mode: ["css"]}}).from(cont.querySelector(".pdfped")).toPdf().get("pdf");
+    const nPag = cont.querySelectorAll(".pag").length || 1;
+    while (pdf.getNumberOfPages() > nPag) pdf.deletePage(pdf.getNumberOfPages());   // quita la hoja en blanco que deja el redondeo de altura
+    return pdf.output("datauristring").split(",")[1];
+  } finally { cont.remove(); }
 }
 
 /* PDF: pedido a un fabricante y resumen completo para el comercial */
@@ -1447,7 +1509,7 @@ function abrirPDF(titulo, cuerpo) {
 const logoInduvec = () => `${location.origin}/crm/img/induvec-logo.jpg`;
 const cabPedido = (t, s) => `<div class="cab"><img src="${logoInduvec()}" alt="INDUVEC"><div class="t"><h1>${t}</h1><div class="s">${s}</div></div></div>`;
 const piePedido = (izq) => `<div class="pie"><span>${esc(izq)}</span><span>javier@induvec.com · +34 670 86 56 67</span></div>`;
-function imprimirPedidoFab(pz) {
+function htmlPedidoFab(pz) {
   const f = FAB_PEDIDO[pz.proyecto_id], l = leads.find(x => x.id === pz.lead_id) || {}, bernad = pz.proyecto_id === "jose-bernad";
   const obs = obsCliente(pz);
   const filas = (pz.lineas || []).map(li => `<tr><td class="ref">${esc(li.ref)}</td>${bernad ? `<td class="ref">${esc(li.codigo || "—")}</td>` : ""}<td>${esc(String(li.nombre).split("\n")[0])}</td><td class="n">${(+li.cantidad).toLocaleString("es-ES")}</td><td>${esc(udP(li.unidad))}</td><td class="n">${e2p(li.precio)}</td><td class="n"><b>${e2p(li.cantidad * li.precio * (1 - (+li.dto || 0) / 100))}</b></td></tr>`).join("");
@@ -1461,7 +1523,11 @@ function imprimirPedidoFab(pz) {
     <h2>Condiciones</h2><div class="cond">${f.cond.map(([a, b]) => `<div><b>${esc(a)}:</b> ${esc(b)}</div>`).join("")}</div>
     <div class="firma"><div><div class="et">Recibido y conforme · ${esc(f.nombre)}</div></div><div><div class="et">Fecha prevista de entrega</div></div></div>
     ${piePedido("INDUVEC · Suministro industrial · Pedido " + pz.numero)}</section>`;
-  abrirPDF(`Pedido ${pz.numero} · ${f.corto} · ${l.empresa || ""}`, cuerpo);
+  return cuerpo;
+}
+function imprimirPedidoFab(pz) {
+  const f = FAB_PEDIDO[pz.proyecto_id], l = leads.find(x => x.id === pz.lead_id) || {};
+  abrirPDF(`Pedido ${pz.numero} · ${f.corto} · ${l.empresa || ""}`, htmlPedidoFab(pz));
 }
 function imprimirResumenPedido(pzs) {
   if (!pzs.length) return;
