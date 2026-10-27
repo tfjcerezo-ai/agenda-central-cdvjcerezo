@@ -539,6 +539,7 @@ function bloqueCompras(l) {
         <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:70px">${meses.map(m => { const v = porMes[m.k] || 0; return `<div title="${m.t}: ${eur(v)}" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:2px"><div style="background:${v ? "var(--oro)" : "var(--linea)"};height:${v ? Math.max(6, v / maxMes * 52) : 2}px;border-radius:3px"></div><div style="font-size:9px;color:var(--texto3);text-align:center">${m.t.replace(".", "")}</div></div>`; }).join("")}</div>`; })()}
     ${top.length ? `<div style="margin:8px 0">${top.map(([n, v]) => `<div class="fila-barra"><span>${esc(n)}</span><div class="barra"><span style="width:${v / Math.max(1, total) * 100}%"></span></div><span class="n">${eur(v)}</span></div>`).join("")}</div>` : ""}
     ${cs.length ? `<ul class="lista">${cs.map(c => { const e = ESTADO_COMPRA[c.estado] || [c.estado, "p-neutro"]; return `<li ${c._venta ? `title="Viene de la venta registrada en la agenda"` : `class="clic" data-compra="${c.id}" style="cursor:pointer"`}><span class="crece"><b style="font-weight:500">${esc(c.producto || "Compra")}</b>${c.descripcion ? " · " + esc(c.descripcion) : ""}<small>${c.presupuesto_id ? "Desde propuesta aceptada · " : ""}${fF(c.fecha)}${c.cantidad ? " · " + (+c.cantidad).toLocaleString("es-ES") + " " + esc(c.unidad || "") : ""}${c.notas ? " · " + esc(c.notas) : ""}</small></span><span style="text-align:right"><b style="font-weight:600">${eur(c.importe)}</b><br><span class="pildora ${e[1]}">${e[0]}</span></span></li>`; }).join("")}</ul>` : `<p class="vacia">${catalogoDe(l.proyecto_id).length ? "Todavía no hay compras. Pulsa «+ Nueva compra», elige los productos del catálogo y saca la propuesta; cuando el cliente la acepte, pasa a venta aquí." : "Todavía no hay compras. Apunta cada pedido para tener su histórico."}</p>`}
+    ${bloquePedidosFab(l)}
   </div>`;
 }
 function editarCompra(l, id) {
@@ -730,6 +731,7 @@ async function cargarTodo() {
     gastos = gr.error ? [] : gr.data || []; recurrentes = rr.error ? [] : rr.data || [];
     const im = await sb.from("impuestos").select("*").order("ejercicio").order("periodo"); impuestos = im.error ? [] : im.data || [];
     if (!gr.error && !rr.error) await generarRecurrentes();
+    const pw = await sb.from("crm_pedidos_web").select("*").eq("estado", "nuevo").order("recibido"); pedidosWeb = pw.error ? [] : pw.data || [];
   }
   misProyectos = esDir() ? proyectos.map(p => p.id) : miembros.filter(m => m.perfil_id === yo.id).map(m => m.proyecto_id);
 }
@@ -810,6 +812,7 @@ function enlazar(r) {
   r.querySelectorAll("[data-semana]").forEach(b => b.onclick = () => { semana = b.dataset.semana === "0" ? 0 : semana + (+b.dataset.semana); render(); });
   r.querySelectorAll("[data-nueva-reunion]").forEach(b => b.onclick = () => editarReunion(null, {fecha: b.dataset.fecha || null}));
   r.querySelectorAll("[data-reunion]").forEach(b => b.onclick = (e) => { e.stopPropagation(); editarReunion(+b.dataset.reunion); });
+  enlazarPedidos(r);
 }
 
 /* ===== PANEL ===== */
@@ -837,6 +840,7 @@ function vPanel() {
     <div class="cifra ${venc.length ? "alerta" : "bien"}"><div class="etiq">Pasos vencidos</div><div class="num">${venc.length}</div><div class="det">${venc.length ? "leads sin actualizar" : "todo al día"}${sinPaso.length ? ` · ${sinPaso.length} sin próximo paso` : ""}</div></div>
     ${esDir() ? `<div class="cifra bien" data-vista="ventas" style="cursor:pointer"><div class="etiq">Ventas cerradas</div><div class="num">${ventas.length}</div><div class="det">${eur(ventas.reduce((s, v) => s + (+v.importe || 0), 0))} · ver ventas →</div></div>` : `<div class="cifra bien"><div class="etiq">Ganados</div><div class="num">${ganados.length}</div><div class="det">${eur(ganados.reduce((s, l) => s + (+l.valor || 0), 0))}</div></div>`}
   </section>
+  ${bloqueAvisosPedidos()}
   ${bloqueReunionesHoy()}
   <section class="dos-col">
     <div class="bloque"><div class="bloque-cab"><h3>Próximos pasos</h3><button class="btn-texto" data-vista="pipeline">Abrir pipeline →</button></div>
@@ -1243,6 +1247,311 @@ function imprimirPresupuesto(l, d) {
   w.document.open(); w.document.write(html); w.document.close();
 }
 
+/* ===== PEDIDOS INDUVEC: pedido web → un pedido por fabricante (José Bernad / CAYFI) ===== */
+let pedidosWeb = [];   // solo director: pedidos recibidos desde induvec.com pendientes de revisar (crm_pedidos_web)
+const FAB_PEDIDO = {
+  "jose-bernad": {nombre: "José Bernad, S.L.", corto: "José Bernad", pref: "JB", color: "#F2B705", email: "", dest: "Manuel · Dirección comercial de José Bernad",
+    cond: [["Suministro y factura", "José Bernad, S.L. sirve el material y factura directamente al cliente."], ["Precios", "Tarifa de instalador, sin IVA."], ["Portes", "Debidos, a cargo del cliente."],
+      ["Forma de pago", "La elige el cliente en la confirmación de pedido: transferencia 50 % / 50 %, recibo SEPA a 30 días o confirming a 30, 45 o 60 días."], ["Comisión", "Operación comercial de INDUVEC (Javier Cerezo), según el acuerdo de colaboración."]]},
+  "cayfi": {nombre: "CAYFI, S.L.", corto: "CAYFI", pref: "CY", color: "#E63946", email: "", dest: "Nuria · Responsable comercial de CAYFI",
+    cond: [["Suministro y factura", "CAYFI, S.L. sirve el material, factura y cobra directamente al cliente."], ["Precios", "Tarifa vigente, sin IVA, por cajas completas."], ["Portes", "A consultar, aparte."],
+      ["Forma de pago", "Transferencia antes del envío."], ["Comisión", "Cliente de INDUVEC como comisionista / colaborador: 10 % de comisión a fin de mes. Incluir en el listado mensual de clientes."]]}
+};
+const PEDIDOS_DESDE = "2026-10-23";   // los avisos de «por enviar» cuentan desde que existe el circuito
+const esPedidoFab = (pz) => pz && pz.estado === "aceptado" && !!FAB_PEDIDO[pz.proyecto_id];
+const pedidosPorEnviar = () => presupuestos.filter(pz => esPedidoFab(pz) && !pz.enviado_fab && String(pz.fecha || "") >= PEDIDOS_DESDE);
+const grupoPedido = (pz) => presupuestos.filter(x => esPedidoFab(x) && (pz.pedido_web_id ? x.pedido_web_id === pz.pedido_web_id : x.id === pz.id)).sort((a, b) => (a.proyecto_id === "jose-bernad" ? 0 : 1) - (b.proyecto_id === "jose-bernad" ? 0 : 1));
+const fDMAp = (s) => s ? String(s).slice(0, 10).split("-").reverse().join("/") : "";
+const e2p = (n) => { const [e, d] = Math.abs(+n || 0).toFixed(2).split("."); return ((+n || 0) < 0 ? "-" : "") + e.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + d + " €"; };
+
+/* Numeración: JB-AAMMDD-NN / CY-AAMMDD-NN */
+function numeroPedido(proy, fecha) {
+  const f = FAB_PEDIDO[proy]; const d = String(fecha || fechaISO(new Date())).replace(/-/g, "").slice(2);
+  const base = `${f.pref}-${d}-`; const n = presupuestos.filter(p => String(p.numero || "").startsWith(base)).length + 1;
+  return base + String(n).padStart(2, "0");
+}
+
+/* Texto del correo que llega desde la web → datos del pedido */
+function parsearPedidoWeb(txt) {
+  const t = String(txt || "").replace(/\r/g, "");
+  const campo = (et) => { const m = t.match(new RegExp("^\\s*" + et + "\\s*:\\s*(.+)$", "mi")); return m ? m[1].trim() : ""; };
+  const fm = t.match(/SOLICITUD DE PEDIDO[^\n]*?(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}:\d{2}))?/i);
+  const lineas = [];
+  t.split("\n").forEach(s => { const m = s.match(/(IV-[A-Z0-9]+-[A-Z0-9]+)\s*·.*·\s*([\d.,]+)\s*([^\s×x\d][^×]*?)\s*[×x]\s*([\d.,]+)\s*€/i);
+    if (m) lineas.push({ref: m[1].toUpperCase(), cantidad: +m[2].replace(/\./g, "").replace(",", "."), precio_web: +m[4].replace(/\./g, "").replace(",", ".")}); });
+  return {cliente: {nombre: campo("Nombre"), empresa: campo("Empresa"), cif: campo("CIF\\/NIF") || campo("CIF"), correo: campo("Correo"), telefono: campo("Tel[eé]fono"), entrega: campo("Entrega"), observaciones: campo("Observaciones")},
+    lineas, fecha: fm ? `${fm[3]}-${fm[2]}-${fm[1]}` : fechaISO(new Date()), hora: fm && fm[4] ? fm[4] : "", origen: "correo"};
+}
+
+/* Reparte las líneas del pedido web entre fabricantes con el catálogo del CRM (precio = tarifa del CRM, nunca el de la web) */
+function repartoPedido(d) {
+  const grupos = {}, sinRef = [], difPrecio = [];
+  (d.lineas || []).forEach(li => {
+    const x = catalogo.find(c => String(c.ref_web || "").toUpperCase() === String(li.ref || "").toUpperCase());
+    if (!x || !FAB_PEDIDO[x.proyecto_id]) { sinRef.push(li); return; }
+    if (li.precio_web != null && Math.abs(+li.precio_web - +x.precio) > 0.005) difPrecio.push(`${li.ref}: web ${eur(li.precio_web)} · CRM ${eur(x.precio)}`);
+    (grupos[x.proyecto_id] = grupos[x.proyecto_id] || []).push({id: x.id, ref: x.ref, codigo: x.codigo || null, nombre: x.nombre, unidad: x.unidad, cantidad: +li.cantidad || 0, precio: +x.precio || 0, dto: 0, libre: false, fuera: false, web: li.ref});
+  });
+  return {grupos, sinRef, difPrecio};
+}
+
+function revisarPedidoWeb(d, pwId) {
+  const c = d.cliente || {}; const {grupos, sinRef, difPrecio} = repartoPedido(d);
+  const proys = Object.keys(grupos);
+  const tabla = (proy) => { const f = FAB_PEDIDO[proy], ls = grupos[proy], t = totalesPresu(ls, proy);
+    return `<div style="margin:10px 0 4px;font-weight:700;display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:2px;background:${f.color};display:inline-block"></span>Pedido a ${esc(f.nombre)} · ${esc(numeroPedido(proy, d.fecha))}</div>
+      <table style="width:100%;font-size:12.5px"><thead><tr><th>Web</th><th>Ref.</th><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Importe</th></tr></thead><tbody>
+      ${ls.map(li => `<tr><td>${esc(li.web)}</td><td>${esc(li.ref)}</td><td>${esc(li.nombre)}</td><td class="num">${(+li.cantidad).toLocaleString("es-ES")} ${esc(li.unidad)}</td><td class="num">${eur(li.precio)}</td><td class="num"><b>${eur(li.cantidad * li.precio)}</b></td></tr>`).join("")}
+      </tbody></table><div class="fila-liq"><span>Subtotal ${esc(f.corto)} (sin IVA)</span><b>${eur(t.sub)}</b></div>`; };
+  const tot = proys.reduce((s, p) => s + totalesPresu(grupos[p], p).sub, 0);
+  modal(`<h3>Pedido web${d.hora ? " · " + esc(fDMAp(d.fecha)) + " " + esc(d.hora) : ""}</h3>
+    <div class="rejilla-campos">
+      <div class="campo"><label for="pw-empresa">Empresa</label><input id="pw-empresa" value="${esc(c.empresa || c.nombre || "")}"></div>
+      <div class="campo"><label for="pw-cif">CIF/NIF</label><input id="pw-cif" value="${esc(c.cif || "")}"></div>
+      <div class="campo"><label for="pw-contacto">Contacto</label><input id="pw-contacto" value="${esc(c.nombre || "")}"></div>
+      <div class="campo"><label for="pw-tel">Teléfono</label><input id="pw-tel" value="${esc(c.telefono || "")}"></div>
+      <div class="campo"><label for="pw-email">Correo</label><input id="pw-email" value="${esc(c.correo || "")}"></div>
+      <div class="campo"><label for="pw-entrega">Dirección de entrega</label><input id="pw-entrega" value="${esc(c.entrega || "")}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="pw-obs">Observaciones del cliente</label><input id="pw-obs" value="${esc(c.observaciones || "")}"></div>
+    </div>
+    ${proys.map(tabla).join("") || `<p class="vacia">Ninguna línea coincide con el catálogo del CRM.</p>`}
+    ${proys.length ? `<div class="fila-liq total"><span>Total pedido (sin IVA)</span><b>${eur(tot)}</b></div>` : ""}
+    ${sinRef.length ? `<p style="color:var(--mal);font-size:12.5px">⚠ Sin correspondencia en el catálogo (no entran en ningún pedido): ${sinRef.map(x => esc(x.ref)).join(", ")}. Revisa la referencia web en el catálogo.</p>` : ""}
+    ${difPrecio.length ? `<p style="color:var(--aviso);font-size:12.5px">⚠ Precio de la web distinto del CRM (se usa el del CRM): ${difPrecio.map(esc).join(" · ")}</p>` : ""}
+    <p style="font-size:12.5px;color:var(--texto3)">Al confirmar se crea el cliente con una oportunidad ganada por fabricante, su propuesta aceptada y la venta. Los pedidos quedan en «PDF por enviar».</p>`,
+  async () => {
+    if (!proys.length) return "No hay líneas que se puedan pedir.";
+    const cli = {empresa: $("#pw-empresa").value.trim(), cif: $("#pw-cif").value.trim(), contacto: $("#pw-contacto").value.trim(), telefono: $("#pw-tel").value.trim(), email: $("#pw-email").value.trim(), direccion: $("#pw-entrega").value.trim(), observaciones: $("#pw-obs").value.trim()};
+    if (!cli.empresa) return "Falta el nombre de la empresa.";
+    const e = await generarPedidos(cli, grupos, d, pwId); if (e) return e;
+    aviso(`Pedido generado: ${proys.length} ${proys.length === 1 ? "pedido" : "pedidos"} por enviar`);
+    render();
+  }, "Confirmar y generar pedidos");
+  const caja = $(".modal-caja"); if (caja) caja.style.maxWidth = "860px";
+}
+
+async function generarPedidos(cli, grupos, d, pwId) {
+  const fecha = d.fecha || fechaISO(new Date()), val = new Date(fecha); val.setDate(val.getDate() + VALIDEZ_DIAS);
+  for (const proy of Object.keys(grupos)) {
+    const f = FAB_PEDIDO[proy], ls = grupos[proy], t = totalesPresu(ls, proy);
+    const filaL = {proyecto_id: proy, empresa: cli.empresa, contacto: cli.contacto || null, telefono: cli.telefono || null, email: cli.email || null, cif: cli.cif || null, direccion: cli.direccion || null,
+      origen: "Pedido web Induvec", etapa: "Propuesta", prioridad: "alta", closer_id: yo.id, creado_por: yo.id, proximo_paso: `Enviar pedido a ${f.corto}`, proximo_paso_fecha: fechaISO(new Date())};
+    const {data: l, error: el} = await sb.from("crm_leads").insert(filaL).select().single();
+    if (el) return "No se pudo crear el cliente: " + el.message;
+    leads.unshift(l);
+    const filaP = {lead_id: l.id, proyecto_id: proy, numero: numeroPedido(proy, fecha), fecha, validez: fechaISO(val), estado: "aceptado", lineas: ls, subtotal: t.sub, iva: t.iva, total: t.total,
+      notas: f.cond.map(([a, b]) => a + ": " + b).join("\n") + (cli.observaciones ? "\nObservaciones del cliente: " + cli.observaciones : ""), pedido_web_id: pwId || null};
+    const {data: pz, error: ep} = await sb.from("crm_presupuestos").insert(filaP).select().single();
+    if (ep) return "No se pudo guardar el pedido: " + ep.message;
+    presupuestos.unshift(pz);
+    await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Pedido web Induvec ${pz.numero}: ${eur(pz.subtotal)} + IVA. Pendiente de enviar a ${f.corto}.`});
+    const e = await pasarAVenta(l, pz); if (e) return e;
+  }
+  if (pwId) { await sb.from("crm_pedidos_web").update({estado: "procesado", procesado: new Date().toISOString()}).eq("id", pwId); pedidosWeb = pedidosWeb.filter(x => x.id !== pwId); }
+  return null;
+}
+
+function importarPedidoWeb() {
+  modal(`<h3>Importar pedido web</h3><p style="font-size:13px;color:var(--texto2)">Pega el texto del correo «SOLICITUD DE PEDIDO · INDUVEC» tal como te llega.</p>
+    <textarea id="pw-texto" rows="14" style="width:100%;font-size:12.5px" placeholder="SOLICITUD DE PEDIDO · INDUVEC · …"></textarea>`, async () => {
+    const d = parsearPedidoWeb($("#pw-texto").value);
+    if (!d.lineas.length) return "No encuentro líneas de producto (IV-…) en el texto.";
+    // Se guarda como pedido web (origen correo) para que los pedidos de cada fabricante queden agrupados
+    const {data: pw} = await sb.from("crm_pedidos_web").insert({datos: d, estado: "nuevo"}).select().single();
+    if (pw) pedidosWeb.push(pw);
+    setTimeout(() => revisarPedidoWeb(d, pw ? pw.id : null), 0);
+  }, "Leer pedido");
+}
+
+/* Bloque de avisos en el panel (solo director) */
+function bloqueAvisosPedidos() {
+  if (!esDir() || !proyectos.some(p => FAB_PEDIDO[p.id])) return "";
+  const pend = pedidosPorEnviar();
+  const nuevos = pedidosWeb;
+  return `<section class="bloque" style="margin-bottom:16px;${pend.length || nuevos.length ? "border:1px solid var(--aviso)" : ""}"><div class="bloque-cab"><h3>Pedidos Induvec${pend.length || nuevos.length ? ` <span class="pildora p-aviso">${nuevos.length + pend.length}</span>` : ""}</h3><button class="btn" data-importar-pedido type="button">Importar pedido web</button></div>
+    ${nuevos.length ? `<div class="etiq" style="margin:2px 0 6px">Pedidos web nuevos · revisar y confirmar</div><ul class="lista" style="margin-bottom:10px">${nuevos.map(p => { const d = p.datos || {}, c = d.cliente || {};
+      return `<li style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span>${esc(c.empresa || c.nombre || "Sin nombre")}<small style="display:block;color:var(--texto3)">${new Date(p.recibido).toLocaleString("es-ES", {day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"})} · ${(d.lineas || []).length} líneas${c.observaciones ? " · " + esc(c.observaciones) : ""}</small></span>
+        <span style="display:flex;gap:6px"><button class="btn btn-oro" type="button" data-pw-revisar="${p.id}">Revisar</button><button class="btn-texto" type="button" data-pw-descartar="${p.id}">Descartar</button></span></li>`; }).join("")}</ul>` : ""}
+    ${pend.length ? `<div class="etiq" style="margin:2px 0 6px">PDF por enviar a fabricantes</div><ul class="lista">${pend.map(filaPedidoFab).join("")}</ul>` : ""}
+    ${!nuevos.length && !pend.length ? `<p class="vacia" style="margin:0">No hay pedidos pendientes. Los pedidos de induvec.com entran aquí solos; si alguno no llega, impórtalo pegando el correo.</p>` : ""}
+  </section>`;
+}
+function filaPedidoFab(pz) {
+  const l = leads.find(x => x.id === pz.lead_id) || {}, f = FAB_PEDIDO[pz.proyecto_id];
+  return `<li style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${f.color};margin-right:6px"></span><b style="font-weight:600">${esc(pz.numero || "")}</b> · ${esc(f.corto)} · ${esc(l.empresa || "")}<small style="display:block;color:var(--texto3)">${fF(pz.fecha)} · ${(pz.lineas || []).length} ${(pz.lineas || []).length === 1 ? "línea" : "líneas"} · ${eur(pz.subtotal)} sin IVA${pz.enviado_fab ? " · enviado el " + fF(pz.enviado_fab) : ""}</small></span>
+    <span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" type="button" data-pf-pdf="${pz.id}">⬇ PDF</button><button class="btn" type="button" data-pf-mail="${pz.id}">✉ Correo</button>${grupoPedido(pz).length > 1 || pz.pedido_web_id ? `<button class="btn" type="button" data-pf-res="${pz.id}" title="Pedido completo para el comercial">Resumen</button>` : ""}${pz.enviado_fab ? `<button class="btn-texto" type="button" data-pf-env="${pz.id}" data-quitar="1">Deshacer enviado</button>` : `<button class="btn btn-oro" type="button" data-pf-env="${pz.id}">✓ Enviado</button>`}</span></li>`;
+}
+/* En la ficha del cliente: pedidos a fabricante de este lead */
+function bloquePedidosFab(l) {
+  const ps = presupuestos.filter(p => p.lead_id === l.id && esPedidoFab(p));
+  if (!ps.length) return "";
+  return `<div class="etiq" style="margin:12px 0 6px">Pedido al fabricante</div><ul class="lista">${ps.map(filaPedidoFab).join("")}</ul>`;
+}
+function enlazarPedidos(r, alCambiar) {
+  const pz = (b, k) => presupuestos.find(x => x.id === +b.dataset[k]);
+  r.querySelectorAll("[data-importar-pedido]").forEach(b => b.onclick = importarPedidoWeb);
+  r.querySelectorAll("[data-pw-revisar]").forEach(b => b.onclick = () => { const p = pedidosWeb.find(x => x.id === +b.dataset.pwRevisar); if (p) revisarPedidoWeb(Object.assign({origen: "web"}, p.datos, {fecha: String(p.recibido).slice(0, 10), hora: new Date(p.recibido).toLocaleTimeString("es-ES", {hour: "2-digit", minute: "2-digit"})}), p.id); });
+  r.querySelectorAll("[data-pw-descartar]").forEach(b => b.onclick = async () => { if (!confirm("¿Descartar este pedido web? No se crea nada en el CRM.")) return;
+    const {error} = await sb.from("crm_pedidos_web").update({estado: "descartado", procesado: new Date().toISOString()}).eq("id", +b.dataset.pwDescartar); if (error) return fallo(error, "No se pudo descartar");
+    pedidosWeb = pedidosWeb.filter(x => x.id !== +b.dataset.pwDescartar); render(); });
+  r.querySelectorAll("[data-pf-pdf]").forEach(b => b.onclick = (e) => { e.stopPropagation(); imprimirPedidoFab(pz(b, "pfPdf")); });
+  r.querySelectorAll("[data-pf-res]").forEach(b => b.onclick = (e) => { e.stopPropagation(); imprimirResumenPedido(grupoPedido(pz(b, "pfRes"))); });
+  r.querySelectorAll("[data-pf-mail]").forEach(b => b.onclick = (e) => { e.stopPropagation(); correoPedidoFab(pz(b, "pfMail")); });
+  r.querySelectorAll("[data-pf-env]").forEach(b => b.onclick = async (e) => { e.stopPropagation(); const p = pz(b, "pfEnv"); const quitar = !!b.dataset.quitar;
+    const err = await marcarEnviado(p, quitar, ""); if (err) return;
+    aviso(quitar ? "Marcado como pendiente de enviar" : `Pedido ${p.numero} marcado como enviado`); (alCambiar || render)(); });
+  correoTrasEnviar = alCambiar || render;
+}
+let correoTrasEnviar = null;
+async function marcarEnviado(p, quitar, como) {
+  const {data, error} = await sb.from("crm_presupuestos").update({enviado_fab: quitar ? null : new Date().toISOString()}).eq("id", p.id).select().single();
+  if (error) { fallo(error, "No se pudo guardar"); return error.message; }
+  Object.assign(p, data);
+  if (!quitar) { await sb.from("crm_actividad").insert({lead_id: p.lead_id, autor_id: yo.id, tipo: "nota", texto: `Pedido ${p.numero} enviado a ${FAB_PEDIDO[p.proyecto_id].corto}${como ? " " + como : ""}`});
+    const l = leads.find(x => x.id === p.lead_id); if (l && /^Enviar pedido/.test(l.proximo_paso || "")) { const {data: ld} = await sb.from("crm_leads").update({proximo_paso: null, proximo_paso_fecha: null}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); } }
+  return null;
+}
+
+function textoCorreoPedido(pz) {
+  const l = leads.find(x => x.id === pz.lead_id) || {};
+  return [`Hola,`, ``, `Os paso el pedido ${pz.numero} de INDUVEC. Va adjunto en PDF.`, ``,
+    `Cliente final (facturar y entregar a): ${l.empresa || ""}${l.cif ? " · CIF " + l.cif : ""}`, l.direccion ? `Entrega: ${l.direccion}` : "", [l.contacto, l.telefono || l.movil, l.email].filter(Boolean).join(" · "), ``,
+    ...(pz.lineas || []).map(li => `- ${li.codigo || li.ref} · ${String(li.nombre).split("\n")[0]} · ${(+li.cantidad).toLocaleString("es-ES")} ${li.unidad} × ${e2p(li.precio)} = ${e2p(li.cantidad * li.precio)}`),
+    ``, `Base imponible: ${e2p(pz.subtotal)} · IVA 21 %: ${e2p(pz.iva)} · Total: ${e2p(pz.total)}`, ``, `Por favor, confirmadme la recepción y la fecha prevista de entrega.`, ``, `Un saludo,`, ``, `Javier Cerezo`, `Director Comercial · INDUVEC`, `javier@induvec.com · +34 670 86 56 67`].join("\n");
+}
+const emailOk = (s) => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(s);
+/* Borrador del correo al fabricante: se revisa en el CRM y se envía desde javier@induvec.com con el PDF adjunto */
+function correoPedidoFab(pz) {
+  const f = FAB_PEDIDO[pz.proyecto_id], l = leads.find(x => x.id === pz.lead_id) || {};
+  const nombrePdf = `Pedido ${pz.numero} - ${f.corto} - ${String(l.empresa || "").replace(/\.+$/, "")}.pdf`.replace(/[\\/:*?"<>|]/g, "");
+  modal(`<h3>Correo a ${esc(f.corto)} · pedido ${esc(pz.numero)}</h3>
+    ${pz.enviado_fab ? `<p class="nota-ejemplo" style="margin-bottom:10px">⚠ Este pedido ya se marcó como enviado el ${fF(pz.enviado_fab)}. Si lo vuelves a enviar, le llegará otra vez.</p>` : ""}
+    <div class="rejilla-campos">
+      <div class="campo" style="grid-column:1/-1"><label for="co-para">Para</label><input id="co-para" type="email" value="${esc(f.email || "")}" placeholder="correo de ${esc(f.dest.split(" · ")[0])}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="co-asunto">Asunto</label><input id="co-asunto" value="${esc(`Pedido INDUVEC ${pz.numero} · ${l.empresa || ""}`)}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="co-texto">Texto</label><textarea id="co-texto" rows="16" style="font-size:12.5px">${esc(textoCorreoPedido(pz))}</textarea></div>
+    </div>
+    <p style="font-size:12.5px;color:var(--texto2);margin:6px 0 0">📎 Adjunto: <b>${esc(nombrePdf)}</b> · <a href="#" id="co-ver">ver PDF</a><br>Sale desde <b>javier@induvec.com</b> y te llega una copia oculta. Al enviarlo, el pedido se marca como enviado.</p>`,
+  async () => {
+    const para = $("#co-para").value.trim(), asunto = $("#co-asunto").value.trim(), texto = $("#co-texto").value;
+    if (!emailOk(para)) return "Pon un correo de destino válido.";
+    if (!asunto) return "Falta el asunto.";
+    const bt = [...document.querySelectorAll(".modal-acciones button")].pop(); if (bt) { bt.disabled = true; bt.textContent = "Enviando…"; }
+    try {
+      const pdf = await pdfPedidoBase64(pz);
+      const {data, error} = await sb.functions.invoke("enviar-pedido", {body: {presupuesto_id: pz.id, para, asunto, texto, pdf_base64: pdf, pdf_nombre: nombrePdf}});
+      if (error || !data || !data.ok) { if (bt) { bt.disabled = false; bt.textContent = "Enviar"; } return "No se pudo enviar: " + ((data && data.error) || (error && error.message) || "error desconocido") + ". No se ha marcado como enviado."; }
+    } catch (e) { if (bt) { bt.disabled = false; bt.textContent = "Enviar"; } return "No se pudo preparar el envío: " + e.message; }
+    await marcarEnviado(pz, false, "por correo a " + para);
+    aviso(`Pedido ${pz.numero} enviado a ${para}`);
+    setTimeout(() => (correoTrasEnviar || render)(), 0);
+  }, "Enviar");
+  const caja = $(".modal-caja"); if (caja) caja.style.maxWidth = "760px";
+  const ver = $("#co-ver"); if (ver) ver.onclick = (e) => { e.preventDefault(); imprimirPedidoFab(pz); };
+  const acc = $(".modal-acciones");
+  if (acc) { const bm = document.createElement("button"); bm.type = "button"; bm.className = "btn"; bm.textContent = "Abrir en mi correo"; bm.style.marginRight = "auto"; bm.title = "Sin adjunto: abre tu programa de correo con el texto";
+    bm.onclick = () => { location.href = `mailto:${encodeURIComponent($("#co-para").value.trim())}?subject=${encodeURIComponent($("#co-asunto").value)}&body=${encodeURIComponent($("#co-texto").value)}`; }; acc.prepend(bm); }
+}
+/* PDF del pedido generado en el navegador (html2pdf) para adjuntarlo al correo */
+let cargaHtml2pdf = null;
+function html2pdfListo() {
+  if (window.html2pdf) return Promise.resolve();
+  if (!cargaHtml2pdf) cargaHtml2pdf = new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"; s.onload = ok; s.onerror = () => { cargaHtml2pdf = null; ko(new Error("no se pudo cargar el generador de PDF")); }; document.head.appendChild(s); });
+  return cargaHtml2pdf;
+}
+// Limita los estilos del PDF a su contenedor para no alterar el resto del CRM mientras se genera
+function cssAcotado(css, raiz) {
+  return css.replace(/@media screen\{[^{}]*\{[^{}]*\}[^{}]*\}/g, "").replace(/@page\{[^{}]*\}/g, "")
+    .replace(/(^|\})\s*([^{}@]+)\{/g, (m, b, sel) => b + sel.split(",").map(s => { s = s.trim(); return s === "body" ? raiz : s === "*" ? raiz + " *," + raiz : raiz + " " + s; }).join(",") + "{");
+}
+async function pdfPedidoBase64(pz) {
+  await html2pdfListo();
+  const cont = document.createElement("div"); cont.style.cssText = "position:fixed;left:-10000px;top:0;width:210mm;background:#fff";
+  cont.innerHTML = `<style>${cssAcotado(CSS_PEDIDO, ".pdfped")}.pdfped .pag{width:210mm;height:295mm;min-height:0;overflow:hidden;page-break-after:auto}.pdfped h1,.pdfped h2,.pdfped h3{font-family:Helvetica,Arial,sans-serif;letter-spacing:normal}</style><div class="pdfped">${htmlPedidoFab(pz)}</div>`;
+  document.body.appendChild(cont);
+  try {
+    await Promise.all([...cont.querySelectorAll("img")].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
+    const pdf = await window.html2pdf().set({margin: 0, image: {type: "jpeg", quality: 0.95}, html2canvas: {scale: 2, useCORS: true, backgroundColor: "#ffffff"}, jsPDF: {unit: "mm", format: "a4", orientation: "portrait"}, pagebreak: {mode: ["css"]}}).from(cont.querySelector(".pdfped")).toPdf().get("pdf");
+    const nPag = cont.querySelectorAll(".pag").length || 1;
+    while (pdf.getNumberOfPages() > nPag) pdf.deletePage(pdf.getNumberOfPages());   // quita la hoja en blanco que deja el redondeo de altura
+    return pdf.output("datauristring").split(",")[1];
+  } finally { cont.remove(); }
+}
+
+/* PDF: pedido a un fabricante y resumen completo para el comercial */
+const CSS_PEDIDO = `@page{size:A4;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;font-family:Helvetica,Arial,sans-serif;color:#1d2530;font-size:10.5px;line-height:1.45}
+.pag{position:relative;min-height:296mm;padding:12mm 14mm 18mm 14mm;page-break-after:always}.pag:last-child{page-break-after:auto}
+.cab{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #0E7C9E;padding-bottom:8px;margin-bottom:12px}
+.cab img{height:58px}.cab .t{text-align:right}.cab h1{margin:0;font-size:21px;letter-spacing:1px;color:#0E5C78}.cab .s{font-size:10px;color:#56636f;margin-top:2px}
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.pills span{background:#E8F4F8;color:#0E5C78;border-radius:20px;padding:3px 10px;font-size:9.5px;font-weight:600}
+.cajas{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.caja{border:1px solid #D5E3EA;border-radius:8px;padding:9px 11px;background:#FAFCFD}
+.et{font-size:8.5px;letter-spacing:1.4px;text-transform:uppercase;color:#6B7C88;font-weight:700;margin-bottom:3px}.nom{font-size:13px;font-weight:700;margin-bottom:2px}
+h2{font-size:12.5px;margin:14px 0 6px;display:flex;align-items:center;gap:8px}h2 .b{display:inline-block;width:10px;height:10px;border-radius:2px}
+table{width:100%;border-collapse:collapse;font-size:10px}th{background:#0E7C9E;color:#fff;text-align:left;padding:6px;font-size:9px;letter-spacing:.5px;text-transform:uppercase}
+td{padding:6px;border-bottom:1px solid #E3EBEF;vertical-align:top}.n{text-align:right;white-space:nowrap}.ref{font-family:Menlo,Consolas,monospace;font-size:9.5px;color:#35424d}
+tr.sub td{font-weight:700;background:#F2F7F9}.tot{margin-left:auto;width:62mm;margin-top:8px}.tot div{display:flex;justify-content:space-between;padding:3px 0}
+.tot .g{border-top:2px solid #0E7C9E;margin-top:3px;padding-top:6px;font-size:13px;font-weight:700;color:#0E5C78}.cond div{padding:3px 0;border-bottom:1px dashed #E3EBEF}
+.aviso{margin-top:10px;border:1px solid #F5C542;background:#FFF8E1;border-radius:8px;padding:8px 11px;font-size:9.8px}
+.pie{position:absolute;left:14mm;right:14mm;bottom:8mm;display:flex;justify-content:space-between;font-size:8.5px;color:#6B7C88;border-top:1px solid #D5E3EA;padding-top:5px}
+.firma{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.firma div{border:1px solid #D5E3EA;border-radius:8px;height:26mm;padding:7px 10px}
+@media screen{body{background:#e9e8e3}.pag{width:210mm;margin:12px auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.12)}}`;
+const udP = (u) => ({m: "m", ml: "ml"})[u] || u || "ud";
+function htmlCliente(l, titulo) {
+  return `<div class="caja"><div class="et">${titulo}</div><div class="nom">${esc(l.empresa || "")}</div>${l.cif ? `CIF/NIF: ${esc(l.cif)}<br>` : ""}${[l.contacto && "Contacto: " + esc(l.contacto), (l.telefono || l.movil) && "Tel. " + esc(l.telefono || l.movil)].filter(Boolean).join(" · ")}${l.email ? "<br>" + esc(l.email) : ""}${l.direccion ? `<br><b>Entrega:</b> ${esc(l.direccion)}` : ""}</div>`;
+}
+function obsCliente(pz) { const m = String(pz.notas || "").match(/Observaciones del cliente:\s*(.+)/); return m ? m[1] : ""; }
+function abrirPDF(titulo, cuerpo) {
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(titulo)}</title><style>${CSS_PEDIDO}</style></head><body>${cuerpo}<script>window.onload=()=>setTimeout(()=>window.print(),400)<\/script></body></html>`;
+  const w = window.open("", "_blank"); if (!w) return aviso("Permite las ventanas emergentes para descargar el PDF", true);
+  w.document.open(); w.document.write(html); w.document.close();
+}
+const logoInduvec = () => `${location.origin}/crm/img/induvec-logo.jpg`;
+const cabPedido = (t, s) => `<div class="cab"><img src="${logoInduvec()}" alt="INDUVEC"><div class="t"><h1>${t}</h1><div class="s">${s}</div></div></div>`;
+const piePedido = (izq) => `<div class="pie"><span>${esc(izq)}</span><span>javier@induvec.com · +34 670 86 56 67</span></div>`;
+function htmlPedidoFab(pz) {
+  const f = FAB_PEDIDO[pz.proyecto_id], l = leads.find(x => x.id === pz.lead_id) || {}, bernad = pz.proyecto_id === "jose-bernad";
+  const obs = obsCliente(pz);
+  const filas = (pz.lineas || []).map(li => `<tr><td class="ref">${esc(li.ref)}</td>${bernad ? `<td class="ref">${esc(li.codigo || "—")}</td>` : ""}<td>${esc(String(li.nombre).split("\n")[0])}</td><td class="n">${(+li.cantidad).toLocaleString("es-ES")}</td><td>${esc(udP(li.unidad))}</td><td class="n">${e2p(li.precio)}</td><td class="n"><b>${e2p(li.cantidad * li.precio * (1 - (+li.dto || 0) / 100))}</b></td></tr>`).join("");
+  const cuerpo = `<section class="pag">${cabPedido("PEDIDO A " + esc(f.corto.toUpperCase()), "Nº " + esc(pz.numero) + " · " + fDMAp(pz.fecha))}
+    <div class="pills"><span>Precios sin IVA</span><span>Sirve y factura ${esc(f.nombre)}</span></div>
+    <div class="cajas"><div class="caja"><div class="et">Para</div><div class="nom">${esc(f.nombre)}</div>${esc(f.dest)}</div>
+      <div class="caja"><div class="et">Pedido tramitado por</div><div class="nom">INDUVEC · Suministro industrial</div>Javier Cerezo · Director Comercial<br>javier@induvec.com · +34 670 86 56 67<br>Pedido nº <b>${esc(pz.numero)}</b> · ${fDMAp(pz.fecha)}</div></div>
+    <div class="cajas" style="grid-template-columns:1fr">${htmlCliente(l, "Cliente final · facturar y entregar a").replace(/<\/div>$/, obs ? `<br><b>Observaciones:</b> ${esc(obs)}</div>` : "</div>")}</div>
+    <table><thead><tr><th>Ref.</th>${bernad ? "<th>Código Bernad</th>" : ""}<th>Producto</th><th class="n">Cant.</th><th>Ud.</th><th class="n">Precio</th><th class="n">Importe</th></tr></thead><tbody>${filas}</tbody></table>
+    <div class="tot"><div><span>Base imponible</span><span>${e2p(pz.subtotal)}</span></div><div><span>IVA 21 %</span><span>${e2p(pz.iva)}</span></div><div class="g"><span>Total</span><span>${e2p(pz.total)}</span></div></div>
+    <h2>Condiciones</h2><div class="cond">${f.cond.map(([a, b]) => `<div><b>${esc(a)}:</b> ${esc(b)}</div>`).join("")}</div>
+    <div class="firma"><div><div class="et">Recibido y conforme · ${esc(f.nombre)}</div></div><div><div class="et">Fecha prevista de entrega</div></div></div>
+    ${piePedido("INDUVEC · Suministro industrial · Pedido " + pz.numero)}</section>`;
+  return cuerpo;
+}
+function imprimirPedidoFab(pz) {
+  const f = FAB_PEDIDO[pz.proyecto_id], l = leads.find(x => x.id === pz.lead_id) || {};
+  abrirPDF(`Pedido ${pz.numero} · ${f.corto} · ${l.empresa || ""}`, htmlPedidoFab(pz));
+}
+function imprimirResumenPedido(pzs) {
+  if (!pzs.length) return;
+  const l = leads.find(x => x.id === pzs[0].lead_id) || {}, obs = obsCliente(pzs[0]);
+  let S = 0, I = 0, T = 0; const avisos = [];
+  const bloques = pzs.map(pz => { const f = FAB_PEDIDO[pz.proyecto_id]; S += +pz.subtotal || 0; I += +pz.iva || 0; T += +pz.total || 0;
+    (pz.lineas || []).forEach(li => { if (pz.proyecto_id === "jose-bernad" && !li.codigo) avisos.push(`<b>${esc(li.ref)}</b>: sin código de Bernad.`); });
+    return `<h2><span class="b" style="background:${f.color}"></span>Pedido ${esc(pz.numero)} · ${esc(f.nombre)}</h2>
+    <table><thead><tr><th>Ref. web</th><th>Ref. fabricante</th><th>Producto</th><th class="n">Cant.</th><th>Ud.</th><th class="n">Precio</th><th class="n">Importe</th></tr></thead><tbody>
+    ${(pz.lineas || []).map(li => `<tr><td class="ref">${esc(li.web || "—")}</td><td class="ref">${esc(li.ref)}</td><td>${esc(String(li.nombre).split("\n")[0])}</td><td class="n">${(+li.cantidad).toLocaleString("es-ES")}</td><td>${esc(udP(li.unidad))}</td><td class="n">${e2p(li.precio)}</td><td class="n"><b>${e2p(li.cantidad * li.precio)}</b></td></tr>`).join("")}
+    <tr class="sub"><td colspan="6">Subtotal ${esc(f.corto)} (sin IVA)${pz.enviado_fab ? " · enviado el " + fDMAp(String(pz.enviado_fab).slice(0, 10)) : " · pendiente de enviar"}</td><td class="n">${e2p(pz.subtotal)}</td></tr></tbody></table>`; }).join("");
+  const cy = pzs.find(p => p.proyecto_id === "cayfi");
+  const cuerpo = `<section class="pag">${cabPedido("PEDIDO · RESUMEN", "Uso interno · Departamento comercial INDUVEC")}
+    <div class="pills"><span>${fDMAp(pzs[0].fecha)}</span><span>${pzs.length} ${pzs.length === 1 ? "fabricante" : "fabricantes"} · ${pzs.length} ${pzs.length === 1 ? "pedido" : "pedidos"}</span></div>
+    <div class="cajas">${htmlCliente(l, "Cliente final").replace(/<\/div>$/, obs ? `<br><b>Observaciones:</b> ${esc(obs)}</div>` : "</div>")}<div class="caja"><div class="et">Reparto del pedido</div>
+      ${pzs.map((pz, i) => `<div style="margin-bottom:5px"><b>Pedido ${i + 1} · ${esc(pz.numero)}</b> → ${esc(FAB_PEDIDO[pz.proyecto_id].nombre)}<br>${(pz.lineas || []).length} líneas · ${e2p(pz.subtotal)} + IVA</div>`).join("")}
+      <div style="margin-top:6px;color:#56636f">Cada fabricante sirve y factura su parte al cliente.</div></div></div>
+    ${bloques}
+    <div class="tot"><div><span>Base imponible</span><span>${e2p(S)}</span></div><div><span>IVA 21 %</span><span>${e2p(I)}</span></div><div class="g"><span>Total pedido</span><span>${e2p(T)}</span></div></div>
+    <div class="aviso"><b>Antes de enviar los pedidos, revisar:</b><br>${avisos.map(a => "• " + a + "<br>").join("")}• <b>Portes:</b> aparte. Pedir precio a cada fabricante y comunicarlo al cliente.<br>${cy ? `• Comisión prevista CAYFI: 10 % de ${e2p(cy.subtotal)} = <b>${e2p(r2(cy.subtotal * 0.1))}</b>.` : ""}</div>
+    ${piePedido("INDUVEC · Suministro industrial · Documento interno")}</section>`;
+  abrirPDF(`Pedido completo · ${l.empresa || ""}`, cuerpo);
+}
+
 /* ===== WHATSAPP CON MENSAJES PREPARADOS ===== */
 const PLANTILLAS_WA = [
   ["primer", "Primer contacto", "Hola{N}, soy {YO} de {P}. Te escribo para presentarte lo que hacemos y ver si te puede encajar. ¿Cuándo te viene bien una llamada de 5 minutos?"],
@@ -1518,6 +1827,7 @@ async function abrirLead(id) {
   const nc = $("#nueva-compra"); if (nc) nc.onclick = () => editarCompra(l, null);
   const np = $("#nuevo-presupuesto"); if (np) np.onclick = () => editarPresupuesto(l, null);
   capa.querySelectorAll("[data-presupuesto]").forEach(b => b.onclick = () => editarPresupuesto(l, +b.dataset.presupuesto));
+  enlazarPedidos(capa, () => abrirLead(l.id));
   capa.querySelectorAll("[data-compra]").forEach(b => b.onclick = () => editarCompra(l, +b.dataset.compra));
   const nota = async (tipo, texto) => {
     const {error} = await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo, texto});
