@@ -1135,8 +1135,15 @@ const MARCAS_PRESU = {
       `<b>Recibo domiciliado SEPA a 30 días.</b> IBAN para la domiciliación: <span class="linea-in"></span>`,
       `<b>Confirming</b> a <span class="caja-chk"></span> 30 &nbsp;<span class="caja-chk"></span> 45 &nbsp;<span class="caja-chk"></span> 60 días. Entidad: <span class="linea-in corta"></span>`]}
 };
+// CAYFI: la propuesta sale con la imagen de INDUVEC (CAYFI sirve y factura al cliente)
+MARCAS_PRESU.cayfi = {logo: "/crm/img/induvec-logo.jpg", cargo: "Director Comercial · INDUVEC", lema: "Suministro industrial", suministra: "CAYFI, S.L.", email: "javier@induvec.com",
+  pie: "INDUVEC · Suministro industrial · Material servido y facturado por CAYFI, S.L.", acento: "#0E7C9E", texAcento: "#0E5C78", franja: false,
+  pago: "Transferencia bancaria antes del envío del material",
+  formasPago: (tot, e2) => [`<b>Transferencia bancaria</b> antes del envío del material: ${e2(tot)}.`]};
 function condicionesPorDefecto(proyectoId) {
   const m = MARCAS_PRESU[proyectoId];
+  if (proyectoId === "cayfi") return ["Precios: en euros, tarifa vigente, IVA no incluido salvo en el total", "Venta: por cajas completas", "Portes: a consultar, aparte", "Plazo de entrega: a confirmar con el pedido (perfiles a medida: unas 3 semanas, mínimo 500 ml o 150 m²)",
+    "Forma de pago: " + m.pago, "Validez: " + VALIDEZ_DIAS + " días desde la fecha de emisión", "Suministro y factura: CAYFI, S.L."].join("\n");
   return ["Precios: en euros, IVA no incluido salvo en el total", "Portes: debidos", "Plazo de entrega: a confirmar con el pedido", "Forma de pago: " + (m && m.pago ? m.pago + " (a elegir en la confirmación de pedido)" : "a convenir"),
     "Validez: " + VALIDEZ_DIAS + " días desde la fecha de emisión", "Suministro y factura: " + (m ? m.suministra : "CDV by JCerezo")].join("\n");
 }
@@ -1174,7 +1181,7 @@ function imprimirPresupuesto(l, d) {
       ${l.contacto ? `A la atención de: ${esc(l.contacto)}<br>` : ""}${l.cif ? `CIF: ${esc(l.cif)}<br>` : ""}${cliHtml}${(l.movil || l.telefono) ? `Tel.: ${esc(l.movil || l.telefono)}<br>` : ""}${l.email ? esc(l.email) : ""}</div>
       <div class="caja"><div class="et">Datos de la oferta</div><div class="nom">Nº ${esc(d.numero || "—")}</div>
       Fecha: ${fDMA2(d.fecha)}<br>Validez: ${dias} días<br>Atendido por: <b>${esc(esJavi ? "Javier Cerezo" : autor.nombre || "")}</b><br>
-      ${esJavi ? "Director de Desarrollo Comercial Externo<br>España y Portugal<br>" : ""}${esc(email)}${telAutor ? `<br>Tel.: ${esc(telAutor)}` : ""}</div></div>
+      ${esJavi ? (m.cargo || "Director de Desarrollo Comercial Externo<br>España y Portugal") + "<br>" : ""}${esc(email)}${telAutor ? `<br>Tel.: ${esc(telAutor)}` : ""}</div></div>
     ${fichas.map(f => `<div class="prod"><div><div class="et2">El producto</div><h2>${esc(f.titulo)}</h2><p>${esc(f.texto)}</p></div>
       <div class="fotos">${f.fotos.map(([s, p]) => `<figure><img src="${img(s)}" alt=""><figcaption>${esc(p)}</figcaption></figure>`).join("")}</div></div>`).join("")}
     <table class="lin"><thead><tr><th>Descripción</th><th class="n">Cant.</th><th>Ud.</th><th class="n">Precio</th>${conDto ? `<th class="n">Dto.</th>` : ""}<th class="n">Importe</th></tr></thead><tbody>
@@ -1336,9 +1343,17 @@ async function generarPedidos(cli, grupos, d, pwId) {
     const f = FAB_PEDIDO[proy], ls = grupos[proy], t = totalesPresu(ls, proy);
     const filaL = {proyecto_id: proy, empresa: cli.empresa, contacto: cli.contacto || null, telefono: cli.telefono || null, email: cli.email || null, cif: cli.cif || null, direccion: cli.direccion || null,
       origen: "Pedido web Induvec", etapa: "Propuesta", prioridad: "alta", closer_id: yo.id, creado_por: yo.id, proximo_paso: `Enviar pedido a ${f.corto}`, proximo_paso_fecha: fechaISO(new Date())};
-    const {data: l, error: el} = await sb.from("crm_leads").insert(filaL).select().single();
-    if (el) return "No se pudo crear el cliente: " + el.message;
-    leads.unshift(l);
+    // Sin duplicar clientes: si ya existe (mismo correo o CIF), se usa su nombre y, si tiene una oportunidad abierta de este fabricante, esa misma
+    const norm = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const mismo = (x) => (cli.email && String(x.email || "").toLowerCase() === cli.email.toLowerCase()) || (cli.cif && norm(x.cif) && norm(x.cif) === norm(cli.cif));
+    const conocidos = leads.filter(mismo);
+    if (conocidos.length) filaL.empresa = conocidos[0].empresa;
+    const abierta = conocidos.find(x => x.proyecto_id === proy && esActivo(x) && !presupuestos.some(z => z.lead_id === x.id && z.estado === "aceptado"));
+    let l;
+    if (abierta) { l = abierta; await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: "Pedido recibido desde la web de Induvec"}); }
+    else { const {data, error: el} = await sb.from("crm_leads").insert(filaL).select().single();
+      if (el) return "No se pudo crear el cliente: " + el.message;
+      l = data; leads.unshift(l); }
     const filaP = {lead_id: l.id, proyecto_id: proy, numero: numeroPedido(proy, fecha), fecha, validez: fechaISO(val), estado: "aceptado", lineas: ls, subtotal: t.sub, iva: t.iva, total: t.total,
       notas: f.cond.map(([a, b]) => a + ": " + b).join("\n") + (cli.observaciones ? "\nObservaciones del cliente: " + cli.observaciones : ""), pedido_web_id: pwId || null};
     const {data: pz, error: ep} = await sb.from("crm_presupuestos").insert(filaP).select().single();
