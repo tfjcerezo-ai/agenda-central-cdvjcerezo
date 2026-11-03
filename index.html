@@ -1125,7 +1125,7 @@ const COLS_NUBE = {
   tareas:['id','texto','prioridad','proyecto','fecha','completada','asignado','creador'],
   eventos:['id','fecha','hora','titulo','descripcion','tipo','visible'],
   notas:['id','texto','proyecto','fecha'],
-  registros:['id','proyecto','nivel','horas','valor','descripcion','fecha','tipo'],
+  registros:['id','proyecto','nivel','horas','valor','descripcion','fecha','tipo','categoria'],
   mov_liga:['id','sesion','tipo','concepto','importe','fecha'],
   proyectos:['id','nombre','descripcion','estado','color','progreso'],
   incubacion:['id','nombre','descripcion','estado','proyecto'],
@@ -3726,6 +3726,114 @@ function renderRegistros(){
     </div>`;}).join(''):'<div class="empty-state"><div class="empty-icon">⏱</div><div class="empty-text">Sin registros todavía</div></div>';
 }
 try{ renderNotas(); renderRegistros(); }catch(e){}
+</script>
+<script>
+// =====================
+// TIEMPO: actividad dentro de cada proyecto (nov. 2026)
+// =====================
+const ACTIVIDADES_BASE=['Organización y planificación','Redes sociales','Llamadas y seguimiento de clientes','Reuniones comerciales','Correos y propuestas','Administración y facturación','Web y sistemas','Formación','Desplazamientos','Eventos y producción'];
+const esOrganizacion=c=>/^organizaci/i.test(c||'');
+function opcionesActividad(){ const usadas=registros.map(r=>r.categoria).filter(Boolean); return [...new Set([...ACTIVIDADES_BASE,...usadas])]; }
+(function camposActividad(){
+  const dl=document.createElement('datalist'); dl.id='dlActividades'; document.body.appendChild(dl);
+  [['cronoProyecto','cronoCat'],['manProyecto','manCat']].forEach(([sel,id])=>{
+    const g=document.getElementById(sel)?.closest('.form-group'); if(!g||document.getElementById(id)) return;
+    const d=document.createElement('div'); d.className='form-group';
+    d.innerHTML=`<label class="form-label">Actividad</label><input class="form-input" id="${id}" list="dlActividades" placeholder="Ej: Redes sociales, Organización y planificación…">`;
+    g.after(d);
+    d.querySelector('input').addEventListener('change',e=>{ if(esOrganizacion(e.target.value)){ if(id==='manCat'){document.getElementById('manNivel').value='cero'; calcManual();} } });
+  });
+})();
+function refrescarActividades(){ const dl=document.getElementById('dlActividades'); if(dl) dl.innerHTML=opcionesActividad().map(a=>`<option value="${escH(a)}">`).join(''); }
+refrescarActividades();
+function marcarActividad(idCampo){
+  const r=registros[0]; if(!r) return; const c=(document.getElementById(idCampo)?.value||'').trim();
+  r.categoria=c||null; if(esOrganizacion(c)){ r.nivel='cero'; r.valor=0; }
+  document.getElementById(idCampo).value=''; save(); refrescarActividades(); renderRegistros();
+}
+const _guardarCrono=guardarCrono; guardarCrono=function(){ const n=registros.length; _guardarCrono(); if(registros.length>n) marcarActividad('cronoCat'); };
+const _guardarManual=guardarManual; guardarManual=function(){ const n=registros.length; _guardarManual(); if(registros.length>n) marcarActividad('manCat'); };
+// La edición de un registro incluye la actividad
+const _renderRegistros=renderRegistros;
+renderRegistros=function(){
+  _renderRegistros();
+  const lista=document.getElementById('listaRegistros'); if(!lista) return;
+  if(regEditId){ const r=registros.find(x=>x.id===regEditId); const d=document.getElementById('re_desc')?.closest('.form-group');
+    if(r&&d&&!document.getElementById('re_cat')){ const g=document.createElement('div'); g.className='form-group'; g.innerHTML=`<label class="form-label">Actividad</label><input class="form-input" id="re_cat" list="dlActividades" value="${escH(r.categoria||'')}">`; d.after(g); } }
+  // etiqueta de actividad en cada registro
+  registros.forEach(r=>{ if(!r.categoria||r.id===regEditId) return; const b=lista.querySelector(`button[onclick="editarRegistro(${r.id})"]`); const fila=b?.closest('div')?.nextElementSibling; if(fila&&!fila.querySelector('.tag-act')) fila.insertAdjacentHTML('afterbegin',`<span class="tag-act" style="font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(201,168,76,0.12);color:var(--dorado);">${escH(r.categoria)}</span>`); });
+};
+const _guardarRegistro=guardarRegistro;
+guardarRegistro=function(id){ const c=(document.getElementById('re_cat')?.value||'').trim(); _guardarRegistro(id); const r=registros.find(x=>x.id===id); if(r){ r.categoria=c||null; if(esOrganizacion(c)){r.nivel='cero';r.valor=0;} save(); refrescarActividades(); renderRegistros(); } };
+
+// =====================
+// FINANZAS CDV: total vendido, total de todos los proyectos y detalle al pulsar cada recuadro (nov. 2026)
+// =====================
+const eurF=n=>(Number(n)||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+'€';
+const FIN_DET={};
+function tarjetaFin(clave,titulo,valor,color,lista,modo){
+  FIN_DET[clave]={titulo,lista,modo};
+  return `<div class="stat-card" style="cursor:pointer" onclick="toggleDetFin('${clave}')" title="Pulsa para ver el detalle"><div class="stat-numero" style="color:${color}">${valor}</div><div class="stat-label">${titulo} ▾</div></div>`;
+}
+function toggleDetFin(clave){
+  const d=FIN_DET[clave]; const cont=document.getElementById('det-'+clave.split('|')[0]); if(!d||!cont) return;
+  if(cont.dataset.abierto===clave){ cont.innerHTML=''; cont.dataset.abierto=''; return; }
+  cont.dataset.abierto=clave;
+  const filas=[...d.lista].sort((a,b)=>String(b.fecha_cobro||'').localeCompare(String(a.fecha_cobro||'')));
+  const suma=filas.reduce((a,v)=>a+(d.modo==='vendido'?importeTotal(v):ingresoCDV(v)),0);
+  cont.innerHTML=`<div style="background:var(--negro-claro);border:1px solid rgba(201,168,76,0.35);border-radius:12px;padding:12px;margin:-4px 0 14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);">${d.titulo} · ${filas.length} ${filas.length===1?'venta':'ventas'}</span><button class="btn-borrar" onclick="toggleDetFin('${clave}')">✕</button></div>
+    ${filas.length?filas.map(v=>`<div style="display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:7px 0;border-top:1px solid var(--negro-borde);font-size:12px;">
+      <span style="color:var(--blanco-suave);font-weight:600;">${escH(v.cliente)}</span><span style="text-align:right;color:var(--dorado);font-weight:700;">${eurF(d.modo==='vendido'?importeTotal(v):ingresoCDV(v))}</span>
+      <span style="color:var(--gris);font-size:10px;">${escH(v.proyecto||'Sin proyecto')}${v.producto?' · '+escH(v.producto):''} · ${fmtFecha(v.fecha_cobro)} · ${estadoLabel(v.estado)}</span><span style="text-align:right;color:var(--gris);font-size:10px;">${d.modo==='vendido'?'comisión '+eurF(ingresoCDV(v)):'venta '+eurF(importeTotal(v))}</span>
+    </div>`).join(''):'<div style="font-size:12px;color:var(--gris);">Sin ventas</div>'}
+    ${filas.length?`<div style="display:flex;justify-content:space-between;border-top:1px solid rgba(201,168,76,0.35);padding-top:8px;margin-top:2px;font-weight:700;"><span style="color:var(--gris-claro);">Total</span><span style="color:var(--dorado);">${eurF(suma)}</span></div>`:''}
+  </div>`;
+}
+function statsFinHTML(pref,nv,etiquetaPend){
+  const com=nv.filter(v=>estadoEsComisionCobrada(v.estado)), fac=nv.filter(v=>v.estado==='cobrado'), pen=nv.filter(v=>v.estado==='pendiente');
+  const s=(l,f)=>l.reduce((a,v)=>a+f(v),0);
+  return `<div class="stat-card" style="grid-column:1/-1;cursor:pointer" onclick="toggleDetFin('${pref}|vend')" title="Pulsa para ver el detalle"><div class="stat-numero">${eurF(s(nv,importeTotal))}</div><div class="stat-label">Total vendido · todos los proyectos ▾</div></div>`
+    .replace(/todos los proyectos/, pref==='g'||pref==='t'?'todos los proyectos':'este proyecto')
+    + tarjetaFin(pref+'|com','Comisión cobrada',eurF(s(com,ingresoCDV)),'var(--verde)',com)
+    + tarjetaFin(pref+'|fac','Factura cobrada',eurF(s(fac,ingresoCDV)),'var(--dorado)',fac)
+    + tarjetaFin(pref+'|pen',etiquetaPend,eurF(s(pen,ingresoCDV)),'var(--rojo)',pen)
+    + tarjetaFin(pref+'|num','Total ventas',String(nv.length),'var(--blanco)',nv)
+    + (FIN_DET[pref+'|vend']={titulo:'Total vendido',lista:nv,modo:'vendido'}, '');
+}
+const _renderVentas=renderVentas;
+renderVentas=function(){
+  _renderVentas();
+  const el=document.getElementById('statsCDV'); if(!el) return;
+  el.innerHTML=statsFinHTML('g',ventas.map(normVenta),'Factura pendiente');
+  if(!document.getElementById('det-g')) el.insertAdjacentHTML('afterend','<div id="det-g"></div>');
+};
+const _renderVentasProyecto=renderVentasProyecto;
+renderVentasProyecto=function(proyNombre,containerId){
+  const cont=document.getElementById(containerId); if(!cont) return;
+  const pref='p'+containerId;
+  if(proyNombre==='cdv'){
+    // CDV by JCerezo = la suma de todos los proyectos, con el reparto por proyecto
+    const nv=ventas.map(normVenta);
+    const grupos={}; nv.forEach(v=>{ const k=v.proyecto||'Sin proyecto'; (grupos[k]=grupos[k]||[]).push(v); });
+    const filas=Object.entries(grupos).map(([k,l])=>({k,n:l.length,vend:l.reduce((a,v)=>a+importeTotal(v),0),cob:l.filter(v=>estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+ingresoCDV(v),0),pen:l.filter(v=>!estadoEsComisionCobrada(v.estado)).reduce((a,v)=>a+ingresoCDV(v),0)})).sort((a,b)=>b.vend-a.vend);
+    cont.innerHTML=`<div class="stats-grid" style="margin-bottom:14px;">${statsFinHTML('t',nv,'Pendiente')}</div><div id="det-t"></div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--dorado);margin:4px 0 8px;">Por proyecto</div>
+      <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:6px 12px;">
+        <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:6px;font-size:10px;color:var(--gris);padding:6px 0;"><span>Proyecto</span><span style="text-align:right">Vendido</span><span style="text-align:right">Comisión cobrada</span><span style="text-align:right">Pendiente</span></div>
+        ${filas.map(f=>`<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:6px;font-size:12px;padding:7px 0;border-top:1px solid var(--negro-borde);"><span style="color:var(--blanco-suave)">${escH(f.k)} <span style="color:var(--gris);font-size:10px">(${f.n})</span></span><span style="text-align:right;color:var(--dorado)">${eurF(f.vend)}</span><span style="text-align:right;color:var(--verde)">${eurF(f.cob)}</span><span style="text-align:right;color:var(--rojo)">${eurF(f.pen)}</span></div>`).join('')}
+      </div>`;
+    return;
+  }
+  _renderVentasProyecto(proyNombre,containerId);
+  const grid=cont.querySelector('.stats-grid'); if(!grid) return;
+  const ALIAS={jbernad:['josé bernad','jose bernad',...PROYECTOS_COMERCIALES.filter(p=>p.cuenta==='José Bernad').map(p=>p.nombre.toLowerCase())],zeren:['zeren clinic']};
+  const nombres=[proyNombre.toLowerCase(),...(ALIAS[proyNombre]||[])];
+  const nv=ventas.map(normVenta).filter(v=>nombres.includes((v.proyecto||'').toLowerCase()));
+  grid.innerHTML=statsFinHTML(pref,nv,'Pendiente');
+  grid.insertAdjacentHTML('afterend',`<div id="det-${pref}"></div>`);
+};
+try{ renderRegistros(); }catch(e){}
 </script>
 </body>
 </html>
