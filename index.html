@@ -956,6 +956,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 // DATOS
 // =====================
 const TARIFAS = {verde:40,azul:90,rojo:150,cero:0};
+function fmtHM(h){const t=Math.round((Number(h)||0)*60);const hh=Math.floor(t/60),mm=t%60;return hh&&mm?`${hh} h ${mm} min`:hh?`${hh} h`:`${mm} min`;}
 const PNOMBRES = {elocrea:'Elocrea',liga:'Liga DJ',cdv:'CDV by JCerezo',consultoria:'Consultoría',personal:'Personal',jbernad:'José Bernad',cayfi:'CAYFI',yiux:'YIUX',zeren:'Zeren Clinic',elogistic:'Elogistic',deca:'DeCA',heru:'Heru',kinelia:'Kinelia'};
 const SNOMBRES = {'0':'Sesión 0 — Siroco','1':'Sesión 1 — Epoka','2':'Sesión 2 — Hangar48','3':'Sesión 3 — Varvi','4':'Sesión 4 — 27 Jun','general':'General'};
 
@@ -1910,8 +1911,8 @@ function guardarCrono() {
   document.getElementById('cronoDesc').value='';
   document.getElementById('cronoValor').textContent='0€';
   const horasHoy=registros.filter(r=>r.fecha===new Date().toISOString().split('T')[0]).reduce((a,r)=>a+r.horas,0);
-  document.getElementById('cronoHoy').textContent=`${horasHoy.toFixed(1)}h`;
-  alert(`✅ Guardado — ${horas.toFixed(2)}h · ${Math.round(horas*tarifa)}€`);
+  document.getElementById('cronoHoy').textContent=fmtHM(horasHoy);
+  alert(`✅ Guardado — ${fmtHM(horas)} · ${Math.round(horas*tarifa)}€`);
 }
 
 function calcManual() {
@@ -1940,14 +1941,14 @@ function guardarManual() {
   registros.unshift({id:Date.now(),proyecto:proj,nivel,horas,valor:Math.round(horas*tarifa),descripcion:desc,fecha:document.getElementById('manFecha').value,tipo:'manual'});
   save(); document.getElementById('manDesc').value=''; document.getElementById('manInicio').value=''; document.getElementById('manFin').value='';
   document.getElementById('manValor').textContent='0€';
-  renderRegistros(); alert(`✅ Guardado — ${horas.toFixed(2)}h · ${Math.round(horas*tarifa)}€`);
+  renderRegistros(); alert(`✅ Guardado — ${fmtHM(horas)} · ${Math.round(horas*tarifa)}€`);
 }
 
 function renderRegistros() {
   const total=registros.reduce((a,r)=>a+r.horas,0);
   const valor=registros.reduce((a,r)=>a+r.valor,0);
   document.getElementById('statsRegistros').innerHTML=`
-    <div class="stat-card"><div class="stat-numero">${total.toFixed(1)}h</div><div class="stat-label">Total horas</div></div>
+    <div class="stat-card"><div class="stat-numero">${fmtHM(total)}</div><div class="stat-label">Total horas</div></div>
     <div class="stat-card"><div class="stat-numero">${valor}€</div><div class="stat-label">Valor total</div></div>`;
   const nmap={verde:'🟢',azul:'🔵',rojo:'🔴',cero:'⚪'};
   document.getElementById('listaRegistros').innerHTML=registros.length?registros.map(r=>`
@@ -1958,7 +1959,7 @@ function renderRegistros() {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <span class="ptag ptag-${r.proyecto}">${PNOMBRES[r.proyecto]||r.proyecto}</span>
-        <span style="font-size:10px;color:var(--gris);">${nmap[r.nivel]||''} ${r.horas.toFixed(2)}h</span>
+        <span style="font-size:10px;color:var(--gris);">${nmap[r.nivel]||''} ${fmtHM(r.horas)}</span>
         <span style="font-size:10px;color:var(--gris);">📅 ${r.fecha}</span>
       </div>
     </div>`).join(''):'<div class="empty-state"><div class="empty-icon">⏱</div><div class="empty-text">Sin registros todavía</div></div>';
@@ -3685,7 +3686,7 @@ function borrarRegistro(id){
 function guardarRegistro(id){
   const r=registros.find(x=>x.id===id); if(!r) return;
   const v=k=>document.getElementById('re_'+k).value;
-  const horas=Math.round(parseFloat(String(v('horas')).replace(',','.'))*100)/100;
+  const horas=Math.round((((parseInt(v('h'))||0)*60+(parseInt(v('m'))||0))/60)*100)/100;
   if(!(horas>0)){alert('Las horas tienen que ser mayores que 0');return;}
   r.descripcion=v('desc').trim()||'Sin descripción'; r.proyecto=v('proy'); r.nivel=v('nivel'); r.fecha=v('fecha'); r.horas=horas;
   r.valor=Math.round(horas*(r.proyecto==='personal'?0:TARIFAS[r.nivel]||0));
@@ -3694,7 +3695,7 @@ function guardarRegistro(id){
 function renderRegistros(){
   const total=registros.reduce((a,r)=>a+r.horas,0), valor=registros.reduce((a,r)=>a+r.valor,0);
   document.getElementById('statsRegistros').innerHTML=`
-    <div class="stat-card"><div class="stat-numero">${total.toFixed(1)}h</div><div class="stat-label">Total horas</div></div>
+    <div class="stat-card"><div class="stat-numero">${fmtHM(total)}</div><div class="stat-label">Total horas</div></div>
     <div class="stat-card"><div class="stat-numero">${valor}€</div><div class="stat-label">Valor total</div></div>`;
   const nmap={verde:'🟢',azul:'🔵',rojo:'🔴',cero:'⚪'};
   const borde=n=>n==='verde'?'var(--verde)':n==='azul'?'var(--azul)':n==='rojo'?'var(--rojo)':'var(--gris)';
@@ -3707,7 +3708,7 @@ function renderRegistros(){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group"><label class="form-label">Proyecto</label><select class="form-select" id="re_proy">${proyOpts(r.proyecto)}</select></div>
         <div class="form-group"><label class="form-label">Nivel</label><select class="form-select" id="re_nivel">${nivOpts(r.nivel)}</select></div>
-        <div class="form-group"><label class="form-label">Horas</label><input class="form-input" id="re_horas" inputmode="decimal" value="${r.horas}"></div>
+        <div class="form-group"><label class="form-label">Tiempo</label><div style="display:flex;gap:6px;align-items:center;"><input class="form-input" id="re_h" type="number" min="0" step="1" style="width:70px" value="${Math.floor(Math.round(r.horas*60)/60)}"><span style="color:var(--gris);font-size:12px;">h</span><input class="form-input" id="re_m" type="number" min="0" max="59" step="1" style="width:70px" value="${Math.round(r.horas*60)%60}"><span style="color:var(--gris);font-size:12px;">min</span></div></div>
         <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="re_fecha" value="${r.fecha}"></div>
       </div>
       <div style="display:flex;gap:8px;"><button class="btn-primary" style="flex:1" onclick="guardarRegistro(${r.id})">Guardar</button><button class="btn-primary" style="flex:1;background:transparent;border:1px solid var(--negro-borde);color:var(--gris-claro)" onclick="regEditId=0;renderRegistros()">Cancelar</button></div>
@@ -3720,7 +3721,7 @@ function renderRegistros(){
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <span class="ptag ptag-${claveAG(r.proyecto)}">${PNOMBRES[claveAG(r.proyecto)]||r.proyecto}</span>
-        <span style="font-size:10px;color:var(--gris);">${nmap[r.nivel]||''} ${Number(r.horas).toFixed(2)}h</span>
+        <span style="font-size:10px;color:var(--gris);">${nmap[r.nivel]||''} ${fmtHM(r.horas)}</span>
         <span style="font-size:10px;color:var(--gris);">📅 ${r.fecha}</span>
       </div>
     </div>`;}).join(''):'<div class="empty-state"><div class="empty-icon">⏱</div><div class="empty-text">Sin registros todavía</div></div>';
