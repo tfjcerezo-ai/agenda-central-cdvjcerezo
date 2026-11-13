@@ -277,6 +277,7 @@ tfoot td{font-weight:500;color:var(--texto2)}
 .fantasma{position:fixed;z-index:70;pointer-events:none;margin:0;transform:rotate(2deg) scale(1.02);box-shadow:0 14px 30px rgba(0,0,0,.55);border-color:var(--oro)!important;opacity:.95}
 body.arrastrando-lead{cursor:grabbing;user-select:none;-webkit-user-select:none}
 .columna.sobre .col-cab{background:var(--oro-suave)}
+.kanban .lead{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 
 .aviso-datos{font-size:12px;color:var(--texto2);border:1px solid rgba(201,162,39,.3);background:var(--oro-suave);border-radius:8px;padding:8px 12px}
 tr.actual td{background:var(--oro-suave)}
@@ -775,6 +776,8 @@ function enlazar(r) {
     col.ondragleave = (e) => { if (!col.contains(e.relatedTarget)) col.style.outline = ""; };
     col.ondrop = (e) => { e.preventDefault(); col.style.outline = ""; const id = +e.dataTransfer.getData("text/plain"); if (id) moverEtapa(id, col.dataset.etapa); };
   });
+  // Móvil y tableta: mantener pulsada la tarjeta medio segundo y arrastrarla con el dedo
+  r.querySelectorAll(".kanban .lead[draggable]").forEach(t => enlazarArrastreTactil(t, r));
   r.querySelectorAll("[data-ir-proy]").forEach(b => { const ir = () => { filtroProy = b.dataset.irProy; vista = "pipeline"; render(); }; b.onclick = ir; b.onkeydown = (e) => { if (e.key === "Enter") ir(); }; });
   r.querySelectorAll("[data-fproy]").forEach(b => b.onclick = () => { filtroProy = b.dataset.fproy; render(); });
   r.querySelectorAll("[data-nuevo-lead]").forEach(b => b.onclick = nuevoLead);
@@ -915,6 +918,57 @@ function tarjetaVenta(v) {
     <span class="lead-inf"><span class="valor">${eur(v.importe)}</span><span class="pildora ${e[1]}">${e[0]}</span></span>
     <span class="lead-cta">Closer: <b>${esc(closers || "—")}</b>${v.setter ? " · Setter: " + esc(v.setter) : ""}</span>
   </div>`;
+}
+function enlazarArrastreTactil(t, r) {
+  let timer = null, arrastrando = false, x0 = 0, y0 = 0, fantasma = null, colSobre = null, rafScroll = null, dxScroll = 0;
+  const scroller = t.closest(".kanban-scroll");
+  const limpiar = () => {
+    clearTimeout(timer); timer = null; cancelAnimationFrame(rafScroll); rafScroll = null; dxScroll = 0;
+    if (fantasma) fantasma.remove(); fantasma = null;
+    t.style.opacity = ""; r.querySelectorAll(".columna").forEach(c => c.style.outline = ""); colSobre = null;
+  };
+  const autoScroll = () => {
+    if (!scroller || !dxScroll) { rafScroll = null; return; }
+    scroller.scrollLeft += dxScroll; rafScroll = requestAnimationFrame(autoScroll);
+  };
+  t.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    timer = setTimeout(() => {
+      timer = null; arrastrando = true; t.style.opacity = ".45";
+      if (navigator.vibrate) navigator.vibrate(30);
+      const rc = t.getBoundingClientRect();
+      fantasma = t.cloneNode(true);
+      Object.assign(fantasma.style, {position: "fixed", left: rc.left + "px", top: rc.top + "px", width: rc.width + "px", zIndex: 9999, pointerEvents: "none", opacity: ".92", boxShadow: "0 8px 24px rgba(0,0,0,.35)", transform: "rotate(2deg)"});
+      document.body.appendChild(fantasma);
+      fantasma._dx = x0 - rc.left; fantasma._dy = y0 - rc.top;
+    }, 450);
+  }, {passive: true});
+  t.addEventListener("touchmove", (e) => {
+    const p = e.touches[0];
+    if (!arrastrando) { if (timer && (Math.abs(p.clientX - x0) > 10 || Math.abs(p.clientY - y0) > 10)) { clearTimeout(timer); timer = null; } return; }
+    e.preventDefault();
+    fantasma.style.left = (p.clientX - fantasma._dx) + "px"; fantasma.style.top = (p.clientY - fantasma._dy) + "px";
+    const bajo = document.elementFromPoint(p.clientX, p.clientY);
+    const col = bajo && bajo.closest(".kanban .columna[data-etapa]");
+    if (col !== colSobre) { if (colSobre) colSobre.style.outline = ""; colSobre = col; if (col) col.style.outline = "2px dashed var(--oro)"; }
+    const w = window.innerWidth, borde = 48;
+    dxScroll = p.clientX < borde ? -12 : p.clientX > w - borde ? 12 : 0;
+    if (dxScroll && !rafScroll) rafScroll = requestAnimationFrame(autoScroll);
+  }, {passive: false});
+  const fin = (e) => {
+    if (arrastrando) {
+      e.preventDefault(); arrastrando = false;
+      const destino = colSobre && colSobre.dataset.etapa; limpiar();
+      t._ignorarClick = true; setTimeout(() => t._ignorarClick = false, 400);
+      if (destino) moverEtapa(+t.dataset.lead, destino);
+    } else limpiar();
+  };
+  t.addEventListener("touchend", fin);
+  t.addEventListener("touchcancel", () => { arrastrando = false; limpiar(); });
+  t.addEventListener("contextmenu", (e) => { if (arrastrando || timer === null) e.preventDefault(); });
+  const clickOriginal = t.onclick;
+  t.onclick = (e) => { if (t._ignorarClick) { e.preventDefault(); return; } if (clickOriginal) clickOriginal.call(t, e); };
 }
 async function moverEtapa(id, etapa) {
   const l = leads.find(x => x.id === id); if (!l || l.etapa === etapa) return;
