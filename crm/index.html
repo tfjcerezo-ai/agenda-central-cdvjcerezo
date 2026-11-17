@@ -1119,7 +1119,7 @@ function editarPresupuesto(l, id) {
       lineas: lineas.map(li => ({id: li.id, ref: li.ref, codigo: li.codigo || null, nombre: li.nombre, unidad: li.unidad, cantidad: +li.cantidad || 0, precio: +li.precio || 0, dto: +li.dto || 0, libre: !!li.libre, fuera: !!li.fuera})),
       subtotal: t.sub, iva: t.iva, total: t.total, notas: $("#pz-notas").value.trim() || null};
     if (conEntrega(l)) { const en = leerEntregaPedido(); fila.entrega = en.entrega;
-      if (en.guardar && en.entrega.direccion) { const lista = entregasDe(l).concat([{id: "e" + Date.now(), etiqueta: en.entrega.etiqueta || "Entrega", direccion: en.entrega.direccion, cp: en.entrega.cp, poblacion: en.entrega.poblacion, provincia: en.entrega.provincia, contacto: en.entrega.contacto, telefono: en.entrega.telefono, defecto: !entregasDe(l).length}]);
+      if (en.guardar && en.entrega.direccion && hayEntregas()) { const lista = entregasDe(l).concat([{id: "e" + Date.now(), etiqueta: en.entrega.etiqueta || "Entrega", direccion: en.entrega.direccion, cp: en.entrega.cp, poblacion: en.entrega.poblacion, provincia: en.entrega.provincia, contacto: en.entrega.contacto, telefono: en.entrega.telefono, defecto: !entregasDe(l).length}]);
         const {data: ld} = await sb.from("crm_leads").update({entregas: lista, entrega_fiscal: false}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); } }
     const num = $("#pz-numero").value.trim(); if (num) fila.numero = num;
     const q = p ? sb.from("crm_presupuestos").update(fila).eq("id", p.id) : sb.from("crm_presupuestos").insert(fila);
@@ -1173,7 +1173,7 @@ function editarPresupuesto(l, id) {
   $("#pz-buscar").oninput = sugerir; $("#pz-cat").onchange = sugerir; sugerir(); pintar();
 }
 /* Propuesta o pedido: dónde se entrega y a quién se llama (solo proyectos con suministro de material) */
-const conEntrega = (l) => !!(FAB_PEDIDO[l.proyecto_id] || l.proyecto_id === "induvec");
+const conEntrega = (l) => hayEntregaPz() && !!(FAB_PEDIDO[l.proyecto_id] || l.proyecto_id === "induvec");
 function htmlEntregaPedido(l, p) {
   const es = entregasDe(l), act = p && p.entrega ? p.entrega : entregaDefecto(l);
   const iSel = act.fiscal ? "fiscal" : String(Math.max(-1, es.findIndex(e => (e.direccion || "") === (act.direccion || "") && (e.poblacion || "") === (act.poblacion || ""))));
@@ -1363,6 +1363,9 @@ const FAB_PEDIDO = {
 };
 /* ===== Direcciones: fiscal (crm_leads.direccion) y de entrega (crm_leads.entregas · crm_presupuestos.entrega) ===== */
 const txtDir = (e) => !e ? "" : [e.direccion, [e.cp, e.poblacion].filter(Boolean).join(" "), e.provincia && e.provincia !== e.poblacion ? e.provincia : ""].filter(Boolean).join(", ");
+/* Las columnas nuevas solo se usan si ya existen en la base de datos (sql/direcciones_entrega.sql) */
+const hayEntregas = () => leads.some(x => "entregas" in x);
+const hayEntregaPz = () => presupuestos.some(x => "entrega" in x);
 const entregasDe = (l) => Array.isArray(l && l.entregas) ? l.entregas.filter(e => e && (e.direccion || e.poblacion)) : [];
 /* Entrega por defecto del cliente: la marcada como defecto, o la fiscal si la casilla está activa o no hay ninguna */
 function entregaDefecto(l) {
@@ -1450,7 +1453,7 @@ async function generarPedidos(cli, grupos, d, pwId) {
   for (const proy of Object.keys(grupos)) {
     const f = FAB_PEDIDO[proy], ls = grupos[proy], t = totalesPresu(ls, proy);
     const filaL = {proyecto_id: proy, empresa: cli.empresa, contacto: cli.contacto || null, telefono: cli.telefono || null, email: cli.email || null, cif: cli.cif || null,
-      entregas: cli.entrega ? [{id: "e" + Date.now(), etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || "", defecto: true}] : [], entrega_fiscal: !cli.entrega,
+      ...(hayEntregas() ? {entregas: cli.entrega ? [{id: "e" + Date.now(), etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || "", defecto: true}] : [], entrega_fiscal: !cli.entrega} : {direccion: cli.entrega || null}),
       origen: "Pedido web Induvec", etapa: "Propuesta", prioridad: "alta", closer_id: yo.id, creado_por: yo.id, proximo_paso: `Enviar pedido a ${f.corto}`, proximo_paso_fecha: fechaISO(new Date())};
     // Sin duplicar clientes: si ya existe (mismo correo o CIF), se usa su nombre y, si tiene una oportunidad abierta de este fabricante, esa misma
     const norm = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -1460,13 +1463,13 @@ async function generarPedidos(cli, grupos, d, pwId) {
     const abierta = conocidos.find(x => x.proyecto_id === proy && esActivo(x) && !presupuestos.some(z => z.lead_id === x.id && z.estado === "aceptado"));
     let l;
     if (abierta) { l = abierta; await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: "Pedido recibido desde la web de Induvec"});
-      if (cli.entrega && !entregasDe(l).some(e => (e.direccion || "").toLowerCase() === cli.entrega.toLowerCase())) { const {data: ld} = await sb.from("crm_leads").update({entregas: entregasDe(l).concat([{id: "e" + Date.now(), etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || "", defecto: !entregasDe(l).length}]), entrega_fiscal: false}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); } }
+      if (hayEntregas() && cli.entrega && !entregasDe(l).some(e => (e.direccion || "").toLowerCase() === cli.entrega.toLowerCase())) { const {data: ld} = await sb.from("crm_leads").update({entregas: entregasDe(l).concat([{id: "e" + Date.now(), etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || "", defecto: !entregasDe(l).length}]), entrega_fiscal: false}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); } }
     else { const {data, error: el} = await sb.from("crm_leads").insert(filaL).select().single();
       if (el) return "No se pudo crear el cliente: " + el.message;
       l = data; leads.unshift(l); }
     const filaP = {lead_id: l.id, proyecto_id: proy, numero: numeroPedido(proy, fecha), fecha, validez: fechaISO(val), estado: "aceptado", lineas: ls, subtotal: t.sub, iva: t.iva, total: t.total,
       notas: f.cond.map(([a, b]) => a + ": " + b).join("\n") + (cli.observaciones ? "\nObservaciones del cliente: " + cli.observaciones : ""), pedido_web_id: pwId || null,
-      entrega: cli.entrega ? {etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || ""} : null};
+      ...(hayEntregaPz() ? {entrega: cli.entrega ? {etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || ""} : null} : {})};
     const {data: pz, error: ep} = await sb.from("crm_presupuestos").insert(filaP).select().single();
     if (ep) return "No se pudo guardar el pedido: " + ep.message;
     presupuestos.unshift(pz);
@@ -1941,7 +1944,7 @@ async function abrirLead(id) {
       <div class="campo"><label for="l-ciudad">Ciudad / provincia</label><input id="l-ciudad" value="${esc(l.ciudad || "")}"></div>
       <div class="campo"><label for="l-cif">CIF</label><input id="l-cif" value="${esc(l.cif || "")}"></div>
       <div class="campo" style="grid-column:1/-1"><label for="l-direccion">Dirección fiscal <small style="color:var(--texto3)">(la de facturación, con la razón social y el CIF)</small></label><input id="l-direccion" value="${esc(l.direccion || "")}" placeholder="Calle, número, CP, población"></div>
-      <div style="grid-column:1/-1" id="l-entregas-caja">${htmlEntregasFicha(l)}</div>
+      ${hayEntregas() ? `<div style="grid-column:1/-1" id="l-entregas-caja">${htmlEntregasFicha(l)}</div>` : ""}
       <div class="campo" style="grid-column:1/-1"><label for="l-web">Web</label><input id="l-web" value="${esc(l.web || "")}"></div>
       <div class="campo" style="grid-column:1/-1"><label for="l-linkedin">LinkedIn (perfil del contacto o página de la empresa)</label><div style="display:flex;gap:8px"><input id="l-linkedin" type="url" placeholder="https://www.linkedin.com/in/…" value="${esc(linkedinDe(l))}" style="flex:1"><a class="btn" href="${esc(linkedinDe(l) || buscarLinkedin(l))}" target="_blank" rel="noopener">${linkedinDe(l) ? "Abrir" : "Buscar"}</a></div></div>
       ${esDir() ? `<div class="campo"><label for="l-proy">Proyecto</label><select id="l-proy">${proyectos.map(p => `<option value="${p.id}" ${p.id === l.proyecto_id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select></div>
