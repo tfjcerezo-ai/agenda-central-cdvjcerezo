@@ -1105,6 +1105,7 @@ function editarPresupuesto(l, id) {
         <div id="pz-sugerencias" style="max-height:300px;overflow:auto;margin-top:6px;border:1px solid var(--linea);border-radius:10px"></div></div>
       <div style="grid-column:1/-1;overflow:auto"><table id="pz-tabla" style="font-size:12.5px;width:100%"></table></div>
       <div id="pz-totales" style="grid-column:1/-1"></div>
+      ${conEntrega(l) ? htmlEntregaPedido(l, p) : ""}
       <div class="campo"><label for="pz-estado">Estado</label><select id="pz-estado">${Object.entries(ESTADO_PRESU).map(([k, v]) => `<option value="${k}" ${(p ? p.estado : "borrador") === k ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>
       <div class="campo" style="grid-column:1/-1"><label for="pz-notas">Condiciones para el cliente <small style="color:var(--texto3)">(una por línea, «Concepto: texto»)</small></label><textarea id="pz-notas" rows="6">${esc(p ? p.notas || "" : condicionesPorDefecto(l.proyecto_id))}</textarea></div>
     </div>`, async () => {
@@ -1117,6 +1118,9 @@ function editarPresupuesto(l, id) {
     const fila = {lead_id: l.id, proyecto_id: l.proyecto_id, fecha: $("#pz-fecha").value || fechaISO(hoy), validez: $("#pz-validez").value || null, estado: $("#pz-estado").value,
       lineas: lineas.map(li => ({id: li.id, ref: li.ref, codigo: li.codigo || null, nombre: li.nombre, unidad: li.unidad, cantidad: +li.cantidad || 0, precio: +li.precio || 0, dto: +li.dto || 0, libre: !!li.libre, fuera: !!li.fuera})),
       subtotal: t.sub, iva: t.iva, total: t.total, notas: $("#pz-notas").value.trim() || null};
+    if (conEntrega(l)) { const en = leerEntregaPedido(); fila.entrega = en.entrega;
+      if (en.guardar && en.entrega.direccion) { const lista = entregasDe(l).concat([{id: "e" + Date.now(), etiqueta: en.entrega.etiqueta || "Entrega", direccion: en.entrega.direccion, cp: en.entrega.cp, poblacion: en.entrega.poblacion, provincia: en.entrega.provincia, contacto: en.entrega.contacto, telefono: en.entrega.telefono, defecto: !entregasDe(l).length}]);
+        const {data: ld} = await sb.from("crm_leads").update({entregas: lista, entrega_fiscal: false}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); } }
     const num = $("#pz-numero").value.trim(); if (num) fila.numero = num;
     const q = p ? sb.from("crm_presupuestos").update(fila).eq("id", p.id) : sb.from("crm_presupuestos").insert(fila);
     const {data, error} = await q.select().single();
@@ -1132,7 +1136,8 @@ function editarPresupuesto(l, id) {
   const caja = $(".modal-caja"); if (caja) caja.style.maxWidth = "860px";
   const acc = $(".modal-acciones");
   const bPdf = document.createElement("button"); bPdf.type = "button"; bPdf.className = "btn"; bPdf.textContent = "⬇ PDF para el cliente"; bPdf.style.marginRight = "auto";
-  bPdf.onclick = () => { if (!lineas.length) return aviso("Añade productos primero", true); const av = avisosPrecio(lineas); if (av.length && !confirm("Revisa estos precios:\n\n" + av.map(a => "• " + a.txt).join("\n") + "\n\n¿Sacar el PDF igualmente?")) return; imprimirPresupuesto(l, {numero: $("#pz-numero").value.trim() || (p ? p.numero : "(sin guardar)"), fecha: $("#pz-fecha").value, validez: $("#pz-validez").value, lineas, notas: $("#pz-notas").value, creado_por: p ? p.creado_por : yo.id}); };
+  bPdf.onclick = () => { if (!lineas.length) return aviso("Añade productos primero", true); const av = avisosPrecio(lineas); if (av.length && !confirm("Revisa estos precios:\n\n" + av.map(a => "• " + a.txt).join("\n") + "\n\n¿Sacar el PDF igualmente?")) return; imprimirPresupuesto(l, {numero: $("#pz-numero").value.trim() || (p ? p.numero : "(sin guardar)"), fecha: $("#pz-fecha").value, validez: $("#pz-validez").value, lineas, notas: $("#pz-notas").value, creado_por: p ? p.creado_por : yo.id, entrega: conEntrega(l) ? leerEntregaPedido().entrega : null}); };
+  enlazarEntregaPedido(l);
   acc.prepend(bPdf);
   const bLib = document.createElement("button"); bLib.type = "button"; bLib.className = "btn"; bLib.textContent = cat.length ? "+ Portes / línea libre" : "+ Añadir línea";
   bLib.onclick = () => { lineas.push({id: "libre-" + Date.now(), ref: "—", codigo: null, nombre: cat.length ? "Portes" : "Concepto", unidad: "ud", cantidad: 1, precio: 0, dto: 0, libre: true, fuera: true}); pintar(); };
@@ -1166,6 +1171,44 @@ function editarPresupuesto(l, id) {
     $("#pz-sugerencias").querySelectorAll("[data-add]").forEach(d => d.onclick = () => { const x = cat.find(y => y.id === d.dataset.add); const ya = lineas.find(li => li.id === x.id); if (ya) ya.cantidad = (+ya.cantidad || 0) + 1; else lineas.push({id: x.id, ref: x.ref, codigo: x.codigo, nombre: x.nombre, unidad: x.unidad, cantidad: 1, precio: +x.precio || 0, dto: 0, libre: !!x.precio_libre}); pintar(); sugerir(); });
   };
   $("#pz-buscar").oninput = sugerir; $("#pz-cat").onchange = sugerir; sugerir(); pintar();
+}
+/* Propuesta o pedido: dónde se entrega y a quién se llama (solo proyectos con suministro de material) */
+const conEntrega = (l) => !!(FAB_PEDIDO[l.proyecto_id] || l.proyecto_id === "induvec");
+function htmlEntregaPedido(l, p) {
+  const es = entregasDe(l), act = p && p.entrega ? p.entrega : entregaDefecto(l);
+  const iSel = act.fiscal ? "fiscal" : String(Math.max(-1, es.findIndex(e => (e.direccion || "") === (act.direccion || "") && (e.poblacion || "") === (act.poblacion || ""))));
+  const sel = iSel === "-1" ? "otra" : iSel;
+  const v = (k) => esc(act[k] || "");
+  return `<div class="bloque" style="grid-column:1/-1;padding:12px 14px"><div class="etiq" style="margin-bottom:8px">Entrega de este pedido</div>
+    <div class="rejilla-campos">
+      <div class="campo" style="grid-column:1/-1"><label for="pz-ent-sel">Dirección de entrega</label><select id="pz-ent-sel">
+        <option value="fiscal" ${sel === "fiscal" ? "selected" : ""}>La dirección fiscal${l.direccion ? " · " + esc(l.direccion) : ""}</option>
+        ${es.map((e, i) => `<option value="${i}" ${sel === String(i) ? "selected" : ""}>${esc(e.etiqueta || "Entrega")} · ${esc(txtDir(e))}${e.defecto ? " (por defecto)" : ""}</option>`).join("")}
+        <option value="otra" ${sel === "otra" ? "selected" : ""}>Otra dirección solo para este pedido…</option></select></div>
+      <div class="campo" style="grid-column:1/-1"><label for="pz-ent-dir">Dirección</label><input id="pz-ent-dir" value="${v("direccion")}" placeholder="Calle y número"></div>
+      <div class="campo"><label for="pz-ent-cp">CP</label><input id="pz-ent-cp" value="${v("cp")}"></div>
+      <div class="campo"><label for="pz-ent-pob">Población</label><input id="pz-ent-pob" value="${v("poblacion")}"></div>
+      <div class="campo"><label for="pz-ent-prov">Provincia</label><input id="pz-ent-prov" value="${v("provincia")}"></div>
+      <div class="campo"><label for="pz-ent-cont">Persona que recibe</label><input id="pz-ent-cont" value="${v("contacto")}"></div>
+      <div class="campo"><label for="pz-ent-tel">Teléfono de entrega</label><input id="pz-ent-tel" value="${v("telefono")}"></div>
+      <label id="pz-ent-guardar-l" style="grid-column:1/-1;display:${sel === "otra" ? "inline-flex" : "none"};gap:8px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="pz-ent-guardar" style="width:auto;margin:0"> Guardar también esta dirección en la ficha del cliente</label>
+    </div></div>`;
+}
+function enlazarEntregaPedido(l) {
+  const s = document.getElementById("pz-ent-sel"); if (!s) return;
+  s.onchange = () => {
+    const es = entregasDe(l), poner = (o) => { [["dir", "direccion"], ["cp", "cp"], ["pob", "poblacion"], ["prov", "provincia"], ["cont", "contacto"], ["tel", "telefono"]].forEach(([id, k]) => { document.getElementById("pz-ent-" + id).value = o[k] || ""; }); };
+    if (s.value === "fiscal") poner({direccion: l.direccion, contacto: l.contacto, telefono: l.telefono || l.movil});
+    else if (s.value === "otra") { poner({contacto: l.contacto, telefono: l.telefono || l.movil}); document.getElementById("pz-ent-dir").focus(); }
+    else { const e = es[+s.value] || {}; poner({...e, contacto: e.contacto || l.contacto, telefono: e.telefono || l.telefono || l.movil}); }
+    document.getElementById("pz-ent-guardar-l").style.display = s.value === "otra" ? "inline-flex" : "none";
+  };
+}
+function leerEntregaPedido() {
+  const s = document.getElementById("pz-ent-sel"), g = (id) => (document.getElementById("pz-ent-" + id) || {value: ""}).value.trim();
+  if (!s) return {entrega: null, guardar: false};
+  const etiqueta = s.value === "fiscal" ? "Dirección fiscal" : s.value === "otra" ? "Entrega" : (s.selectedOptions[0] ? s.selectedOptions[0].textContent.split(" · ")[0] : "Entrega");
+  return {entrega: {etiqueta, direccion: g("dir"), cp: g("cp"), poblacion: g("pob"), provincia: g("prov"), contacto: g("cont"), telefono: g("tel"), fiscal: s.value === "fiscal"}, guardar: s.value === "otra" && !!(document.getElementById("pz-ent-guardar") || {}).checked};
 }
 /* Fichas de producto que acompañan a la oferta (foto en la 1.ª página y anexo técnico) */
 const FICHAS_PRESU = {
@@ -1250,7 +1293,7 @@ function imprimirPresupuesto(l, d) {
     <table class="lin tec"><thead><tr>${f.tabla[0].map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${f.tabla.slice(1).map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>
     <div class="h3"><span>Características</span></div><ul class="car">${f.caracteristicas.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
     ${pie(2 + i)}</section>`).join("");
-  const campos = [["Razón social", l.empresa], ["CIF", l.cif], ["Dirección de facturación", "", 1], ["Dirección de entrega", "", 1], ["Persona de contacto y teléfono"], ["Email para envío de factura"], ["Nombre y apellidos del firmante"], ["DNI del firmante"], ["Cargo"], ["Fecha"]];
+  const campos = [["Razón social", l.empresa], ["CIF", l.cif], ["Dirección de facturación", l.direccion || "", 1], ["Dirección de entrega", (e => !e || e.fiscal ? "" : txtDir(e))(d.entrega || (l.entrega_fiscal === false ? entregaDefecto(l) : null)), 1], ["Persona de contacto y teléfono", (e => !e || e.fiscal ? "" : [e.contacto, e.telefono].filter(Boolean).join(" · "))(d.entrega || (l.entrega_fiscal === false ? entregaDefecto(l) : null))], ["Email para envío de factura"], ["Nombre y apellidos del firmante"], ["DNI del firmante"], ["Cargo"], ["Fecha"]];
   const pedido = `<section class="pag">${cab("CONFIRMACIÓN DE PEDIDO", "Aceptación del presupuesto")}
     <div class="resumen"><div><div class="et">Oferta</div><div class="nom">Nº ${esc(d.numero || "—")}</div>${fDMA2(d.fecha)}</div>
       <div><div class="et">Cliente</div><div class="nom">${esc(l.empresa)}</div>${l.contacto ? "A la atención de " + esc(l.contacto) : ""}</div>
@@ -1318,6 +1361,17 @@ const FAB_PEDIDO = {
     cond: [["Suministro y factura", "CAYFI, S.L. sirve el material, factura y cobra directamente al cliente."], ["Precios", "Tarifa vigente, sin IVA, por cajas completas."], ["Portes", "A consultar, aparte."],
       ["Forma de pago", "Transferencia antes del envío."], ["Comisión", "Cliente de INDUVEC como comisionista / colaborador: 10 % de comisión a fin de mes. Incluir en el listado mensual de clientes."]]}
 };
+/* ===== Direcciones: fiscal (crm_leads.direccion) y de entrega (crm_leads.entregas · crm_presupuestos.entrega) ===== */
+const txtDir = (e) => !e ? "" : [e.direccion, [e.cp, e.poblacion].filter(Boolean).join(" "), e.provincia && e.provincia !== e.poblacion ? e.provincia : ""].filter(Boolean).join(", ");
+const entregasDe = (l) => Array.isArray(l && l.entregas) ? l.entregas.filter(e => e && (e.direccion || e.poblacion)) : [];
+/* Entrega por defecto del cliente: la marcada como defecto, o la fiscal si la casilla está activa o no hay ninguna */
+function entregaDefecto(l) {
+  const es = entregasDe(l);
+  if (l && l.entrega_fiscal === false && es.length) { const e = es.find(x => x.defecto) || es[0]; return {etiqueta: e.etiqueta || "Entrega", direccion: e.direccion || "", cp: e.cp || "", poblacion: e.poblacion || "", provincia: e.provincia || "", contacto: e.contacto || l.contacto || "", telefono: e.telefono || l.telefono || l.movil || "", fiscal: false}; }
+  return {etiqueta: "Dirección fiscal", direccion: (l && l.direccion) || "", cp: "", poblacion: "", provincia: "", contacto: (l && l.contacto) || "", telefono: (l && (l.telefono || l.movil)) || "", fiscal: true};
+}
+/* Entrega de un pedido concreto: la guardada en el pedido o, si no tiene, la del cliente */
+const entregaPedido = (pz, l) => (pz && pz.entrega && (pz.entrega.direccion || pz.entrega.poblacion || pz.entrega.contacto)) ? pz.entrega : entregaDefecto(l);
 const PEDIDOS_DESDE = "2026-10-23";   // los avisos de «por enviar» cuentan desde que existe el circuito
 const esPedidoFab = (pz) => pz && pz.estado === "aceptado" && !!FAB_PEDIDO[pz.proyecto_id];
 const pedidosPorEnviar = () => presupuestos.filter(pz => esPedidoFab(pz) && !pz.enviado_fab && String(pz.fecha || "") >= PEDIDOS_DESDE);
@@ -1382,7 +1436,7 @@ function revisarPedidoWeb(d, pwId) {
     <p style="font-size:12.5px;color:var(--texto3)">Al confirmar se crea el cliente con una oportunidad ganada por fabricante, su propuesta aceptada y la venta. Los pedidos quedan en «PDF por enviar».</p>`,
   async () => {
     if (!proys.length) return "No hay líneas que se puedan pedir.";
-    const cli = {empresa: $("#pw-empresa").value.trim(), cif: $("#pw-cif").value.trim(), contacto: $("#pw-contacto").value.trim(), telefono: $("#pw-tel").value.trim(), email: $("#pw-email").value.trim(), direccion: $("#pw-entrega").value.trim(), observaciones: $("#pw-obs").value.trim()};
+    const cli = {empresa: $("#pw-empresa").value.trim(), cif: $("#pw-cif").value.trim(), contacto: $("#pw-contacto").value.trim(), telefono: $("#pw-tel").value.trim(), email: $("#pw-email").value.trim(), entrega: $("#pw-entrega").value.trim(), observaciones: $("#pw-obs").value.trim()};
     if (!cli.empresa) return "Falta el nombre de la empresa.";
     const e = await generarPedidos(cli, grupos, d, pwId); if (e) return e;
     aviso(`Pedido generado: ${proys.length} ${proys.length === 1 ? "pedido" : "pedidos"} por enviar`);
@@ -1395,7 +1449,8 @@ async function generarPedidos(cli, grupos, d, pwId) {
   const fecha = d.fecha || fechaISO(new Date()), val = new Date(fecha); val.setDate(val.getDate() + VALIDEZ_DIAS);
   for (const proy of Object.keys(grupos)) {
     const f = FAB_PEDIDO[proy], ls = grupos[proy], t = totalesPresu(ls, proy);
-    const filaL = {proyecto_id: proy, empresa: cli.empresa, contacto: cli.contacto || null, telefono: cli.telefono || null, email: cli.email || null, cif: cli.cif || null, direccion: cli.direccion || null,
+    const filaL = {proyecto_id: proy, empresa: cli.empresa, contacto: cli.contacto || null, telefono: cli.telefono || null, email: cli.email || null, cif: cli.cif || null,
+      entregas: cli.entrega ? [{id: "e" + Date.now(), etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || "", defecto: true}] : [], entrega_fiscal: !cli.entrega,
       origen: "Pedido web Induvec", etapa: "Propuesta", prioridad: "alta", closer_id: yo.id, creado_por: yo.id, proximo_paso: `Enviar pedido a ${f.corto}`, proximo_paso_fecha: fechaISO(new Date())};
     // Sin duplicar clientes: si ya existe (mismo correo o CIF), se usa su nombre y, si tiene una oportunidad abierta de este fabricante, esa misma
     const norm = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -1404,12 +1459,14 @@ async function generarPedidos(cli, grupos, d, pwId) {
     if (conocidos.length) filaL.empresa = conocidos[0].empresa;
     const abierta = conocidos.find(x => x.proyecto_id === proy && esActivo(x) && !presupuestos.some(z => z.lead_id === x.id && z.estado === "aceptado"));
     let l;
-    if (abierta) { l = abierta; await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: "Pedido recibido desde la web de Induvec"}); }
+    if (abierta) { l = abierta; await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: "Pedido recibido desde la web de Induvec"});
+      if (cli.entrega && !entregasDe(l).some(e => (e.direccion || "").toLowerCase() === cli.entrega.toLowerCase())) { const {data: ld} = await sb.from("crm_leads").update({entregas: entregasDe(l).concat([{id: "e" + Date.now(), etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || "", defecto: !entregasDe(l).length}]), entrega_fiscal: false}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); } }
     else { const {data, error: el} = await sb.from("crm_leads").insert(filaL).select().single();
       if (el) return "No se pudo crear el cliente: " + el.message;
       l = data; leads.unshift(l); }
     const filaP = {lead_id: l.id, proyecto_id: proy, numero: numeroPedido(proy, fecha), fecha, validez: fechaISO(val), estado: "aceptado", lineas: ls, subtotal: t.sub, iva: t.iva, total: t.total,
-      notas: f.cond.map(([a, b]) => a + ": " + b).join("\n") + (cli.observaciones ? "\nObservaciones del cliente: " + cli.observaciones : ""), pedido_web_id: pwId || null};
+      notas: f.cond.map(([a, b]) => a + ": " + b).join("\n") + (cli.observaciones ? "\nObservaciones del cliente: " + cli.observaciones : ""), pedido_web_id: pwId || null,
+      entrega: cli.entrega ? {etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || ""} : null};
     const {data: pz, error: ep} = await sb.from("crm_presupuestos").insert(filaP).select().single();
     if (ep) return "No se pudo guardar el pedido: " + ep.message;
     presupuestos.unshift(pz);
@@ -1484,7 +1541,9 @@ async function marcarEnviado(p, quitar, como) {
 function textoCorreoPedido(pz) {
   const l = leads.find(x => x.id === pz.lead_id) || {};
   return [`Hola,`, ``, `Os paso el pedido ${pz.numero} de INDUVEC. Va adjunto en PDF.`, ``,
-    `Cliente final (facturar y entregar a): ${l.empresa || ""}${l.cif ? " · CIF " + l.cif : ""}`, l.direccion ? `Entrega: ${l.direccion}` : "", [l.contacto, l.telefono || l.movil, l.email].filter(Boolean).join(" · "), ``,
+    ...(e => [`DATOS DE FACTURACIÓN`, `${l.empresa || ""}${l.cif ? " · CIF " + l.cif : ""}`, l.direccion ? `Dirección fiscal: ${l.direccion}` : "", ``,
+      `DIRECCIÓN DE ENTREGA`, e.fiscal ? `La misma que la fiscal${txtDir(e) ? ": " + txtDir(e) : ""}` : (e.etiqueta && e.etiqueta !== "Entrega" ? e.etiqueta + ": " : "") + (txtDir(e) || "sin indicar"), ``,
+      `CONTACTO PARA LA ENTREGA`, [e.contacto, e.telefono].filter(Boolean).join(" · ") || "sin indicar", ``])(entregaPedido(pz, l)),
     ...(pz.lineas || []).map(li => `- ${li.codigo || li.ref} · ${String(li.nombre).split("\n")[0]} · ${(+li.cantidad).toLocaleString("es-ES")} ${li.unidad} × ${e2p(li.precio)} = ${e2p(li.cantidad * li.precio)}`),
     ``, `Base imponible: ${e2p(pz.subtotal)} · IVA 21 %: ${e2p(pz.iva)} · Total: ${e2p(pz.total)}`, ``, `Por favor, confirmadme la recepción y la fecha prevista de entrega.`, ``, `Un saludo,`, ``, `Javier Cerezo`, `Director Comercial · INDUVEC`, `javier@induvec.com · +34 670 86 56 67`].join("\n");
 }
@@ -1567,7 +1626,15 @@ tr.sub td{font-weight:700;background:#F2F7F9}.tot{margin-left:auto;width:62mm;ma
 @media screen{body{background:#e9e8e3}.pag{width:210mm;margin:12px auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.12)}}`;
 const udP = (u) => ({m: "m", ml: "ml"})[u] || u || "ud";
 function htmlCliente(l, titulo) {
-  return `<div class="caja"><div class="et">${titulo}</div><div class="nom">${esc(l.empresa || "")}</div>${l.cif ? `CIF/NIF: ${esc(l.cif)}<br>` : ""}${[l.contacto && "Contacto: " + esc(l.contacto), (l.telefono || l.movil) && "Tel. " + esc(l.telefono || l.movil)].filter(Boolean).join(" · ")}${l.email ? "<br>" + esc(l.email) : ""}${l.direccion ? `<br><b>Entrega:</b> ${esc(l.direccion)}` : ""}</div>`;
+  return `<div class="caja"><div class="et">${titulo}</div><div class="nom">${esc(l.empresa || "")}</div>${l.cif ? `CIF/NIF: ${esc(l.cif)}<br>` : ""}${[l.contacto && "Contacto: " + esc(l.contacto), (l.telefono || l.movil) && "Tel. " + esc(l.telefono || l.movil)].filter(Boolean).join(" · ")}${l.email ? "<br>" + esc(l.email) : ""}${l.direccion ? `<br><b>Dirección fiscal:</b> ${esc(l.direccion)}` : ""}</div>`;
+}
+/* Pedido al fabricante: tres bloques separados — facturación, dirección de entrega y contacto para la entrega */
+function htmlFactEntrega(l, pz, obs) {
+  const e = entregaPedido(pz, l), dir = txtDir(e);
+  return `<div class="cajas" style="grid-template-columns:1fr 1fr 1fr">
+    <div class="caja"><div class="et">Datos de facturación</div><div class="nom">${esc(l.empresa || "")}</div>${l.cif ? `CIF/NIF: ${esc(l.cif)}<br>` : ""}${l.direccion ? esc(l.direccion) : "<i>Dirección fiscal sin indicar</i>"}${l.email ? "<br>" + esc(l.email) : ""}</div>
+    <div class="caja"><div class="et">Dirección de entrega</div>${e.fiscal ? `<div class="nom">La misma que la fiscal</div>${dir ? esc(dir) : ""}` : `${e.etiqueta && e.etiqueta !== "Entrega" ? `<div class="nom">${esc(e.etiqueta)}</div>` : ""}${dir ? `<b>${esc(dir)}</b>` : "<i>Sin indicar</i>"}`}</div>
+    <div class="caja"><div class="et">Contacto para la entrega</div>${e.contacto ? `<div class="nom">${esc(e.contacto)}</div>` : "<i>Sin indicar</i><br>"}${e.telefono ? "Tel. " + esc(e.telefono) : ""}${obs ? `<br><b>Observaciones:</b> ${esc(obs)}` : ""}</div></div>`;
 }
 function obsCliente(pz) { const m = String(pz.notas || "").match(/Observaciones del cliente:\s*(.+)/); return m ? m[1] : ""; }
 function abrirPDF(titulo, cuerpo) {
@@ -1586,7 +1653,7 @@ function htmlPedidoFab(pz) {
     <div class="pills"><span>Precios sin IVA</span><span>Sirve y factura ${esc(f.nombre)}</span></div>
     <div class="cajas"><div class="caja"><div class="et">Para</div><div class="nom">${esc(f.nombre)}</div>${esc(f.dest)}</div>
       <div class="caja"><div class="et">Pedido tramitado por</div><div class="nom">INDUVEC · Suministro industrial</div>Javier Cerezo · Director Comercial<br>javier@induvec.com · +34 670 86 56 67<br>Pedido nº <b>${esc(pz.numero)}</b> · ${fDMAp(pz.fecha)}</div></div>
-    <div class="cajas" style="grid-template-columns:1fr">${htmlCliente(l, "Cliente final · facturar y entregar a").replace(/<\/div>$/, obs ? `<br><b>Observaciones:</b> ${esc(obs)}</div>` : "</div>")}</div>
+    ${htmlFactEntrega(l, pz, obs)}
     <table><thead><tr><th>Ref.</th>${bernad ? "<th>Código Bernad</th>" : ""}<th>Producto</th><th class="n">Cant.</th><th>Ud.</th><th class="n">Precio</th><th class="n">Importe</th></tr></thead><tbody>${filas}</tbody></table>
     <div class="tot"><div><span>Base imponible</span><span>${e2p(pz.subtotal)}</span></div><div><span>IVA 21 %</span><span>${e2p(pz.iva)}</span></div><div class="g"><span>Total</span><span>${e2p(pz.total)}</span></div></div>
     <h2>Condiciones</h2><div class="cond">${f.cond.map(([a, b]) => `<div><b>${esc(a)}:</b> ${esc(b)}</div>`).join("")}</div>
@@ -1611,7 +1678,8 @@ function imprimirResumenPedido(pzs) {
   const cy = pzs.find(p => p.proyecto_id === "cayfi");
   const cuerpo = `<section class="pag">${cabPedido("PEDIDO · RESUMEN", "Uso interno · Departamento comercial INDUVEC")}
     <div class="pills"><span>${fDMAp(pzs[0].fecha)}</span><span>${pzs.length} ${pzs.length === 1 ? "fabricante" : "fabricantes"} · ${pzs.length} ${pzs.length === 1 ? "pedido" : "pedidos"}</span></div>
-    <div class="cajas">${htmlCliente(l, "Cliente final").replace(/<\/div>$/, obs ? `<br><b>Observaciones:</b> ${esc(obs)}</div>` : "</div>")}<div class="caja"><div class="et">Reparto del pedido</div>
+    ${htmlFactEntrega(l, pzs[0], obs)}
+    <div class="cajas" style="grid-template-columns:1fr"><div class="caja"><div class="et">Reparto del pedido</div>
       ${pzs.map((pz, i) => `<div style="margin-bottom:5px"><b>Pedido ${i + 1} · ${esc(pz.numero)}</b> → ${esc(FAB_PEDIDO[pz.proyecto_id].nombre)}<br>${(pz.lineas || []).length} líneas · ${e2p(pz.subtotal)} + IVA</div>`).join("")}
       <div style="margin-top:6px;color:#56636f">Cada fabricante sirve y factura su parte al cliente.</div></div></div>
     ${bloques}
@@ -1872,7 +1940,8 @@ async function abrirLead(id) {
       <div class="campo"><label for="l-tipo">Tipo de cliente</label><input id="l-tipo" list="l-tipos" value="${esc(l.tipo_cliente || "")}" placeholder="Instalador, matadero, frigorífico…"><datalist id="l-tipos">${[...new Set(leads.filter(x => x.proyecto_id === l.proyecto_id && x.tipo_cliente).map(x => x.tipo_cliente))].sort().map(t => `<option value="${esc(t)}">`).join("")}</datalist></div>
       <div class="campo"><label for="l-ciudad">Ciudad / provincia</label><input id="l-ciudad" value="${esc(l.ciudad || "")}"></div>
       <div class="campo"><label for="l-cif">CIF</label><input id="l-cif" value="${esc(l.cif || "")}"></div>
-      <div class="campo" style="grid-column:1/-1"><label for="l-direccion">Dirección</label><input id="l-direccion" value="${esc(l.direccion || "")}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="l-direccion">Dirección fiscal <small style="color:var(--texto3)">(la de facturación, con la razón social y el CIF)</small></label><input id="l-direccion" value="${esc(l.direccion || "")}" placeholder="Calle, número, CP, población"></div>
+      <div style="grid-column:1/-1" id="l-entregas-caja">${htmlEntregasFicha(l)}</div>
       <div class="campo" style="grid-column:1/-1"><label for="l-web">Web</label><input id="l-web" value="${esc(l.web || "")}"></div>
       <div class="campo" style="grid-column:1/-1"><label for="l-linkedin">LinkedIn (perfil del contacto o página de la empresa)</label><div style="display:flex;gap:8px"><input id="l-linkedin" type="url" placeholder="https://www.linkedin.com/in/…" value="${esc(linkedinDe(l))}" style="flex:1"><a class="btn" href="${esc(linkedinDe(l) || buscarLinkedin(l))}" target="_blank" rel="noopener">${linkedinDe(l) ? "Abrir" : "Buscar"}</a></div></div>
       ${esDir() ? `<div class="campo"><label for="l-proy">Proyecto</label><select id="l-proy">${proyectos.map(p => `<option value="${p.id}" ${p.id === l.proyecto_id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select></div>
@@ -1893,6 +1962,7 @@ async function abrirLead(id) {
   { const ht = capa.querySelector("#hist-todo"); if (ht) ht.onchange = () => { capa.querySelector("#hist-lead").hidden = ht.checked; capa.querySelector("#hist-cliente").hidden = !ht.checked; }; }
   { const no = capa.querySelector("#nueva-oport"); if (no) no.onclick = () => nuevaOportunidad(l); }
   $("#reunion-lead").onclick = () => editarReunion(null, {lead_id: l.id});
+  enlazarEntregasFicha();
   const nc = $("#nueva-compra"); if (nc) nc.onclick = () => editarCompra(l, null);
   const np = $("#nuevo-presupuesto"); if (np) np.onclick = () => editarPresupuesto(l, null);
   capa.querySelectorAll("[data-presupuesto]").forEach(b => b.onclick = () => editarPresupuesto(l, +b.dataset.presupuesto));
@@ -1927,6 +1997,7 @@ async function abrirLead(id) {
       movil: $("#l-movil").value.trim() || null, cargo: $("#l-cargo").value.trim() || null, tipo_cliente: $("#l-tipo").value.trim() || null,
       ciudad: $("#l-ciudad").value.trim() || null, cif: $("#l-cif").value.trim() || null, direccion: $("#l-direccion").value.trim() || null, web: $("#l-web").value.trim() || null,
     };
+    { const ent = leerEntregasFicha(); if (ent && JSON.stringify([ent.entregas, ent.entrega_fiscal]) !== JSON.stringify([entregasDe(l), l.entrega_fiscal !== false])) Object.assign(cambios, ent); }
     { const li = $("#l-linkedin").value.trim(); if (li !== linkedinDe(l)) { const ex = {...(l.extra || {})}; if (li) ex.linkedin = /^https?:\/\//i.test(li) ? li : "https://" + li; else delete ex.linkedin; cambios.extra = ex; } }
     const empNueva = $("#l-empresa").value.trim(); if (!empNueva) return aviso("La empresa no puede quedar vacía", true); if (empNueva !== l.empresa) cambios.empresa = empNueva;
     if (document.getElementById("l-prods")) cambios.productos = leerProductos("l");
@@ -1965,7 +2036,45 @@ async function abrirLead(id) {
   };
 }
 const cerrarCapa = () => $("#capa").innerHTML = "";
-const CAMPOS_CLIENTE = ["contacto", "cargo", "telefono", "movil", "email", "cif", "direccion", "ciudad", "web", "tipo_cliente"];
+const CAMPOS_CLIENTE = ["contacto", "cargo", "telefono", "movil", "email", "cif", "direccion", "ciudad", "web", "tipo_cliente", "entregas", "entrega_fiscal"];
+/* Ficha de cliente: direcciones de entrega (editables; se guardan con «Guardar cambios») */
+let entregasEdit = [];
+function htmlEntregasFicha(l) {
+  entregasEdit = JSON.parse(JSON.stringify(entregasDe(l)));
+  const fiscal = l.entrega_fiscal !== false || !entregasEdit.length;
+  return `<div class="bloque" style="padding:12px 14px"><div class="etiq" style="margin-bottom:8px">Direcciones de entrega</div>
+    <label style="display:inline-flex;gap:8px;align-items:center;cursor:pointer;font-size:13.5px"><input type="checkbox" id="l-ent-fiscal" style="width:auto;margin:0" ${fiscal ? "checked" : ""}> La entrega es en la dirección fiscal</label>
+    <div id="l-ent-lista" ${fiscal ? "hidden" : ""} style="margin-top:10px"></div></div>`;
+}
+function pintarEntregasFicha() {
+  const cont = document.getElementById("l-ent-lista"); if (!cont) return;
+  if (!entregasEdit.length) entregasEdit.push({id: "e" + Date.now(), etiqueta: "Nave", direccion: "", cp: "", poblacion: "", provincia: "", contacto: "", telefono: "", defecto: true});
+  if (!entregasEdit.some(e => e.defecto)) entregasEdit[0].defecto = true;
+  const c = (i, k, lab, ph, ancho) => `<div class="campo"${ancho ? ' style="grid-column:1/-1"' : ""}><label>${lab}</label><input data-ent="${i}" data-k="${k}" value="${esc(entregasEdit[i][k] || "")}" placeholder="${ph}"></div>`;
+  cont.innerHTML = entregasEdit.map((e, i) => `<div style="border:1px solid var(--linea);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+        <label style="display:inline-flex;gap:6px;align-items:center;cursor:pointer;font-size:13px"><input type="radio" name="ent-def" data-def="${i}" style="width:auto;margin:0" ${e.defecto ? "checked" : ""}> Por defecto</label>
+        <button type="button" class="btn-texto" data-ent-quitar="${i}" style="color:var(--mal)">Quitar</button></div>
+      <div class="rejilla-campos">${c(i, "etiqueta", "Etiqueta", "Nave, Obra, Oficina…")}${c(i, "direccion", "Dirección", "Calle y número", 1)}${c(i, "cp", "CP", "06200")}${c(i, "poblacion", "Población", "Almendralejo")}${c(i, "provincia", "Provincia", "Badajoz")}${c(i, "contacto", "Persona que recibe", "Nombre")}${c(i, "telefono", "Teléfono", "Teléfono de quien recibe")}</div></div>`).join("")
+    + `<button type="button" class="btn" id="l-ent-mas">+ Añadir otra dirección de entrega</button>`;
+  cont.querySelectorAll("[data-ent]").forEach(inp => inp.oninput = () => { entregasEdit[+inp.dataset.ent][inp.dataset.k] = inp.value; });
+  cont.querySelectorAll("[data-def]").forEach(r => r.onchange = () => { entregasEdit.forEach((e, j) => e.defecto = j === +r.dataset.def); });
+  cont.querySelectorAll("[data-ent-quitar]").forEach(b => b.onclick = () => { entregasEdit.splice(+b.dataset.entQuitar, 1); if (!entregasEdit.length) { const f = document.getElementById("l-ent-fiscal"); if (f) { f.checked = true; cont.hidden = true; } } pintarEntregasFicha(); });
+  const mas = document.getElementById("l-ent-mas"); if (mas) mas.onclick = () => { entregasEdit.push({id: "e" + Date.now(), etiqueta: "", direccion: "", cp: "", poblacion: "", provincia: "", contacto: "", telefono: "", defecto: false}); pintarEntregasFicha(); };
+}
+function enlazarEntregasFicha() {
+  const f = document.getElementById("l-ent-fiscal"), cont = document.getElementById("l-ent-lista"); if (!f || !cont) return;
+  f.onchange = () => { cont.hidden = f.checked; if (!f.checked) pintarEntregasFicha(); };
+  if (!f.checked) pintarEntregasFicha();
+}
+/* Lo que se guarda: solo las direcciones con algún dato; trim de todos los campos */
+function leerEntregasFicha() {
+  const f = document.getElementById("l-ent-fiscal"); if (!f) return null;
+  const lista = entregasEdit.map(e => { const o = {id: e.id || "e" + Date.now()}; ["etiqueta", "direccion", "cp", "poblacion", "provincia", "contacto", "telefono"].forEach(k => o[k] = String(e[k] || "").trim()); o.defecto = !!e.defecto; return o; })
+    .filter(e => e.direccion || e.poblacion);
+  if (lista.length && !lista.some(e => e.defecto)) lista[0].defecto = true;
+  return {entregas: lista, entrega_fiscal: f.checked || !lista.length};
+}
 function nuevaOportunidad(l) {
   const propios = proyectos.filter(p => misProyectos.includes(p.id));
   modal(`<h3>Nueva oportunidad con ${esc(l.empresa)}</h3>
