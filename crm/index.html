@@ -387,7 +387,8 @@ const sb = window.supabase.createClient(SB_URL, SB_KEY);
 /* Etapas = lo que ya ha pasado con el lead. Lo que hay que hacer va en «próximo paso».
    Descartado: nunca hubo propuesta (no interesa, no contesta…). Perdido: tuvo propuesta y no compró. */
 const GANADO = "Cierre ganado", PERDIDO = "Cierre perdido", NO_INTERESA = "Descartado";
-const ETAPAS = ["Nuevo","No contesta","Contactado","Info enviada","Reunión","Negociación","Seguimiento",GANADO,PERDIDO,NO_INTERESA];
+/* Propuesta = hay que preparar/enviar la propuesta. Al marcarla como enviada, el lead pasa solo a Negociación. */
+const ETAPAS = ["Nuevo","No contesta","Contactado","Info enviada","Reunión","Propuesta","Negociación","Seguimiento",GANADO,PERDIDO,NO_INTERESA];
 const CERRADAS = [GANADO, PERDIDO, NO_INTERESA];
 const esActivo = (l) => !CERRADAS.includes(l.etapa);
 const INTERES = {sin_contacto: ["Sin contacto", "p-neutro"], sin_interes: ["Sin interés", "p-mal"], medio: ["Interés medio", "p-aviso"], muy: ["Muy interesado", "p-ok"], potencial: ["Cliente potencial", "p-ok"]};
@@ -397,9 +398,9 @@ const opcionesInteres = (sel) => `<option value="">Sin valorar</option>` + Objec
 function waLink(tel) { let d = String(tel || "").replace(/\D/g, ""); if (!d) return null; if (d.startsWith("00")) d = d.slice(2); if (d.length === 9) d = "34" + d; return "https://wa.me/" + d; }
 const telLead = (l) => l.movil || l.telefono || "";
 const enlacesTel = (tel, leadId) => !tel ? `<span style="color:var(--texto3)">—</span>` : `<span class="tel-acc"><a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(tel)}</a><a class="wa" href="${waLink(tel)}" target="_blank" rel="noopener" onclick="event.stopPropagation()${leadId ? `;event.preventDefault();elegirWhatsApp(${+leadId})` : ""}" title="Escribir por WhatsApp" aria-label="WhatsApp ${esc(tel)}">WhatsApp</a></span>`;
-const ETAPAS_VIVAS = ETAPAS.slice(0, 7), OPAC_ETAPA = [18, 26, 36, 48, 62, 84, 40];
+const ETAPAS_VIVAS = ETAPAS.slice(0, 8), OPAC_ETAPA = [18, 26, 34, 44, 54, 66, 84, 40];
 const fondoEtapa = (i) => `background:color-mix(in srgb, var(--oro) ${OPAC_ETAPA[i]}%, transparent);color:${OPAC_ETAPA[i] >= 62 ? "var(--negro)" : "var(--texto)"}`;
-const PROB = {Nuevo:10,"No contesta":5,Contactado:20,"Info enviada":25,"Reunión":40,"Negociación":60,Seguimiento:15,[GANADO]:100,[PERDIDO]:0,[NO_INTERESA]:0};
+const PROB = {Nuevo:10,"No contesta":5,Contactado:20,"Info enviada":25,"Reunión":40,Propuesta:50,"Negociación":65,Seguimiento:15,[GANADO]:100,[PERDIDO]:0,[NO_INTERESA]:0};
 const MOTIVOS_NO = ["No le interesa","No contesta / sin respuesta","No cualifica / no es el perfil","Ya tiene proveedor","Otro"];
 const ORIGENES = ["Manual","Base de datos","Campaña de mailing","Instagram","Facebook","LinkedIn","Web","Referido","Cliente existente","Llamada en frío","Evento","Otro"];
 const MOTIVOS = ["Precio","Eligió la competencia","Sin presupuesto ahora","No era el momento","No responde tras la propuesta","Otro"];
@@ -1141,6 +1142,10 @@ function editarPresupuesto(l, id) {
     if (p) Object.assign(p, data); else presupuestos.unshift(data);
     if (!p || p.estado !== data.estado) { const verbo = {borrador: "preparada", enviado: "enviada", aceptado: "aceptada", rechazado: "rechazada"}[data.estado] || data.estado;
       await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Propuesta ${data.numero || ""} ${verbo} el ${fDMA(fechaISO(new Date()))}: ${eur(data.subtotal)} + IVA (${eur(data.total)})`}); }
+    if (data.estado === "enviado" && (!p || p.estado !== "enviado") && ETAPAS_VIVAS.indexOf(l.etapa) > -1 && ETAPAS.indexOf(l.etapa) < ETAPAS.indexOf("Negociación")) {
+      const {data: ld} = await sb.from("crm_leads").update({etapa: "Negociación"}).eq("id", l.id).select().single();
+      if (ld) { Object.assign(l, ld); await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "etapa", texto: "Etapa: Negociación (propuesta enviada)"}); }
+    }
     if (!+l.valor || data.estado === "aceptado") { const {data: ld} = await sb.from("crm_leads").update({valor: data.subtotal}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); }
     if (data.estado === "aceptado" && ficha) { const e = await pasarAVenta(l, data); if (e) return e; aviso("Propuesta aceptada: ya está en ventas"); }
     else aviso(p ? "Propuesta actualizada" : "Propuesta guardada");
@@ -1467,7 +1472,7 @@ async function generarPedidos(cli, grupos, d, pwId) {
     const f = FAB_PEDIDO[proy], ls = grupos[proy], t = totalesPresu(ls, proy);
     const filaL = {proyecto_id: proy, empresa: cli.empresa, contacto: cli.contacto || null, telefono: cli.telefono || null, email: cli.email || null, cif: cli.cif || null,
       ...(hayEntregas() ? {entregas: cli.entrega ? [{id: "e" + Date.now(), etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || "", defecto: true}] : [], entrega_fiscal: !cli.entrega} : {direccion: cli.entrega || null}),
-      origen: "Pedido web Induvec", etapa: "Negociación", prioridad: "alta", closer_id: yo.id, creado_por: yo.id, proximo_paso: `Enviar pedido a ${f.corto}`, proximo_paso_fecha: fechaISO(new Date())};
+      origen: "Pedido web Induvec", etapa: "Propuesta", prioridad: "alta", closer_id: yo.id, creado_por: yo.id, proximo_paso: `Enviar pedido a ${f.corto}`, proximo_paso_fecha: fechaISO(new Date())};
     // Sin duplicar clientes: si ya existe (mismo correo o CIF), se usa su nombre y, si tiene una oportunidad abierta de este fabricante, esa misma
     const norm = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     const mismo = (x) => (cli.email && String(x.email || "").toLowerCase() === cli.email.toLowerCase()) || (cli.cif && norm(x.cif) && norm(x.cif) === norm(cli.cif));
@@ -1742,7 +1747,7 @@ function elegirWhatsApp(id) {
   const poner = () => { const t = PLANTILLAS_WA.find(x => x[0] === $("#wa-tipo").value); $("#wa-texto").value = textoWA(t[2], l); };
   $("#wa-tipo").onchange = poner;
   const hayReunion = reuniones.some(x => x.lead_id === l.id && new Date(x.inicio) >= new Date());
-  if (l.etapa === "Negociación") $("#wa-tipo").value = "propuesta";
+  if (l.etapa === "Propuesta" || l.etapa === "Negociación") $("#wa-tipo").value = "propuesta";
   else if (hayReunion || l.etapa === "Reunión" || /reuni/i.test(l.proximo_paso || "")) $("#wa-tipo").value = "reunion";
   poner();
 }
