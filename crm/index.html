@@ -2083,11 +2083,11 @@ function nuevaOportunidad(l) {
   modal(`<h3>Nueva oportunidad con ${esc(l.empresa)}</h3>
     <p style="font-size:13px;color:var(--texto2);margin:0 0 12px">Se crea un lead nuevo con los datos de este cliente (contacto, teléfonos, correo, dirección, CIF, web y LinkedIn). La oportunidad actual no se toca.</p>
     <div class="rejilla-campos">
-      <div class="campo"><label for="no-proy">Proyecto / producto *</label><select id="no-proy">${propios.map(p => `<option value="${p.id}" ${p.id !== l.proyecto_id ? "" : "disabled"}>${esc(p.nombre)}${p.id === l.proyecto_id ? " (el actual)" : ""}</option>`).join("")}</select></div>
+      <div class="campo"><label for="no-proy">Proyecto / producto *</label><select id="no-proy">${propios.map(p => `<option value="${p.id}" ${p.id === l.proyecto_id ? "selected" : ""}>${esc(p.nombre)}${p.id === l.proyecto_id ? " (el mismo: otra oferta o pedido)" : ""}</option>`).join("")}</select></div>
       <div class="campo"><label for="no-valor">Valor estimado (€)</label><input id="no-valor" type="number" min="0" step="0.01"></div>
       <div class="campo" style="grid-column:1/-1"><label for="no-nota">Nota inicial</label><input id="no-nota" placeholder="Qué le interesa de este producto"></div>
     </div>`, async () => {
-    const proyecto_id = $("#no-proy").value; if (!proyecto_id || proyecto_id === l.proyecto_id) return "Elige un proyecto distinto del actual.";
+    const proyecto_id = $("#no-proy").value; if (!proyecto_id) return "Elige un proyecto.";
     const fila = {empresa: l.empresa, proyecto_id, etapa: "Nuevo", prioridad: l.prioridad || "media", origen: "Cliente existente",
       valor: $("#no-valor").value ? r2(parseFloat($("#no-valor").value)) : 0, proximo_paso: "Llamar", proximo_paso_fecha: fechaISO(new Date())};
     CAMPOS_CLIENTE.forEach(k => { if (l[k]) fila[k] = l[k]; });
