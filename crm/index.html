@@ -388,7 +388,7 @@ const sb = window.supabase.createClient(SB_URL, SB_KEY);
    Descartado: nunca hubo propuesta (no interesa, no contesta…). Perdido: tuvo propuesta y no compró. */
 const GANADO = "Cierre ganado", PERDIDO = "Cierre perdido", NO_INTERESA = "Descartado";
 /* Propuesta = hay que preparar/enviar la propuesta. Al marcarla como enviada, el lead pasa solo a Negociación. */
-const ETAPAS = ["Nuevo","No contesta","Contactado","Info enviada","Reunión","Propuesta","Negociación","Seguimiento",GANADO,PERDIDO,NO_INTERESA];
+const ETAPAS = ["Nuevo","No contesta","Contactado","Info enviada","Seguimiento","Reunión","Propuesta","Negociación",GANADO,PERDIDO,NO_INTERESA];
 const CERRADAS = [GANADO, PERDIDO, NO_INTERESA];
 const esActivo = (l) => !CERRADAS.includes(l.etapa);
 const INTERES = {sin_contacto: ["Sin contacto", "p-neutro"], sin_interes: ["Sin interés", "p-mal"], medio: ["Interés medio", "p-aviso"], muy: ["Muy interesado", "p-ok"], potencial: ["Cliente potencial", "p-ok"]};
@@ -398,9 +398,9 @@ const opcionesInteres = (sel) => `<option value="">Sin valorar</option>` + Objec
 function waLink(tel) { let d = String(tel || "").replace(/\D/g, ""); if (!d) return null; if (d.startsWith("00")) d = d.slice(2); if (d.length === 9) d = "34" + d; return "https://wa.me/" + d; }
 const telLead = (l) => l.movil || l.telefono || "";
 const enlacesTel = (tel, leadId) => !tel ? `<span style="color:var(--texto3)">—</span>` : `<span class="tel-acc"><a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(tel)}</a><a class="wa" href="${waLink(tel)}" target="_blank" rel="noopener" onclick="event.stopPropagation()${leadId ? `;event.preventDefault();elegirWhatsApp(${+leadId})` : ""}" title="Escribir por WhatsApp" aria-label="WhatsApp ${esc(tel)}">WhatsApp</a></span>`;
-const ETAPAS_VIVAS = ETAPAS.slice(0, 8), OPAC_ETAPA = [18, 26, 34, 44, 54, 66, 84, 40];
+const ETAPAS_VIVAS = ETAPAS.slice(0, 8), OPAC_ETAPA = [16, 22, 30, 38, 46, 56, 70, 88];
 const fondoEtapa = (i) => `background:color-mix(in srgb, var(--oro) ${OPAC_ETAPA[i]}%, transparent);color:${OPAC_ETAPA[i] >= 62 ? "var(--negro)" : "var(--texto)"}`;
-const PROB = {Nuevo:10,"No contesta":5,Contactado:20,"Info enviada":25,"Reunión":40,Propuesta:50,"Negociación":65,Seguimiento:15,[GANADO]:100,[PERDIDO]:0,[NO_INTERESA]:0};
+const PROB = {Nuevo:5,"No contesta":10,Contactado:20,"Info enviada":25,Seguimiento:30,"Reunión":40,Propuesta:50,"Negociación":65,[GANADO]:100,[PERDIDO]:0,[NO_INTERESA]:0};
 const MOTIVOS_NO = ["No le interesa","No contesta / sin respuesta","No cualifica / no es el perfil","Ya tiene proveedor","Otro"];
 const ORIGENES = ["Manual","Koenraad","Cualificador CEREZUS","Base de datos","Campaña de mailing","Instagram","Facebook","LinkedIn","Web","Referido","Cliente existente","Llamada en frío","Evento","Otro"];
 const MOTIVOS = ["Precio","Eligió la competencia","Sin presupuesto ahora","No era el momento","No responde tras la propuesta","Otro"];
@@ -797,6 +797,7 @@ function enlazar(r) {
   r.querySelectorAll("[data-manio]").forEach(b => b.onclick = () => { anioMes += +b.dataset.manio; render(); });
   r.querySelectorAll("[data-vpipe]").forEach(b => b.onclick = () => { vistaPipe = b.dataset.vpipe; try { localStorage.setItem("crm_vista_pipe", vistaPipe); } catch (e) {} render(); });
   r.querySelectorAll("[data-frapido]").forEach(b => b.onclick = () => { filtroRapido = b.dataset.frapido; render(); });
+  r.querySelectorAll("[data-exportar-pipe]").forEach(b => b.onclick = () => exportarPipeline(filtrados()));
   r.querySelectorAll("[data-hoy]").forEach(b => b.onclick = () => { vistaPipe = "lista"; filtroRapido = "pendientes"; filtroEtapaLista = null; render(); });
   r.querySelectorAll("[data-fprio]").forEach(b => b.onclick = () => { filtroPrio = b.dataset.fprio; render(); });
   r.querySelectorAll("[data-fetapa]").forEach(b => b.onclick = () => { const e = b.dataset.fetapa; filtroEtapaLista = !e || filtroEtapaLista === e ? null : e; render(); });
@@ -1003,7 +1004,7 @@ function vPipeline() {
   const vg = ventasGanadas();
   const personas = esDir() ? perfiles.filter(p => p.activo) : [];
   const conmutador = `<div class="filtros" role="group" aria-label="Vista"><button class="chip" data-vpipe="tablero" aria-pressed="${vistaPipe !== "lista"}">Tablero</button><button class="chip" data-vpipe="lista" aria-pressed="${vistaPipe === "lista"}">Lista</button></div>`;
-  return `<div class="cabecera"><div><h2>Pipeline</h2><div class="sub">${Ls.filter(esActivo).length} leads abiertos${vg.length ? ` · ${vg.length} ventas cerradas` : ""} · pulsa uno para ver y actualizar</div></div><div class="filtros"><button class="btn" data-hoy title="Lo que tienes que hacer hoy y lo atrasado, de todas las etapas">📞 Hoy <b>${Ls.filter(l => esActivo(l) && difDias(l.proximo_paso_fecha) !== null && difDias(l.proximo_paso_fecha) <= 0).length}</b></button>${conmutador}${esDir() ? `<button class="btn" data-importar-leads>⬆ Importar leads</button>` : ""}<button class="btn btn-oro" data-nuevo-lead>+ Nuevo lead</button></div></div>
+  return `<div class="cabecera"><div><h2>Pipeline</h2><div class="sub">${Ls.filter(esActivo).length} leads abiertos${vg.length ? ` · ${vg.length} ventas cerradas` : ""} · pulsa uno para ver y actualizar</div></div><div class="filtros"><button class="btn" data-exportar-pipe title="Descarga en Excel los leads que estás viendo (con los filtros aplicados) para analizarlos">⬇ Exportar</button><button class="btn" data-hoy title="Lo que tienes que hacer hoy y lo atrasado, de todas las etapas">📞 Hoy <b>${Ls.filter(l => esActivo(l) && difDias(l.proximo_paso_fecha) !== null && difDias(l.proximo_paso_fecha) <= 0).length}</b></button>${conmutador}${esDir() ? `<button class="btn" data-importar-leads>⬆ Importar leads</button>` : ""}<button class="btn btn-oro" data-nuevo-lead>+ Nuevo lead</button></div></div>
   <div class="barra-herr"><div class="izq">${chipsProyecto("fproy", filtroProy)}<div class="filtros" role="group" aria-label="Prioridad" style="margin-top:8px">${[["todas", "Toda prioridad"], ["alta", "Alta"], ["media", "Media"], ["baja", "Baja"]].map(([k, t]) => `<button class="chip" data-fprio="${k}" aria-pressed="${filtroPrio === k}">${k === "todas" ? t : pildoraPrio(k)}</button>`).join("")}</div></div>
     <div class="der">${esDir() ? `<select class="entrada" id="f-persona" aria-label="Comercial"><option value="todos">Todo el equipo</option><option value="sin" ${filtroPersona === "sin" ? "selected" : ""}>Sin asignar</option>${personas.map(p => `<option value="${p.id}" ${filtroPersona === p.id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select>` : ""}
     <input class="entrada buscar" id="buscar" type="search" placeholder="Buscar empresa o contacto" value="${esc(busqueda)}"></div></div>
@@ -2291,6 +2292,37 @@ function vContactos() {
       <td>${situ}</td></tr>`;
   }).join("") : `<tr><td colspan="8">No hay contactos${busqContactos || filtroContProy !== "todos" ? " con este filtro" : " todavía. Cada lead que creéis aparece aquí"}.</td></tr>`}
   </tbody></table></div>`;
+}
+/* Exportar el pipeline a Excel para analizar: hoja de leads + resúmenes por etapa, origen, proyecto y motivos */
+async function exportarPipeline(Ls) {
+  try {
+    if (!window.XLSX) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; sc.onload = ok; sc.onerror = () => ko(new Error("no se pudo cargar Excel")); document.head.appendChild(sc); });
+  } catch (e) { return aviso("No se pudo preparar el Excel: " + e.message, true); }
+  const hoyD = new Date(fechaISO(new Date())), dias = (a, b) => (a && b) ? Math.round((new Date(b) - new Date(String(a).slice(0, 10))) / 864e5) : "";
+  const filas = Ls.map(l => {
+    const pz = presupuestos.filter(p => p.lead_id === l.id), env = pz.filter(p => p.estado === "enviado" || p.estado === "aceptado");
+    const retraso = l.proximo_paso_fecha && esActivo(l) ? Math.max(0, dias(l.proximo_paso_fecha, hoyD)) : "";
+    return {"Empresa": l.empresa || "", "CIF": l.cif || "", "Cuenta": cuentaDe(l.proyecto_id) || "", "Proyecto": nomProy(l.proyecto_id), "Etapa": l.etapa,
+      "Probabilidad %": PROB[l.etapa] || 0, "Valor (€ sin IVA)": +l.valor || 0, "Valor ponderado (€)": Math.round((+l.valor || 0) * (PROB[l.etapa] || 0)) / 100,
+      "Origen": l.origen || "", "Prioridad": l.prioridad || "", "Interés": (INTERES[l.interes] || [""])[0], "Tipo de cliente": l.tipo_cliente || "", "Ciudad": l.ciudad || "",
+      "Contacto": l.contacto || "", "Cargo": l.cargo || "", "Teléfono": l.telefono || "", "Móvil": l.movil || "", "Correo": l.email || "",
+      "Closer": l.closer_id ? nomPersona(l.closer_id) : "", "Setter": l.setter_id ? nomPersona(l.setter_id) : "",
+      "Próximo paso": l.proximo_paso || "", "Fecha próximo paso": l.proximo_paso_fecha || "", "Días de retraso": retraso,
+      "Motivo (pérdida / descarte)": l.motivo_perdida || "", "Nº propuestas": pz.length, "Importe propuestas enviadas (€)": env.reduce((s, p) => s + (+p.subtotal || 0), 0),
+      "Comprado (€)": totalComprado(l) || 0, "Fecha de entrada": String(l.creado || "").slice(0, 10), "Días en el CRM": l.creado ? dias(l.creado, hoyD) : "", "Última actualización": String(l.actualizado || "").slice(0, 10)};
+  });
+  const agrupa = (clave, lista) => { const m = {}; Ls.forEach(l => { const k = clave(l) || "Sin dato"; const x = m[k] = m[k] || {n: 0, v: 0, g: 0, cer: 0}; x.n++; x.v += +l.valor || 0; if (l.etapa === GANADO) x.g++; if (CERRADAS.includes(l.etapa)) x.cer++; });
+    return (lista || Object.keys(m)).filter(k => m[k]).map(k => ({[" "]: k, "Leads": m[k].n, "Valor (€)": Math.round(m[k].v * 100) / 100, "Ganados": m[k].g, "Cerrados": m[k].cer, "Conversión %": m[k].cer ? Math.round(m[k].g / m[k].cer * 1000) / 10 : ""})); };
+  const ren = (arr, t) => arr.map(o => { const n = {[t]: o[" "]}; Object.keys(o).filter(k => k !== " ").forEach(k => n[k] = o[k]); return n; });
+  const motivos = []; [[NO_INTERESA, "Descartado"], [PERDIDO, "Perdido"]].forEach(([et, t]) => { const m = {}; Ls.filter(l => l.etapa === et).forEach(l => { const k = l.motivo_perdida || "Sin motivo"; m[k] = (m[k] || 0) + 1; }); Object.entries(m).sort((a, b) => b[1] - a[1]).forEach(([k, n]) => motivos.push({"Tipo": t, "Motivo": k, "Leads": n})); });
+  const wb = XLSX.utils.book_new(), hoja = (datos, nom, anchos) => { const ws = XLSX.utils.json_to_sheet(datos.length ? datos : [{"Sin datos": ""}]); if (anchos) ws["!cols"] = anchos.map(w => ({wch: w})); XLSX.utils.book_append_sheet(wb, ws, nom); };
+  hoja(filas, "Leads", [34, 12, 12, 22, 16, 8, 12, 12, 16, 9, 14, 22, 18, 22, 20, 14, 14, 28, 16, 16, 34, 12, 8, 26, 8, 14, 12, 12, 8, 12]);
+  hoja(ren(agrupa(l => l.etapa, ETAPAS), "Etapa"), "Por etapa", [26, 8, 12, 9, 9, 12]);
+  hoja(ren(agrupa(l => l.origen), "Origen"), "Por origen", [26, 8, 12, 9, 9, 12]);
+  hoja(ren(agrupa(l => nomProy(l.proyecto_id)), "Proyecto"), "Por proyecto", [30, 8, 12, 9, 9, 12]);
+  hoja(motivos, "Motivos", [12, 34, 8]);
+  XLSX.writeFile(wb, "pipeline-" + fechaISO(new Date()) + ".xlsx");
+  aviso(`Exportados ${Ls.length} leads a Excel`);
 }
 function exportarCompras() {
   const filas = [["Cliente", "Proyecto", "Fecha", "Producto", "Detalle", "Cantidad", "Unidad", "Importe sin IVA", "Estado", "Notas"]];
