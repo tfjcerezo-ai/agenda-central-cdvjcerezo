@@ -1940,7 +1940,12 @@ async function abrirLead(id) {
     <div class="cajon-sup"><div class="filtros"><span class="area dir">${etiquetaProy(l.proyecto_id)}</span><span class="prio ${l.prioridad}">Prioridad ${l.prioridad}</span>${linkedinDe(l) ? `<a class="pildora" href="${esc(linkedinDe(l))}" target="_blank" rel="noopener" style="color:#4a90d9;border:1px solid rgba(74,144,217,.5);text-decoration:none">in LinkedIn</a>` : ""}${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? `<span class="pildora p-mal">${esc(l.etapa)}</span>` : ""}</div><button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
     <div class="cajon-id"><span class="avatar g">${iniciales(l.empresa)}</span><div><h2>${esc(l.empresa)}</h2><p>${esc(l.contacto || "Sin contacto")}${l.cargo ? " · " + esc(l.cargo) : ""}</p>${l.tipo_cliente ? `<p style="margin-top:4px"><span class="pildora p-neutro">${esc(l.tipo_cliente)}</span></p>` : ""}${l.movil ? `<p style="margin-top:6px">📱 ${enlacesTel(l.movil, l.id)}</p>` : ""}${l.telefono ? `<p style="margin-top:6px">☎ ${l.movil ? `<a href="tel:${esc(l.telefono)}" style="color:var(--oro-claro)">${esc(l.telefono)}</a>` : enlacesTel(l.telefono, l.id)}</p>` : ""}</div></div>
     <div class="prob-bloque">${totalComprado(l) ? `<div><b>${enNegociacion(l) ? eur(enNegociacion(l)) : "—"}</b><span>en negociación</span><small style="display:block;color:var(--texto2);margin-top:4px">Comprado: <b style="font-weight:600">${eur(totalComprado(l))}</b></small></div>` : `<div><b>${+l.valor ? eur(l.valor) : "—"}</b><span>valor</span></div>`}<div><b>${PROB[l.etapa] || 0} %</b><span>probabilidad</span></div><div><b>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}</b><span>closer</span></div><div class="barra"><span style="width:${PROB[l.etapa] || 0}%"></span></div></div>
-    <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span></div>
+    <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span>${l.proximo_paso ? `<button type="button" class="btn" id="paso-hecho" title="Marcar este paso como hecho y apuntar cómo fue">✓ Hecho</button>` : ""}</span></div>
+      <form class="paso-form" id="f-hecho" hidden style="flex-direction:column;align-items:stretch;gap:8px;margin-bottom:10px">
+        <textarea class="entrada" id="hecho-res" rows="2" placeholder="¿Cómo fue? (opcional) · p. ej. Reunión hecha: le interesa el zócalo, pide propuesta"></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label style="font-size:12.5px;color:var(--texto3)">Etapa</label><select class="entrada" id="hecho-etapa" style="flex:1;min-width:140px">${ETAPAS_VIVAS.map(e => `<option ${e === l.etapa ? "selected" : ""}>${e}</option>`).join("")}</select></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="entrada" id="hecho-accion" placeholder="Siguiente paso (opcional): Enviar propuesta, Llamar…" style="flex:2;min-width:160px"><input class="entrada" type="date" id="hecho-fecha" style="flex:1;min-width:130px"><button class="btn btn-oro" type="submit">Guardar</button></div>
+      </form>
       <form class="paso-form" id="f-paso"><input class="entrada" id="paso-accion" aria-label="Acción" value="${esc(l.proximo_paso || "Llamar")}"><input class="entrada" type="date" id="paso-fecha" aria-label="Fecha" value="${l.proximo_paso_fecha || ""}"><button class="btn" type="submit">Programar</button></form></div>
     ${bloqueCliente}
     <button class="btn" id="reunion-lead" style="align-self:flex-start">📅 Programar reunión</button>
@@ -2006,6 +2011,23 @@ async function abrirLead(id) {
   $("#f-nota").onsubmit = async (e) => {
     e.preventDefault(); const t = $("#nota-txt").value.trim(); if (!t) return;
     try { await nota("nota", t); await actualizar({actualizado: new Date().toISOString()}); aviso("Nota guardada"); abrirLead(l.id); render(); } catch (err) { fallo(err, "No se pudo guardar la nota"); }
+  };
+  const bHecho = $("#paso-hecho");
+  if (bHecho) bHecho.onclick = () => { const f = $("#f-hecho"); f.hidden = !f.hidden; if (!f.hidden) $("#hecho-res").focus(); };
+  const fHecho = $("#f-hecho");
+  if (fHecho) fHecho.onsubmit = async (e) => {
+    e.preventDefault();
+    const res = $("#hecho-res").value.trim(), et = $("#hecho-etapa").value, a = $("#hecho-accion").value.trim(), f = $("#hecho-fecha").value;
+    if (a && !f) return aviso("Pon fecha al siguiente paso, o déjalo en blanco", true);
+    try {
+      await nota("nota", `✓ Hecho: ${l.proximo_paso}${l.proximo_paso_fecha ? " (" + fF(l.proximo_paso_fecha) + ")" : ""}${res ? " — " + res : ""}`);
+      const cambios = {proximo_paso: a || "", proximo_paso_fecha: a ? f : null};
+      if (et && et !== l.etapa) cambios.etapa = et;
+      await actualizar(cambios);
+      if (cambios.etapa) await nota("etapa", "Etapa: " + et);
+      if (a) await nota("paso", a + " · " + fF(f));
+      aviso(a ? "Hecho. Siguiente paso programado" : "Marcado como hecho"); abrirLead(l.id); render();
+    } catch (err) { fallo(err, "No se pudo guardar"); }
   };
   $("#f-paso").onsubmit = async (e) => {
     e.preventDefault(); const a = $("#paso-accion").value.trim(), f = $("#paso-fecha").value;
