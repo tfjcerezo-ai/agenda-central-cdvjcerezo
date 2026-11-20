@@ -1119,6 +1119,30 @@ async function pasarAVenta(l, pz) {
   }
   return null;
 }
+/* Propuesta del catálogo conjunto (Induvec) → un pedido por fabricante (doc 13) */
+const MARCA_CONJ = (num) => `Pedido de la propuesta conjunta ${num}`;
+const dividida = (pz) => !!(pz && pz.numero && presupuestos.some(z => z.id !== pz.id && String(z.notas || "").includes(MARCA_CONJ(pz.numero))));
+function divisionConjunta(lineas) {
+  const grupos = {}, portes = [], manuales = [];
+  (lineas || []).forEach(li => { const x = !li.libre && catalogo.find(c => String(c.id) === String(li.id));
+    if (x && FAB_PEDIDO[x.proyecto_id]) (grupos[x.proyecto_id] = grupos[x.proyecto_id] || []).push(li);
+    else if (/porte/i.test(li.nombre || "") || /porte/i.test(li.ref || "")) portes.push(li); else manuales.push(li); });
+  return {grupos, portes, manuales, proys: Object.keys(grupos).sort((a, b) => (a === "jose-bernad" ? 0 : 1) - (b === "jose-bernad" ? 0 : 1))};
+}
+async function dividirConjunta(l, pz, portesA) {
+  const {grupos, portes, manuales, proys} = divisionConjunta(pz.lineas);
+  if (!proys.length) return "Esta propuesta no tiene productos de catálogo de José Bernad ni de CAYFI.";
+  if (portes.length) { const dest = proys.length === 1 ? proys[0] : portesA; if (!grupos[dest]) return "Elige a qué fabricante van los portes."; grupos[dest] = grupos[dest].concat(portes); }
+  const en = entregaPedido(pz, l), entObj = en && (en.direccion || en.poblacion || en.contacto) ? {etiqueta: en.etiqueta || "Entrega", direccion: en.direccion || "", cp: en.cp || "", poblacion: en.poblacion || "", provincia: en.provincia || "", contacto: en.contacto || "", telefono: en.telefono || ""} : null;
+  const cli = {empresa: l.empresa, cif: l.cif || "", contacto: (entObj && entObj.contacto) || l.contacto || "", telefono: (entObj && entObj.telefono) || l.telefono || l.movil || "", email: l.email || "", entrega: entObj ? txtDir(entObj) : "", entregaObj: entObj,
+    origen: l.origen || null, closer_id: l.closer_id || yo.id, setter_id: l.setter_id || null, nota: MARCA_CONJ(pz.numero),
+    ficha: {direccion: l.direccion || null, ...(hayEntregas() ? {entregas: entregasDe(l), entrega_fiscal: l.entrega_fiscal !== false && !entregasDe(l).length} : {})}};
+  const e = await generarPedidos(cli, grupos, {fecha: fechaISO(new Date())}, null); if (e) return e;
+  const nums = presupuestos.filter(z => String(z.notas || "").includes(MARCA_CONJ(pz.numero))).map(z => z.numero);
+  { const {data: ld} = await sb.from("crm_leads").update({etapa: GANADO, valor: +pz.subtotal || 0}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); }
+  await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Propuesta ${pz.numero} aceptada y dividida por fabricante: ${nums.join(" y ")}` + (manuales.length ? `. Fuera de los pedidos (líneas a mano): ${manuales.map(m => (m.nombre || "").split("\n")[0]).join(", ")}` : "")});
+  return null;
+}
 function editarPresupuesto(l, id) {
   const p = id ? presupuestos.find(x => x.id === id) : null;
   const cat = catalogoDe(l.proyecto_id), conNeta = veNeta(l.proyecto_id);
@@ -1126,9 +1150,9 @@ function editarPresupuesto(l, id) {
   const hoy = new Date(), val = new Date(hoy); val.setDate(val.getDate() + VALIDEZ_DIAS);
   const cats = [...new Set(cat.map(x => x.categoria || "Otros"))];
   let avisosOk = "";
-  const ficha = tieneFicha(l.proyecto_id), vendida = p && compraDePresu(p.id);
+  const conj = l.proyecto_id === "induvec", ficha = tieneFicha(l.proyecto_id), vendida = p && (conj ? dividida(p) : compraDePresu(p.id));
   modal(`<h3>${p ? (ficha ? "Propuesta " : "Presupuesto ") + esc(p.numero || "") : (ficha ? "Nueva compra · propuesta" : "Nuevo presupuesto")} · ${esc(l.empresa)}</h3>
-    ${vendida ? `<p class="nota-ejemplo" style="margin-bottom:10px">✓ Esta propuesta ya está aceptada y apuntada como venta en la ficha de compra.</p>` : ""}
+    ${vendida ? `<p class="nota-ejemplo" style="margin-bottom:10px">✓ ${conj ? "Esta propuesta ya está aceptada y dividida en un pedido por fabricante: " + esc(presupuestos.filter(z => String(z.notas || "").includes(MARCA_CONJ(p.numero))).map(z => z.numero + " (" + (FAB_PEDIDO[z.proyecto_id] || {}).corto + ")").join(" y ")) + "." : "Esta propuesta ya está aceptada y apuntada como venta en la ficha de compra."}</p>` : ""}
     <div class="rejilla-campos">
       <div class="campo"><label for="pz-fecha">Fecha</label><input id="pz-fecha" type="date" value="${p ? p.fecha : fechaISO(hoy)}"></div>
       <div class="campo"><label for="pz-numero">Nº de oferta</label><input id="pz-numero" value="${esc(p ? p.numero || "" : "")}" placeholder="Automático (p. ej. JB-261016-01)"></div>
@@ -1138,6 +1162,7 @@ function editarPresupuesto(l, id) {
       <div style="grid-column:1/-1;overflow:auto"><table id="pz-tabla" style="font-size:12.5px;width:100%"></table></div>
       <div id="pz-totales" style="grid-column:1/-1"></div>
       ${conEntrega(l) ? htmlEntregaPedido(l, p) : ""}
+      ${conj && !vendida ? `<div class="campo" id="pz-portes-caja" hidden style="grid-column:1/-1"><label for="pz-portes">Los portes van en el pedido de</label><select id="pz-portes"><option value="">Elige fabricante…</option><option value="jose-bernad">José Bernad</option><option value="cayfi">CAYFI</option></select></div>` : ""}
       <div class="campo"><label for="pz-estado">Estado</label><select id="pz-estado">${Object.entries(ESTADO_PRESU).map(([k, v]) => `<option value="${k}" ${(p ? p.estado : "borrador") === k ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>
       <div class="campo" style="grid-column:1/-1"><label for="pz-notas">Condiciones para el cliente <small style="color:var(--texto3)">(una por línea, «Concepto: texto»)</small></label><textarea id="pz-notas" rows="6">${esc(p ? p.notas || "" : condicionesPorDefecto(l.proyecto_id))}</textarea></div>
     </div>`, async () => {
@@ -1147,6 +1172,9 @@ function editarPresupuesto(l, id) {
     const av = avisosPrecio(lineas), clave = av.map(a => a.txt).join("|");
     if (av.length && avisosOk !== clave) { avisosOk = clave; return "⚠ Revisa estos precios antes de guardar: " + av.map(a => a.txt).join(" · ") + ". Si es intencionado, pulsa Guardar otra vez."; }
     if (t.bajoNeta.length) return "Hay líneas por debajo de la tarifa neta de " + (l.proyecto_id === "cayfi" ? "CAYFI: el descuento máximo es el 10 % de comisión" : "Bernad") + " (" + t.bajoNeta.join(", ") + "). Reduce el descuento.";
+    if (conj && !vendida && $("#pz-estado").value === "aceptado") { const dv = divisionConjunta(lineas);
+      if (!dv.proys.length) return "Para dividir por fabricante hace falta al menos un producto de catálogo de José Bernad o CAYFI.";
+      if (dv.portes.length && dv.proys.length > 1 && !$("#pz-portes").value) { $("#pz-portes-caja").hidden = false; return "La propuesta lleva portes y productos de los dos fabricantes: elige a qué pedido van los portes y pulsa otra vez."; } }
     const fila = {lead_id: l.id, proyecto_id: l.proyecto_id, fecha: $("#pz-fecha").value || fechaISO(hoy), validez: $("#pz-validez").value || null, estado: $("#pz-estado").value,
       lineas: lineas.map(li => ({id: li.id, ref: li.ref, codigo: li.codigo || null, nombre: li.nombre, unidad: li.unidad, cantidad: +li.cantidad || 0, precio: +li.precio || 0, dto: +li.dto || 0, libre: !!li.libre, fuera: !!li.fuera,
         ...(refIV(li) ? {web: refIV(li)} : {}), ...(+li.pieza_m ? {pieza_m: +li.pieza_m, precio_m: +li.precio_m || r2((+li.precio || 0) / +li.pieza_m)} : {}), ...(li.neta !== undefined && li.neta !== null && li.neta !== "" ? {neta: +li.neta} : {})})),
@@ -1167,6 +1195,8 @@ function editarPresupuesto(l, id) {
     }
     if (!+l.valor || data.estado === "aceptado") { const {data: ld} = await sb.from("crm_leads").update({valor: data.subtotal}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); }
     if (data.estado === "aceptado" && ficha) { const e = await pasarAVenta(l, data); if (e) return e; aviso("Propuesta aceptada: ya está en ventas"); }
+    else if (data.estado === "aceptado" && conj && !vendida) { const e = await dividirConjunta(l, data, $("#pz-portes") ? $("#pz-portes").value : ""); if (e) return "La propuesta se guardó como aceptada, pero no se pudo dividir: " + e;
+      const dv = divisionConjunta(data.lineas); aviso("Propuesta aceptada: " + dv.proys.length + (dv.proys.length === 1 ? " pedido" : " pedidos") + " por enviar" + (dv.manuales.length ? " · las líneas escritas a mano no van a ningún fabricante" : "")); }
     else aviso(p ? "Propuesta actualizada" : "Propuesta guardada");
     setTimeout(() => abrirLead(l.id), 0);
   }, p ? "Guardar" : (ficha ? "Guardar propuesta" : "Guardar presupuesto"));
@@ -1179,8 +1209,14 @@ function editarPresupuesto(l, id) {
   const bLib = document.createElement("button"); bLib.type = "button"; bLib.className = "btn"; bLib.textContent = cat.length ? "+ Portes / línea libre" : "+ Añadir línea";
   bLib.onclick = () => { lineas.push({id: "libre-" + Date.now(), ref: "—", codigo: null, nombre: cat.length ? "Portes" : "Concepto", unidad: "ud", cantidad: 1, precio: 0, dto: 0, libre: true, fuera: true}); pintar(); };
   bPdf.after(bLib);
-  if (ficha && !vendida) { const bV = document.createElement("button"); bV.type = "button"; bV.className = "btn"; bV.style.color = "var(--ok)"; bV.textContent = "✓ Aceptada: pasar a venta"; bV.title = "Marca la propuesta como aceptada y la apunta como venta en la ficha de compra";
-    bV.onclick = () => { if (!confirm("¿El cliente ha ACEPTADO esta propuesta?\n\nSe apuntará como venta y contará la comisión. Si solo la has enviado, cambia el estado a «Enviada».")) return; $("#pz-estado").value = "aceptado"; const ok = $(".modal-acciones button[type=submit]") || [...document.querySelectorAll(".modal-acciones button")].pop(); if (ok) ok.click(); }; bPdf.after(bV); }
+  if ((ficha || conj) && !vendida) { const bV = document.createElement("button"); bV.type = "button"; bV.className = "btn"; bV.style.color = "var(--ok)"; bV.textContent = "✓ Aceptada: pasar a venta"; bV.title = "Marca la propuesta como aceptada y la apunta como venta en la ficha de compra";
+    if (conj) bV.title = "Marca la propuesta como aceptada y crea un pedido por fabricante (José Bernad y CAYFI), cada uno con su venta y su comisión";
+    bV.onclick = () => { let txt = "¿El cliente ha ACEPTADO esta propuesta?\n\nSe apuntará como venta y contará la comisión. Si solo la has enviado, cambia el estado a «Enviada».";
+      if (conj) { const dv = divisionConjunta(lineas); if (!dv.proys.length) return aviso("No hay productos de José Bernad ni de CAYFI en esta propuesta", true);
+        txt = "¿El cliente ha ACEPTADO esta propuesta?\n\nSe crearán " + (dv.proys.length === 1 ? "un pedido" : dv.proys.length + " pedidos") + ": " + dv.proys.map(k => FAB_PEDIDO[k].corto + " (" + dv.grupos[k].length + (dv.grupos[k].length === 1 ? " línea" : " líneas") + ")").join(" y ") + ", cada uno con su venta y su comisión."
+          + (dv.manuales.length ? "\n\n⚠ Estas líneas escritas a mano NO van a ningún fabricante: " + dv.manuales.map(m => (m.nombre || "").split("\n")[0]).join(", ") + "." : "")
+          + (dv.portes.length && dv.proys.length > 1 ? "\n\nLos portes: te pediré a qué fabricante van." : ""); }
+      if (!confirm(txt)) return; $("#pz-estado").value = "aceptado"; const ok = $(".modal-acciones button[type=submit]") || [...document.querySelectorAll(".modal-acciones button")].pop(); if (ok) ok.click(); }; bPdf.after(bV); }
   if (p && esDir()) botonBorrar("Borrar", async () => { if (!confirm("¿Borrar este presupuesto?")) return; const {error} = await sb.from("crm_presupuestos").delete().eq("id", p.id); if (error) return fallo(error, "No se pudo borrar"); presupuestos = presupuestos.filter(x => x.id !== p.id); cerrarCapa(); abrirLead(l.id); });
   const pintar = () => {
     const t = totalesPresu(lineas, l.proyecto_id); const er = $("#err"); if (er) er.hidden = true;
@@ -1445,8 +1481,19 @@ function repartoPedido(d) {
   (d.lineas || []).forEach(li => {
     const x = catalogo.find(c => String(c.ref_web || "").toUpperCase() === String(li.ref || "").toUpperCase());
     if (!x || !FAB_PEDIDO[x.proyecto_id]) { sinRef.push(li); return; }
-    const tarifaCRM = r2(+x.precio * (+x.pieza_m || 1)); if (li.precio_web != null && Math.abs(+li.precio_web - tarifaCRM) > 0.005) difPrecio.push(`${li.ref}: web ${eur(li.precio_web)} · CRM ${eur(tarifaCRM)}${+x.pieza_m ? " por pieza" : ""}`);
-    (grupos[x.proyecto_id] = grupos[x.proyecto_id] || []).push({...lineaCatalogo(x, +li.cantidad || 0), libre: false, web: li.ref});
+    const pm = +x.pieza_m || 0, tarifaM = r2(+x.precio || 0), tarifaPz = r2((+x.precio || 0) * (pm || 1));
+    // Precio de la web: €/m (o €/ud). Se admite también el precio por pieza de pedidos antiguos
+    if (li.precio_web != null && Math.abs(+li.precio_web - tarifaM) > 0.005 && !(pm && Math.abs(+li.precio_web - tarifaPz) <= 0.005)) difPrecio.push(`${li.ref}: web ${eur(li.precio_web)}${pm ? "/m" : ""} · CRM ${eur(tarifaM)}${pm ? "/m" : ""}`);
+    let cant = +li.cantidad || 0, pzTxt = "";
+    if (pm) {
+      const mpz = +li.metros_pieza || pm;
+      if (+li.metros_pieza && Math.abs(+li.metros_pieza - pm) > 0.001) difPrecio.push(`${li.ref}: la web dice piezas de ${mpz.toLocaleString("es-ES")} m y el CRM de ${pm.toLocaleString("es-ES")} m (se usa el CRM)`);
+      const metros = +li.piezas ? +li.piezas * mpz : cant;
+      cant = +li.piezas && Math.abs(mpz - pm) <= 0.001 ? +li.piezas : Math.ceil(metros / pm - 0.0001);
+      if (!+li.piezas && Math.abs(cant * pm - metros) > 0.001) difPrecio.push(`${li.ref}: ${metros.toLocaleString("es-ES")} m no son piezas enteras de ${pm.toLocaleString("es-ES")} m; se piden ${cant}`);
+      pzTxt = `${cant} ${cant === 1 ? "pieza" : "piezas"} de ${pm.toLocaleString("es-ES")} m = ${(cant * pm).toLocaleString("es-ES")} m`;
+    }
+    (grupos[x.proyecto_id] = grupos[x.proyecto_id] || []).push({...lineaCatalogo(x, cant), libre: false, web: li.ref, ...(pzTxt ? {piezas_txt: pzTxt} : {})});
   });
   return {grupos, sinRef, difPrecio};
 }
@@ -1457,7 +1504,7 @@ function revisarPedidoWeb(d, pwId) {
   const tabla = (proy) => { const f = FAB_PEDIDO[proy], ls = grupos[proy], t = totalesPresu(ls, proy);
     return `<div style="margin:10px 0 4px;font-weight:700;display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:2px;background:${f.color};display:inline-block"></span>Pedido a ${esc(f.nombre)} · ${esc(numeroPedido(proy, d.fecha))}</div>
       <table style="width:100%;font-size:12.5px"><thead><tr><th>Web</th><th>Ref.</th><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Importe</th></tr></thead><tbody>
-      ${ls.map(li => `<tr><td>${esc(li.web)}</td><td>${esc(li.ref)}</td><td>${esc(li.nombre)}</td><td class="num">${(+li.cantidad).toLocaleString("es-ES")} ${esc(li.unidad)}</td><td class="num">${eur(li.precio)}</td><td class="num"><b>${eur(li.cantidad * li.precio)}</b></td></tr>`).join("")}
+      ${ls.map(li => `<tr><td>${esc(li.web)}</td><td>${esc(li.ref)}</td><td>${esc(li.nombre)}</td><td class="num">${li.piezas_txt ? esc(li.piezas_txt) : (+li.cantidad).toLocaleString("es-ES") + " " + esc(li.unidad)}</td><td class="num">${eur(li.precio)}${li.piezas_txt ? `<small style="display:block;color:var(--texto3)">${eur(li.precio_m)}/m</small>` : ""}</td><td class="num"><b>${eur(li.cantidad * li.precio)}</b></td></tr>`).join("")}
       </tbody></table><div class="fila-liq"><span>Subtotal ${esc(f.corto)} (sin IVA)</span><b>${eur(t.sub)}</b></div>`; };
   const tot = proys.reduce((s, p) => s + totalesPresu(grupos[p], p).sub, 0);
   modal(`<h3>Pedido web${d.hora ? " · " + esc(fDMAp(d.fecha)) + " " + esc(d.hora) : ""}</h3>
@@ -1492,7 +1539,8 @@ async function generarPedidos(cli, grupos, d, pwId) {
     const f = FAB_PEDIDO[proy], ls = grupos[proy], t = totalesPresu(ls, proy);
     const filaL = {proyecto_id: proy, empresa: cli.empresa, contacto: cli.contacto || null, telefono: cli.telefono || null, email: cli.email || null, cif: cli.cif || null,
       ...(hayEntregas() ? {entregas: cli.entrega ? [{id: "e" + Date.now(), etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || "", defecto: true}] : [], entrega_fiscal: !cli.entrega} : {direccion: cli.entrega || null}),
-      origen: "Pedido web Induvec", etapa: "Propuesta", prioridad: "alta", closer_id: yo.id, creado_por: yo.id, proximo_paso: `Enviar pedido a ${f.corto}`, proximo_paso_fecha: fechaISO(new Date())};
+      origen: cli.origen || "Pedido web Induvec", etapa: "Propuesta", prioridad: "alta", closer_id: cli.closer_id || yo.id, setter_id: cli.setter_id || null, creado_por: yo.id, proximo_paso: `Enviar pedido a ${f.corto}`, proximo_paso_fecha: fechaISO(new Date()),
+      ...(cli.ficha || {})};
     // Sin duplicar clientes: si ya existe (mismo correo o CIF), se usa su nombre y, si tiene una oportunidad abierta de este fabricante, esa misma
     const norm = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     const mismo = (x) => (cli.email && String(x.email || "").toLowerCase() === cli.email.toLowerCase()) || (cli.cif && norm(x.cif) && norm(x.cif) === norm(cli.cif));
@@ -1500,18 +1548,18 @@ async function generarPedidos(cli, grupos, d, pwId) {
     if (conocidos.length) filaL.empresa = conocidos[0].empresa;
     const abierta = conocidos.find(x => x.proyecto_id === proy && esActivo(x) && !presupuestos.some(z => z.lead_id === x.id && z.estado === "aceptado"));
     let l;
-    if (abierta) { l = abierta; await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: "Pedido recibido desde la web de Induvec"});
+    if (abierta) { l = abierta; await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: cli.nota || "Pedido recibido desde la web de Induvec"});
       if (hayEntregas() && cli.entrega && !entregasDe(l).some(e => (e.direccion || "").toLowerCase() === cli.entrega.toLowerCase())) { const {data: ld} = await sb.from("crm_leads").update({entregas: entregasDe(l).concat([{id: "e" + Date.now(), etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || "", defecto: !entregasDe(l).length}]), entrega_fiscal: false}).eq("id", l.id).select().single(); if (ld) Object.assign(l, ld); } }
     else { const {data, error: el} = await sb.from("crm_leads").insert(filaL).select().single();
       if (el) return "No se pudo crear el cliente: " + el.message;
       l = data; leads.unshift(l); }
     const filaP = {lead_id: l.id, proyecto_id: proy, numero: numeroPedido(proy, fecha), fecha, validez: fechaISO(val), estado: "aceptado", lineas: ls, subtotal: t.sub, iva: t.iva, total: t.total,
-      notas: f.cond.map(([a, b]) => a + ": " + b).join("\n") + (cli.observaciones ? "\nObservaciones del cliente: " + cli.observaciones : ""), pedido_web_id: pwId || null,
-      ...(hayEntregaPz() ? {entrega: cli.entrega ? {etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || ""} : null} : {})};
+      notas: f.cond.map(([a, b]) => a + ": " + b).join("\n") + (cli.observaciones ? "\nObservaciones del cliente: " + cli.observaciones : "") + (cli.nota ? "\n" + cli.nota : ""), pedido_web_id: pwId || null,
+      ...(hayEntregaPz() ? {entrega: cli.entregaObj ? cli.entregaObj : cli.entrega ? {etiqueta: "Entrega", direccion: cli.entrega, cp: "", poblacion: "", provincia: "", contacto: cli.contacto || "", telefono: cli.telefono || ""} : null} : {})};
     const {data: pz, error: ep} = await sb.from("crm_presupuestos").insert(filaP).select().single();
     if (ep) return "No se pudo guardar el pedido: " + ep.message;
     presupuestos.unshift(pz);
-    await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `Pedido web Induvec ${pz.numero}: ${eur(pz.subtotal)} + IVA. Pendiente de enviar a ${f.corto}.`});
+    await sb.from("crm_actividad").insert({lead_id: l.id, autor_id: yo.id, tipo: "nota", texto: `${cli.nota ? cli.nota + ":" : "Pedido web Induvec"} ${pz.numero}: ${eur(pz.subtotal)} + IVA. Pendiente de enviar a ${f.corto}.`});
     const e = await pasarAVenta(l, pz); if (e) return e;
   }
   if (pwId) { await sb.from("crm_pedidos_web").update({estado: "procesado", procesado: new Date().toISOString()}).eq("id", pwId); pedidosWeb = pedidosWeb.filter(x => x.id !== pwId); }
