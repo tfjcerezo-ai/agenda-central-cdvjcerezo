@@ -1049,13 +1049,25 @@ const catalogoDe = (proy) => proy === "induvec" ? catalogo.filter(x => x.proyect
 const fDMA = (s) => s ? String(s).slice(0, 10).split("-").reverse().join("-") : "";
 let filtroPropProy = "todos", filtroPropEstado = "";
 /* Avisos de precio: línea de catálogo por encima de tarifa o con más de un 10 % de descuento sobre tarifa */
+/* Venta por pieza (doc 10): productos con tarifa €/m que José Bernad sirve en piezas enteras (crm_catalogo.pieza_m).
+   La línea guarda cantidad en piezas, precio por pieza, pieza_m y precio_m (€/m). */
+const refIV = (li) => (li && li.web) || ((catalogo.find(y => y.id === (li && li.id)) || {}).ref_web) || "";
+const refFab = (li, proy) => { const iv = refIV(li); const parts = (proy === "jose-bernad" || String(li.id || "").startsWith("jb-")) ? [li.codigo, li.ref, iv] : [li.ref, iv];
+  return parts.filter(x => x && x !== "—").filter((x, i, a) => a.indexOf(x) === i).join(" · ") || "—"; };
+const txtPieza = (li) => li && +li.pieza_m ? `${eur(li.precio_m != null ? li.precio_m : (+li.precio || 0) / +li.pieza_m)}/m · pieza de ${(+li.pieza_m).toLocaleString("es-ES")} m` : "";
+const udLinea = (li, n) => +li.pieza_m ? ((+n === 1) ? "pieza" : "piezas") : null;
+function lineaCatalogo(x, cantidad) {
+  const pm = +x.pieza_m || 0, base = {id: x.id, ref: x.ref, codigo: x.codigo || null, nombre: x.nombre, dto: 0, libre: !!x.precio_libre, fuera: false, web: x.ref_web || null};
+  return pm ? {...base, unidad: "pieza", pieza_m: pm, precio_m: +x.precio || 0, precio: r2((+x.precio || 0) * pm), cantidad: cantidad == null ? 1 : cantidad}
+    : {...base, unidad: x.unidad, precio: +x.precio || 0, cantidad: cantidad == null ? 1 : cantidad};
+}
 function avisosPrecio(lineas) {
   const out = [];
   lineas.forEach(li => { const x = catalogo.find(y => y.id === li.id); if (!x || x.precio_libre || !(+x.precio > 0) || li.fuera) return;
-    const ef = (+li.precio || 0) * (1 - (+li.dto || 0) / 100), d = ef / +x.precio - 1;
+    const tarifa = +x.precio * (+li.pieza_m || 1), ef = (+li.precio || 0) * (1 - (+li.dto || 0) / 100), d = ef / tarifa - 1;
     if (!(+li.cantidad > 0)) out.push({id: li.id, txt: `${li.ref}: cantidad 0`});
-    else if (d > 0.0005) out.push({id: li.id, txt: `${li.ref} a ${eur(ef)}, su tarifa es ${eur(x.precio)} (+${(d * 100).toLocaleString("es-ES", {maximumFractionDigits: 1})} %)`});
-    else if (d < -0.10) out.push({id: li.id, txt: `${li.ref} a ${eur(ef)}, su tarifa es ${eur(x.precio)} (${(d * 100).toLocaleString("es-ES", {maximumFractionDigits: 1})} %)`});
+    else if (d > 0.0005) out.push({id: li.id, txt: `${li.ref} a ${eur(ef)}, su tarifa es ${eur(tarifa)} (+${(d * 100).toLocaleString("es-ES", {maximumFractionDigits: 1})} %)`});
+    else if (d < -0.10) out.push({id: li.id, txt: `${li.ref} a ${eur(ef)}, su tarifa es ${eur(tarifa)} (${(d * 100).toLocaleString("es-ES", {maximumFractionDigits: 1})} %)`});
   });
   return out;
 }
@@ -1072,7 +1084,7 @@ function comisionPrevista(p, l) {
 }
 const txtComision = (cp) => cp ? `Comisión prevista ${eur(cp.total)}${cp.reparto.length > 1 ? " · " + cp.reparto.map(([n, v]) => `${esc(n)} ${eur(v)}`).join(" · ") : ""}` : "";
 /* Neta de una línea: la del catálogo o, en líneas escritas a mano (sin catálogo), la que se ponga en la propia línea */
-const netaDe = (li) => netas[li.id] || (li && !li.fuera && li.neta !== undefined && li.neta !== null && li.neta !== "" && !isNaN(+li.neta) ? {neta: +li.neta} : null);
+const netaDe = (li) => (netas[li.id] ? {...netas[li.id], neta: r2(+netas[li.id].neta * (+li.pieza_m || 1))} : null) || (li && !li.fuera && li.neta !== undefined && li.neta !== null && li.neta !== "" && !isNaN(+li.neta) ? {neta: +li.neta} : null);
 const totalesPresu = (lineas, proy) => {
   let sub = 0, neta = 0, subNeta = 0, sinNeta = 0, bajoNeta = [];
   lineas.forEach(li => { const imp = r2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100)); sub += imp;
@@ -1136,7 +1148,8 @@ function editarPresupuesto(l, id) {
     if (av.length && avisosOk !== clave) { avisosOk = clave; return "⚠ Revisa estos precios antes de guardar: " + av.map(a => a.txt).join(" · ") + ". Si es intencionado, pulsa Guardar otra vez."; }
     if (t.bajoNeta.length) return "Hay líneas por debajo de la tarifa neta de " + (l.proyecto_id === "cayfi" ? "CAYFI: el descuento máximo es el 10 % de comisión" : "Bernad") + " (" + t.bajoNeta.join(", ") + "). Reduce el descuento.";
     const fila = {lead_id: l.id, proyecto_id: l.proyecto_id, fecha: $("#pz-fecha").value || fechaISO(hoy), validez: $("#pz-validez").value || null, estado: $("#pz-estado").value,
-      lineas: lineas.map(li => ({id: li.id, ref: li.ref, codigo: li.codigo || null, nombre: li.nombre, unidad: li.unidad, cantidad: +li.cantidad || 0, precio: +li.precio || 0, dto: +li.dto || 0, libre: !!li.libre, fuera: !!li.fuera})),
+      lineas: lineas.map(li => ({id: li.id, ref: li.ref, codigo: li.codigo || null, nombre: li.nombre, unidad: li.unidad, cantidad: +li.cantidad || 0, precio: +li.precio || 0, dto: +li.dto || 0, libre: !!li.libre, fuera: !!li.fuera,
+        ...(refIV(li) ? {web: refIV(li)} : {}), ...(+li.pieza_m ? {pieza_m: +li.pieza_m, precio_m: +li.precio_m || r2((+li.precio || 0) / +li.pieza_m)} : {}), ...(li.neta !== undefined && li.neta !== null && li.neta !== "" ? {neta: +li.neta} : {})})),
       subtotal: t.sub, iva: t.iva, total: t.total, notas: $("#pz-notas").value.trim() || null};
     if (conEntrega(l)) { const en = leerEntregaPedido(); fila.entrega = en.entrega;
       if (en.guardar && en.entrega.direccion && hayEntregas()) { const lista = entregasDe(l).concat([{id: "e" + Date.now(), etiqueta: en.entrega.etiqueta || "Entrega", direccion: en.entrega.direccion, cp: en.entrega.cp, poblacion: en.entrega.poblacion, provincia: en.entrega.provincia, contacto: en.entrega.contacto, telefono: en.entrega.telefono, defecto: !entregasDe(l).length}]);
@@ -1173,7 +1186,7 @@ function editarPresupuesto(l, id) {
     const t = totalesPresu(lineas, l.proyecto_id); const er = $("#err"); if (er) er.hidden = true;
     $("#pz-tabla").innerHTML = lineas.length ? `<thead><tr><th>Ref.</th><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Dto. %</th><th class="num">Importe</th><th></th></tr></thead><tbody>${lineas.map((li, i) => { const n = netaDe(li), bajo = n && (+li.precio || 0) * (1 - (+li.dto || 0) / 100) < +n.neta - 0.0001;
       const avi = avisosPrecio([li]).length;
-      return `<tr${bajo ? ` style="background:rgba(255,90,90,.08)"` : avi ? ` style="background:rgba(242,210,27,.10)" title="Precio fuera de tarifa: revísalo"` : ""}><td>${esc(li.ref)}</td><td><textarea data-li="${i}" data-k="nombre" rows="${Math.max(li.nombre.split("\n").length + (li.nombre.length > 90 ? 1 : 0), li.nombre.length > 60 ? 3 : 1)}" title="La primera línea sale en negrita en el PDF; las siguientes, como detalle" style="width:100%;min-width:200px;font-size:12.5px;resize:vertical">${esc(li.nombre)}</textarea><small style="display:block;color:var(--texto3)">${veNeta(l.proyecto_id) && !netas[li.id] && !li.fuera ? `<span style="display:inline-flex;gap:4px;align-items:center;margin-right:6px">Neta / coste por ${esc(li.unidad || "ud")}: <input data-li="${i}" data-k="neta" type="number" min="0" step="0.01" value="${li.neta ?? ""}" placeholder="—" title="Solo para ti: lo que cuesta esta línea (neta del fabricante o coste). Sirve para calcular la comisión prevista; no sale en el PDF" style="width:80px;font-size:12px"></span>` : ""}${esc(li.unidad)}${conNeta && n ? ((l.proyecto_id === "cayfi" || String(li.id).startsWith("cayfi-")) ? ` · comisión 10 %: ${eur((+li.precio || 0) * (1 - (+li.dto || 0) / 100) - n.neta)}` : ` · neta ${eur(n.neta)}`) : ""}</small></td>
+      return `<tr${bajo ? ` style="background:rgba(255,90,90,.08)"` : avi ? ` style="background:rgba(242,210,27,.10)" title="Precio fuera de tarifa: revísalo"` : ""}><td>${esc(li.ref)}</td><td><textarea data-li="${i}" data-k="nombre" rows="${Math.max(li.nombre.split("\n").length + (li.nombre.length > 90 ? 1 : 0), li.nombre.length > 60 ? 3 : 1)}" title="La primera línea sale en negrita en el PDF; las siguientes, como detalle" style="width:100%;min-width:200px;font-size:12.5px;resize:vertical">${esc(li.nombre)}</textarea><small style="display:block;color:var(--texto3)">${veNeta(l.proyecto_id) && !netas[li.id] && !li.fuera ? `<span style="display:inline-flex;gap:4px;align-items:center;margin-right:6px">Neta / coste por ${esc(li.unidad || "ud")}: <input data-li="${i}" data-k="neta" type="number" min="0" step="0.01" value="${li.neta ?? ""}" placeholder="—" title="Solo para ti: lo que cuesta esta línea (neta del fabricante o coste). Sirve para calcular la comisión prevista; no sale en el PDF" style="width:80px;font-size:12px"></span>` : ""}${+li.pieza_m ? `<b style="font-weight:600;color:var(--texto2)">${esc(txtPieza(li))}</b> · ` : ""}${esc(li.unidad)}${conNeta && n ? ((l.proyecto_id === "cayfi" || String(li.id).startsWith("cayfi-")) ? ` · comisión 10 %: ${eur((+li.precio || 0) * (1 - (+li.dto || 0) / 100) - n.neta)}` : ` · neta ${eur(n.neta)}`) : ""}</small></td>
       <td class="num"><input data-li="${i}" data-k="cantidad" type="number" min="0" step="0.01" value="${li.cantidad}" style="width:70px"></td>
       <td class="num"><input data-li="${i}" data-k="precio" type="number" min="0" step="0.01" value="${li.precio || ""}" placeholder="Precio" style="width:84px"></td>
       <td class="num"><input data-li="${i}" data-k="dto" type="number" min="0" max="100" step="0.5" value="${li.dto || 0}" style="width:60px"></td>
@@ -1192,7 +1205,7 @@ function editarPresupuesto(l, id) {
     $("#pz-sugerencias").innerHTML = res.map(x => { const g = x.categoria || "Otros", cab = g !== grupo ? `<div style="position:sticky;top:0;background:var(--panel2);padding:6px 10px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--texto2);border-bottom:1px solid var(--linea)">${esc(g)}</div>` : ""; grupo = g;
       const ya = lineas.find(li => li.id === x.id);
       return cab + `<div class="clic" data-add="${esc(x.id)}" style="display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-bottom:1px solid var(--linea);cursor:pointer;font-size:12.5px${ya ? ";background:rgba(201,168,76,.10)" : ""}"><span><b style="font-weight:600">${esc(x.ref)}</b> · ${esc(x.nombre)}${ya ? ` <span class="pildora p-ok">×${(+ya.cantidad || 0).toLocaleString("es-ES")}</span>` : ""}${x.detalle ? `<small style="display:block;color:var(--texto2);margin-top:2px">${esc(x.detalle)}</small>` : ""}<small style="display:block;color:var(--texto3)">${x.codigo ? "Ref. Bernad " + esc(x.codigo) : ""}</small></span><span style="white-space:nowrap;text-align:right"><b style="font-weight:600">${x.precio_libre ? "Según proyecto" : eur(x.precio)}</b>${x.precio_libre ? "" : `<small style="display:block;color:var(--texto3)">por ${esc(x.unidad)}</small>`}</span></div>`; }).join("") || `<div style="padding:8px 10px;color:var(--texto3);font-size:12.5px">Sin resultados.</div>`;
-    $("#pz-sugerencias").querySelectorAll("[data-add]").forEach(d => d.onclick = () => { const x = cat.find(y => y.id === d.dataset.add); const ya = lineas.find(li => li.id === x.id); if (ya) ya.cantidad = (+ya.cantidad || 0) + 1; else lineas.push({id: x.id, ref: x.ref, codigo: x.codigo, nombre: x.nombre, unidad: x.unidad, cantidad: 1, precio: +x.precio || 0, dto: 0, libre: !!x.precio_libre}); pintar(); sugerir(); });
+    $("#pz-sugerencias").querySelectorAll("[data-add]").forEach(d => d.onclick = () => { const x = cat.find(y => y.id === d.dataset.add); const ya = lineas.find(li => li.id === x.id); if (ya) ya.cantidad = (+ya.cantidad || 0) + 1; else lineas.push(lineaCatalogo(x, 1)); pintar(); sugerir(); });
   };
   $("#pz-buscar").oninput = sugerir; $("#pz-cat").onchange = sugerir; sugerir(); pintar();
 }
@@ -1285,7 +1298,8 @@ function imprimirPresupuesto(l, d) {
   // Descripción: la primera línea del texto va en negrita; el resto (o el detalle del catálogo) debajo, en gris
   const desc = (li) => { const x = catalogo.find(y => y.id === li.id); const [tit, ...resto] = String(li.nombre || "").split("\n");
     const sub = resto.join(" ").trim() || (x && x.detalle && !li.libre ? x.detalle : "") || (/porte/i.test(tit) ? "Transporte hasta la dirección de entrega." : "");
-    return `<b>${esc(tit)}</b>${sub ? `<span>${esc(sub)}</span>` : ""}`; };
+    const pz = txtPieza(li); return `<b>${esc(tit)}</b>${pz ? `<span><b>${esc(pz)}</b></span>` : ""}${sub ? `<span>${esc(sub)}</span>` : ""}`; };
+  const conRef = d.lineas.some(li => refIV(li));
   const fichas = [...new Set(d.lineas.map(li => (catalogo.find(y => y.id === li.id) || {}).categoria).filter(c => FICHAS_PRESU[c]))].map(c => FICHAS_PRESU[c]);
   const cond = String(d.notas || condicionesPorDefecto(l.proyecto_id)).split("\n").map(s => s.trim()).filter(Boolean)
     .map(s => { const i = s.indexOf(":"); return i > 0 && i < 30 ? `<div><b>${esc(s.slice(0, i))}:</b>${esc(s.slice(i + 1))}</div>` : `<div>${esc(s)}</div>`; }).join("");
@@ -1305,8 +1319,8 @@ function imprimirPresupuesto(l, d) {
       ${esJavi ? (m.cargo || "Director de Desarrollo Comercial Externo<br>España y Portugal") + "<br>" : ""}${esc(email)}${telAutor ? `<br>Tel.: ${esc(telAutor)}` : ""}</div></div>
     ${fichas.map(f => `<div class="prod"><div><div class="et2">El producto</div><h2>${esc(f.titulo)}</h2><p>${esc(f.texto)}</p></div>
       <div class="fotos">${f.fotos.map(([s, p]) => `<figure><img src="${img(s)}" alt=""><figcaption>${esc(p)}</figcaption></figure>`).join("")}</div></div>`).join("")}
-    <table class="lin"><thead><tr><th>Descripción</th><th class="n">Cant.</th><th>Ud.</th><th class="n">Precio</th>${conDto ? `<th class="n">Dto.</th>` : ""}<th class="n">Importe</th></tr></thead><tbody>
-    ${d.lineas.map(li => `<tr><td class="d">${desc(li)}</td><td class="n">${(+li.cantidad || 0).toLocaleString("es-ES")}</td><td>${esc(uds(li.unidad))}</td><td class="n">${e2(li.precio)}</td>${conDto ? `<td class="n">${+li.dto ? (+li.dto).toLocaleString("es-ES") + " %" : "—"}</td>` : ""}<td class="n"><b>${e2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</b></td></tr>`).join("")}
+    <table class="lin"><thead><tr>${conRef ? "<th>Ref.</th>" : ""}<th>Descripción</th><th class="n">Cant.</th><th>Ud.</th><th class="n">Precio</th>${conDto ? `<th class="n">Dto.</th>` : ""}<th class="n">Importe</th></tr></thead><tbody>
+    ${d.lineas.map(li => `<tr>${conRef ? `<td style="white-space:nowrap;font-size:11px">${esc(refIV(li) || "—")}</td>` : ""}<td class="d">${desc(li)}</td><td class="n">${(+li.cantidad || 0).toLocaleString("es-ES")}</td><td>${esc(udLinea(li, li.cantidad) || uds(li.unidad))}</td><td class="n">${e2(li.precio)}</td>${conDto ? `<td class="n">${+li.dto ? (+li.dto).toLocaleString("es-ES") + " %" : "—"}</td>` : ""}<td class="n"><b>${e2((+li.cantidad || 0) * (+li.precio || 0) * (1 - (+li.dto || 0) / 100))}</b></td></tr>`).join("")}
     </tbody></table>
     <div class="tot"><div><span>Base imponible</span><span>${e2(t.sub)}</span></div><div><span>IVA ${IVA_PRESU} %</span><span>${e2(t.iva)}</span></div><div class="g"><span>Total</span><span>${e2(t.total)}</span></div></div>
     <div class="h3"><span>Condiciones</span></div><div class="cond">${cond}</div>
@@ -1431,8 +1445,8 @@ function repartoPedido(d) {
   (d.lineas || []).forEach(li => {
     const x = catalogo.find(c => String(c.ref_web || "").toUpperCase() === String(li.ref || "").toUpperCase());
     if (!x || !FAB_PEDIDO[x.proyecto_id]) { sinRef.push(li); return; }
-    if (li.precio_web != null && Math.abs(+li.precio_web - +x.precio) > 0.005) difPrecio.push(`${li.ref}: web ${eur(li.precio_web)} · CRM ${eur(x.precio)}`);
-    (grupos[x.proyecto_id] = grupos[x.proyecto_id] || []).push({id: x.id, ref: x.ref, codigo: x.codigo || null, nombre: x.nombre, unidad: x.unidad, cantidad: +li.cantidad || 0, precio: +x.precio || 0, dto: 0, libre: false, fuera: false, web: li.ref});
+    const tarifaCRM = r2(+x.precio * (+x.pieza_m || 1)); if (li.precio_web != null && Math.abs(+li.precio_web - tarifaCRM) > 0.005) difPrecio.push(`${li.ref}: web ${eur(li.precio_web)} · CRM ${eur(tarifaCRM)}${+x.pieza_m ? " por pieza" : ""}`);
+    (grupos[x.proyecto_id] = grupos[x.proyecto_id] || []).push({...lineaCatalogo(x, +li.cantidad || 0), libre: false, web: li.ref});
   });
   return {grupos, sinRef, difPrecio};
 }
@@ -1571,7 +1585,7 @@ function textoCorreoPedido(pz) {
     ...(e => [`DATOS DE FACTURACIÓN`, `${l.empresa || ""}${l.cif ? " · CIF " + l.cif : ""}`, l.direccion ? `Dirección fiscal: ${l.direccion}` : "", ``,
       `DIRECCIÓN DE ENTREGA`, e.fiscal ? `La misma que la fiscal${txtDir(e) ? ": " + txtDir(e) : ""}` : (e.etiqueta && e.etiqueta !== "Entrega" ? e.etiqueta + ": " : "") + (txtDir(e) || "sin indicar"), ``,
       `CONTACTO PARA LA ENTREGA`, [e.contacto, e.telefono].filter(Boolean).join(" · ") || "sin indicar", ``])(entregaPedido(pz, l)),
-    ...(pz.lineas || []).map(li => `- ${li.codigo || li.ref} · ${String(li.nombre).split("\n")[0]} · ${(+li.cantidad).toLocaleString("es-ES")} ${li.unidad} × ${e2p(li.precio)} = ${e2p(li.cantidad * li.precio)}`),
+    ...(pz.lineas || []).map(li => `- ${refFab(li, pz.proyecto_id)} · ${String(li.nombre).split("\n")[0]} · ${(+li.cantidad).toLocaleString("es-ES")} ${udLinea(li, li.cantidad) || li.unidad}${+li.pieza_m ? " (" + txtPieza(li) + ")" : ""} × ${e2p(li.precio)} = ${e2p(li.cantidad * li.precio)}`),
     ``, `Base imponible: ${e2p(pz.subtotal)} · IVA 21 %: ${e2p(pz.iva)} · Total: ${e2p(pz.total)}`, ``, `Por favor, confirmadme la recepción y la fecha prevista de entrega.`, ``, `Un saludo,`, ``, `Javier Cerezo`, `Director Comercial · INDUVEC`, `javier@induvec.com · +34 670 86 56 67`].join("\n");
 }
 const emailOk = (s) => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(s);
@@ -1675,13 +1689,13 @@ const piePedido = (izq) => `<div class="pie"><span>${esc(izq)}</span><span>javie
 function htmlPedidoFab(pz) {
   const f = FAB_PEDIDO[pz.proyecto_id], l = leads.find(x => x.id === pz.lead_id) || {}, bernad = pz.proyecto_id === "jose-bernad";
   const obs = obsCliente(pz);
-  const filas = (pz.lineas || []).map(li => `<tr><td class="ref">${esc(li.ref)}</td>${bernad ? `<td class="ref">${esc(li.codigo || "—")}</td>` : ""}<td>${esc(String(li.nombre).split("\n")[0])}</td><td class="n">${(+li.cantidad).toLocaleString("es-ES")}</td><td>${esc(udP(li.unidad))}</td><td class="n">${e2p(li.precio)}</td><td class="n"><b>${e2p(li.cantidad * li.precio * (1 - (+li.dto || 0) / 100))}</b></td></tr>`).join("");
+  const filas = (pz.lineas || []).map(li => `<tr><td class="ref">${esc(refFab(li, pz.proyecto_id))}</td><td>${esc(String(li.nombre).split("\n")[0])}${+li.pieza_m ? `<br><small>${esc(txtPieza(li))}</small>` : ""}</td><td class="n">${(+li.cantidad).toLocaleString("es-ES")}</td><td>${esc(udLinea(li, li.cantidad) || udP(li.unidad))}</td><td class="n">${e2p(li.precio)}</td><td class="n"><b>${e2p(li.cantidad * li.precio * (1 - (+li.dto || 0) / 100))}</b></td></tr>`).join("");
   const cuerpo = `<section class="pag">${cabPedido("PEDIDO A " + esc(f.corto.toUpperCase()), "Nº " + esc(pz.numero) + " · " + fDMAp(pz.fecha))}
     <div class="pills"><span>Precios sin IVA</span><span>Sirve y factura ${esc(f.nombre)}</span></div>
     <div class="cajas"><div class="caja"><div class="et">Para</div><div class="nom">${esc(f.nombre)}</div>${esc(f.dest)}</div>
       <div class="caja"><div class="et">Pedido tramitado por</div><div class="nom">INDUVEC · Suministro industrial</div>Javier Cerezo · Director Comercial<br>javier@induvec.com · +34 670 86 56 67<br>Pedido nº <b>${esc(pz.numero)}</b> · ${fDMAp(pz.fecha)}</div></div>
     ${htmlFactEntrega(l, pz, obs)}
-    <table><thead><tr><th>Ref.</th>${bernad ? "<th>Código Bernad</th>" : ""}<th>Producto</th><th class="n">Cant.</th><th>Ud.</th><th class="n">Precio</th><th class="n">Importe</th></tr></thead><tbody>${filas}</tbody></table>
+    <table><thead><tr><th>${bernad ? "Ref. Bernad · modelo · ref. INDUVEC" : "Ref. fabricante · ref. INDUVEC"}</th><th>Producto</th><th class="n">Cant.</th><th>Ud.</th><th class="n">Precio</th><th class="n">Importe</th></tr></thead><tbody>${filas}</tbody></table>
     <div class="tot"><div><span>Base imponible</span><span>${e2p(pz.subtotal)}</span></div><div><span>IVA 21 %</span><span>${e2p(pz.iva)}</span></div><div class="g"><span>Total</span><span>${e2p(pz.total)}</span></div></div>
     <h2>Condiciones</h2><div class="cond">${f.cond.map(([a, b]) => `<div><b>${esc(a)}:</b> ${esc(b)}</div>`).join("")}</div>
     <div class="firma"><div><div class="et">Recibido y conforme · ${esc(f.nombre)}</div></div><div><div class="et">Fecha prevista de entrega</div></div></div>
@@ -1700,7 +1714,7 @@ function imprimirResumenPedido(pzs) {
     (pz.lineas || []).forEach(li => { if (pz.proyecto_id === "jose-bernad" && !li.codigo) avisos.push(`<b>${esc(li.ref)}</b>: sin código de Bernad.`); });
     return `<h2><span class="b" style="background:${f.color}"></span>Pedido ${esc(pz.numero)} · ${esc(f.nombre)}</h2>
     <table><thead><tr><th>Ref. web</th><th>Ref. fabricante</th><th>Producto</th><th class="n">Cant.</th><th>Ud.</th><th class="n">Precio</th><th class="n">Importe</th></tr></thead><tbody>
-    ${(pz.lineas || []).map(li => `<tr><td class="ref">${esc(li.web || "—")}</td><td class="ref">${esc(li.ref)}</td><td>${esc(String(li.nombre).split("\n")[0])}</td><td class="n">${(+li.cantidad).toLocaleString("es-ES")}</td><td>${esc(udP(li.unidad))}</td><td class="n">${e2p(li.precio)}</td><td class="n"><b>${e2p(li.cantidad * li.precio)}</b></td></tr>`).join("")}
+    ${(pz.lineas || []).map(li => `<tr><td class="ref">${esc(refIV(li) || "—")}</td><td class="ref">${esc(refFab(li, pz.proyecto_id))}</td><td>${esc(String(li.nombre).split("\n")[0])}${+li.pieza_m ? `<br><small>${esc(txtPieza(li))}</small>` : ""}</td><td class="n">${(+li.cantidad).toLocaleString("es-ES")}</td><td>${esc(udLinea(li, li.cantidad) || udP(li.unidad))}</td><td class="n">${e2p(li.precio)}</td><td class="n"><b>${e2p(li.cantidad * li.precio)}</b></td></tr>`).join("")}
     <tr class="sub"><td colspan="6">Subtotal ${esc(f.corto)} (sin IVA)${pz.enviado_fab ? " · enviado el " + fDMAp(String(pz.enviado_fab).slice(0, 10)) : " · pendiente de enviar"}</td><td class="n">${e2p(pz.subtotal)}</td></tr></tbody></table>`; }).join("");
   const cy = pzs.find(p => p.proyecto_id === "cayfi");
   const cuerpo = `<section class="pag">${cabPedido("PEDIDO · RESUMEN", "Uso interno · Departamento comercial INDUVEC")}
