@@ -1392,10 +1392,10 @@ function imprimirPresupuesto(l, d) {
 /* ===== PEDIDOS INDUVEC: pedido web → un pedido por fabricante (José Bernad / CAYFI) ===== */
 let pedidosWeb = [];   // solo director: pedidos recibidos desde induvec.com pendientes de revisar (crm_pedidos_web)
 const FAB_PEDIDO = {
-  "jose-bernad": {nombre: "José Bernad, S.L.", corto: "José Bernad", pref: "JB", color: "#F2B705", email: "", dest: "Manuel · Dirección comercial de José Bernad",
+  "jose-bernad": {nombre: "José Bernad, S.L.", corto: "José Bernad", pref: "JB", color: "#F2B705", email: "m.bezares@josebernad.com", dest: "Manuel Bezares · Dirección comercial de José Bernad",
     cond: [["Suministro y factura", "José Bernad, S.L. sirve el material y factura directamente al cliente."], ["Precios", "Tarifa de instalador, sin IVA."], ["Portes", "Debidos, a cargo del cliente."],
       ["Forma de pago", "La elige el cliente en la confirmación de pedido: transferencia 50 % / 50 %, recibo SEPA a 30 días o confirming a 30, 45 o 60 días."], ["Comisión", "Operación comercial de INDUVEC (Javier Cerezo), según el acuerdo de colaboración."]]},
-  "cayfi": {nombre: "CAYFI, S.L.", corto: "CAYFI", pref: "CY", color: "#E63946", email: "", dest: "Nuria · Responsable comercial de CAYFI",
+  "cayfi": {nombre: "CAYFI, S.L.", corto: "CAYFI", pref: "CY", color: "#E63946", email: "nuria@cayfi.com", dest: "Nuria Gilabert · Responsable comercial de CAYFI",
     cond: [["Suministro y factura", "CAYFI, S.L. sirve el material, factura y cobra directamente al cliente."], ["Precios", "Tarifa vigente, sin IVA, por cajas completas."], ["Portes", "A consultar, aparte."],
       ["Forma de pago", "Transferencia antes del envío."], ["Comisión", "Cliente de INDUVEC como comisionista / colaborador: 10 % de comisión a fin de mes. Incluir en el listado mensual de clientes."]]}
 };
