@@ -437,7 +437,8 @@ let vista = "panel", filtroProy = "todos", filtroPersona = "todos", busqueda = "
 /* ===== UTILIDADES ===== */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const eur = (n) => (Number(n) || 0).toLocaleString("es-ES", {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " €";
+/* «de-DE» usa los mismos separadores que España (1.323,88) pero agrupa también los miles de 4 cifras */
+const eur = (n) => (Number(n) || 0).toLocaleString("de-DE", {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " €";
 const hoy = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
 const aFecha = (s) => s ? new Date(s + (s.length === 10 ? "T00:00" : "")) : null;
 const difDias = (s) => { const f = aFecha(s); if (!f) return null; f.setHours(0,0,0,0); return Math.round((f - hoy()) / 864e5); };
@@ -2507,7 +2508,7 @@ function vVentas() {
   ${bloqueMeses(vs)}
   ${bloqueFacturas(vs)}
   <div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>Por producto</h3></div>
-    ${Object.entries(porProd).map(([id, arr]) => `<div class="fila-barra"><span>${id === "?" ? "Sin producto" : etiquetaProy(id)}</span><div class="barra"><span style="width:${sumF(arr, v => +v.importe || 0) / Math.max(1, total) * 100}%"></span></div><span class="n">${arr.length} · ${eur(sumF(arr, v => +v.importe || 0))}</span></div>`).join("") || `<p class="vacia">Sin ventas.</p>`}</div>
+    ${Object.entries(porProd).map(([id, arr]) => `<div class="fila-barra"><span>${id === "?" ? "Sin producto" : etiquetaProy(id)}</span><div class="barra"><span style="width:${sumF(arr, v => +v.importe || 0) / Math.max(1, total) * 100}%"></span></div><span class="n">${arr.length} ${arr.length === 1 ? "venta" : "ventas"} · ${eur(sumF(arr, v => +v.importe || 0))}</span></div>`).join("") || `<p class="vacia">Sin ventas.</p>`}</div>
   <div class="tabla-env"><table><thead><tr><th>Cliente</th><th>Producto</th><th class="num">Importe</th><th>Closer</th><th>Setter</th><th class="num">Com. CDV by JCerezo</th><th class="num">Com. closer</th><th class="num">Com. setter</th><th>Estado</th></tr></thead><tbody>
   ${vs.map(v => { const id = proyDeVenta(v), e = ESTADO_VENTA[v.estado] || [v.estado, "p-neutro"], jv = comJavier(v);
     const closerTxt = v.closer2 ? `${esc(v.closer)} + ${esc(v.closer2)}` : esc(v.closer || "—");
@@ -2529,7 +2530,7 @@ function vVentasSocio(vs, sumF, total, porProd) {
     <div class="cifra"><div class="etiq">Pendiente de cobro</div><div class="num">${eur(sumF(vs.filter(v => v.estado !== "comision_cobrada"), mia))}</div><div class="det">tu parte aún no cobrada</div></div>
   </section>
   <div class="bloque" style="margin-bottom:16px"><div class="bloque-cab"><h3>Por producto</h3></div>
-    ${Object.entries(porProd).map(([id, arr]) => `<div class="fila-barra"><span>${id === "?" ? "Sin producto" : etiquetaProy(id)}</span><div class="barra"><span style="width:${sumF(arr, v => +v.importe || 0) / Math.max(1, total) * 100}%"></span></div><span class="n">${arr.length} · ${eur(sumF(arr, v => +v.importe || 0))}</span></div>`).join("") || `<p class="vacia">Todavía no hay ventas en tus proyectos.</p>`}</div>
+    ${Object.entries(porProd).map(([id, arr]) => `<div class="fila-barra"><span>${id === "?" ? "Sin producto" : etiquetaProy(id)}</span><div class="barra"><span style="width:${sumF(arr, v => +v.importe || 0) / Math.max(1, total) * 100}%"></span></div><span class="n">${arr.length} ${arr.length === 1 ? "venta" : "ventas"} · ${eur(sumF(arr, v => +v.importe || 0))}</span></div>`).join("") || `<p class="vacia">Todavía no hay ventas en tus proyectos.</p>`}</div>
   <div class="tabla-env"><table><thead><tr><th>Cliente</th><th>Producto</th><th class="num">Importe</th><th>Closer</th><th>Setter</th><th class="num">Com. closer</th><th class="num">Com. setter</th><th class="num">Tu parte</th><th>Estado</th></tr></thead><tbody>
   ${vs.map(v => { const id = proyDeVenta(v), e = ESTADO_VENTA[v.estado] || [v.estado, "p-neutro"];
     return `<tr><td>${esc(v.cliente)}${v.notas ? `<small style="display:block;color:var(--texto3);max-width:260px;white-space:normal">${esc(v.notas)}</small>` : ""}</td><td><span class="area dir">${id ? etiquetaProy(id) : esc(v.proyecto || "—")}${prodDeVenta(v) ? " · " + esc(prodDeVenta(v).nombre) : ""}</span></td><td class="num">${eur(v.importe)}</td><td>${esc([v.closer, v.closer2].filter(Boolean).join(" + ") || "—")}</td><td>${esc(v.setter || "—")}</td><td class="num">${eur((+v.com_closer || 0) + (+v.com_closer2 || 0))}</td><td class="num">${eur(v.com_setter)}</td><td class="num"><b style="font-weight:600">${eur(mia(v))}</b></td><td><span class="pildora ${e[1]}">${e[0]}</span></td></tr>`; }).join("") || `<tr><td colspan="9">No hay ventas con este filtro.</td></tr>`}
