@@ -1600,7 +1600,7 @@ function correoPedidoFab(pz) {
       <div class="campo" style="grid-column:1/-1"><label for="co-asunto">Asunto</label><input id="co-asunto" value="${esc(`Pedido INDUVEC ${pz.numero} · ${l.empresa || ""}`)}"></div>
       <div class="campo" style="grid-column:1/-1"><label for="co-texto">Texto</label><textarea id="co-texto" rows="16" style="font-size:12.5px">${esc(textoCorreoPedido(pz))}</textarea></div>
     </div>
-    <p style="font-size:12.5px;color:var(--texto2);margin:6px 0 0">📎 Adjunto: <b>${esc(nombrePdf)}</b> · <a href="#" id="co-ver">ver PDF</a><br>Sale desde <b>javier@induvec.com</b> y te llega una copia oculta. Al enviarlo, el pedido se marca como enviado.</p>`,
+    <p style="font-size:12.5px;color:var(--texto2);margin:6px 0 0">📎 Adjunto: <b>${esc(nombrePdf)}</b> · <a href="#" id="co-ver">ver PDF</a><br>Sale desde <b>javier@induvec.com</b>, con copia a <b>comercial@induvec.com</b>, y se guarda en tus «Elementos enviados». Al enviarlo, el pedido se marca como enviado.</p>`,
   async () => {
     const para = $("#co-para").value.trim(), asunto = $("#co-asunto").value.trim(), texto = $("#co-texto").value;
     if (!emailOk(para)) return "Pon un correo de destino válido.";
