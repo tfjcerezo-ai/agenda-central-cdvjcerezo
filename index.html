@@ -3893,6 +3893,7 @@ function renderTablasTiempo(){
   const porAct=ttAgrupar(delMes,r=>r.categoria||'Sin actividad');
   const filaProy=x=>{const c=colorProyecto(x.k);const subs=Object.entries(x.sub).sort((a,b)=>b[1]-a[1]).map(([a,h])=>`${escH(a)} ${ttCorto(h)}`).join(' · ');
     return `<tr><td><span class="tt-pt" style="background:${c}"></span>${escH(ttNombre(x.k))}<div class="tt-barra"><span style="width:${pct(x.h)}%;background:${c}"></span></div><div class="tt-sub">${subs}</div></td><td class="n">${fmtHM(x.h)}</td><td class="n">${pct(x.h)} %</td><td class="n">${Math.round(x.v)}€</td></tr>`;};
+  const actTop=porAct.slice(0,10), actResto=porAct.slice(10); if(actResto.length) actTop.push({k:`Otras ${actResto.length} actividades`,h:actResto.reduce((a,x)=>a+x.h,0)});
   const filaAct=x=>`<tr><td>${escH(x.k)}<div class="tt-barra"><span style="width:${pct(x.h)}%;background:var(--dorado)"></span></div></td><td class="n">${fmtHM(x.h)}</td><td class="n">${pct(x.h)} %</td></tr>`;
   // Acumulado anual: proyecto × mes
   const mesesH=Array.from({length:12},()=>0), mesesV=Array.from({length:12},()=>0);
@@ -3907,8 +3908,7 @@ function renderTablasTiempo(){
     <table class="tt-tabla"><thead><tr><th>Proyecto</th><th class="n">Tiempo</th><th class="n">%</th><th class="n">Valor</th></tr></thead>
       <tbody>${porProy.map(filaProy).join('')}</tbody>
       <tfoot><tr><td>Total</td><td class="n">${fmtHM(tH)}</td><td class="n">100 %</td><td class="n">${Math.round(tV)}€</td></tr></tfoot></table>
-    <div style="height:14px"></div>
-    <table class="tt-tabla"><thead><tr><th>Actividad</th><th class="n">Tiempo</th><th class="n">%</th></tr></thead><tbody>${porAct.map(filaAct).join('')}</tbody></table>`
+`
     :`<div class="tt-sub" style="font-size:12px">Sin registros en ${MESES_TT[m-1].toLowerCase()}.</div>`}
   </div>
   <div class="tt-caja">
@@ -3918,7 +3918,9 @@ function renderTablasTiempo(){
       <tfoot><tr><td>Total horas</td>${mesesH.map((h,i)=>`<td class="n${colAct(i)}">${h?ttCorto(h):'·'}</td>`).join('')}<td class="n">${ttCorto(totA)}</td><td class="n">100 %</td></tr>
       <tr><td>Valor</td>${mesesV.map((v,i)=>`<td class="n${colAct(i)}">${v?Math.round(v)+'€':'·'}</td>`).join('')}<td class="n">${Math.round(totAV)}€</td><td></td></tr></tfoot></table></div>`
     :`<div class="tt-sub" style="font-size:12px">Sin registros en ${y}.</div>`}
-  </div>`;
+  </div>
+  ${delMes.length?`<div class="tt-caja"><div class="tt-tit"><span>En qué actividad · ${MESES_TT[m-1]}</span></div>
+    <table class="tt-tabla"><thead><tr><th>Actividad</th><th class="n">Tiempo</th><th class="n">%</th></tr></thead><tbody>${actTop.map(filaAct).join('')}</tbody></table></div>`:''}`;
 }
 const _renderRegistrosTT=renderRegistros;
 renderRegistros=function(){ _renderRegistrosTT(); try{ renderTablasTiempo(); }catch(e){ console.error(e); } };
