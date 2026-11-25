@@ -1023,7 +1023,28 @@ function vPipeline() {
 /* Vista de lista: para trabajar leads uno tras otro con filtros rápidos */
 const sinActividad = (l, dias = 7) => { const f = l.actualizado ? new Date(l.actualizado) : null; return !f || (Date.now() - f) / 864e5 > dias; };
 const FILTROS_RAPIDOS = [["todos", "Todos", () => true], ["pendientes", "Hoy y atrasados", l => difDias(l.proximo_paso_fecha) !== null && difDias(l.proximo_paso_fecha) <= 0], ["vencidas", "Vencidas", l => difDias(l.proximo_paso_fecha) !== null && difDias(l.proximo_paso_fecha) < 0], ["hoy", "Hoy", l => difDias(l.proximo_paso_fecha) === 0], ["manana", "Mañana", l => difDias(l.proximo_paso_fecha) === 1], ["proximas", "Próximas", l => difDias(l.proximo_paso_fecha) > 1], ["sinpaso", "Sin próximo paso", l => !l.proximo_paso_fecha], ["sinact", "Sin actividad 7 días", l => sinActividad(l)]];
+/* Último contacto de cada lead: lo último escrito en su historial (notas, llamadas, WhatsApp, correos…), sin contar los cambios automáticos de etapa ni la programación de próximos pasos */
+let ultAct = {}, ultActCargado = 0, ultActCargando = false;
+const TIPOS_NO_CONTACTO = ["etapa", "paso"];
+async function cargarUltAct(forzar) {
+  if (ultActCargando || (!forzar && Date.now() - ultActCargado < 30000)) return;
+  ultActCargando = true;
+  const {data, error} = await sb.from("crm_actividad").select("lead_id, fecha, tipo, texto").order("fecha", {ascending: false}).limit(10000);
+  ultActCargando = false;
+  if (error || !data) return;
+  const m = {}; data.forEach(a => { if (!TIPOS_NO_CONTACTO.includes(a.tipo) && !m[a.lead_id]) m[a.lead_id] = a; });
+  const antes = JSON.stringify(ultAct); ultAct = m; ultActCargado = Date.now();
+  if (JSON.stringify(m) !== antes && typeof render === "function") render();
+}
+const ICONO_ACT = {llamada: "📞", whatsapp: "💬", email: "✉️", correo: "✉️", reunion: "🤝", nota: "📝"};
+function celdaUltAct(l) {
+  const a = ultAct[l.id]; if (!a) return `<span style="color:var(--texto3)">Sin contactos</span>`;
+  const d = fechaISO(new Date(a.fecha)), n = -difDias(d), txt = String(a.texto || "").replace(/\s+/g, " ").trim();
+  const color = n > 14 ? "var(--mal)" : n > 7 ? "var(--aviso)" : "var(--texto2)";
+  return `<span title="${esc(fDMA(d) + " · " + txt)}"><span style="color:${color};font-weight:600">${n <= 0 ? "hoy" : n === 1 ? "ayer" : "hace " + n + " d"}</span> <small style="color:var(--texto3)">${fF(d)}</small><small style="display:block;color:var(--texto3);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ICONO_ACT[a.tipo] || "📝"} ${esc(txt.length > 70 ? txt.slice(0, 70) + "…" : txt)}</small></span>`;
+}
 function vLista(Ls) {
+  cargarUltAct();
   const base = filtroEtapaLista ? Ls.filter(l => l.etapa === filtroEtapaLista) : Ls.filter(esActivo);
   const fr = FILTROS_RAPIDOS.find(f => f[0] === filtroRapido) || FILTROS_RAPIDOS[0];
   const ls = base.filter(fr[2]).sort((a, b) => ordenPrio(a) - ordenPrio(b) || (a.proximo_paso_fecha || "9999").localeCompare(b.proximo_paso_fecha || "9999") || String(a.empresa).localeCompare(String(b.empresa), "es"));
@@ -1031,10 +1052,10 @@ function vLista(Ls) {
   return `<div class="etapas-cont">${cont.map(([e, n]) => `<button class="etapa-cont${filtroEtapaLista === e ? " activa" : ""}${CERRADAS.includes(e) ? " cerr" : ""}" data-fetapa="${esc(e)}" aria-pressed="${filtroEtapaLista === e}"><span>${esc(e)}</span><b>${n}</b></button>`).join("")}</div>
   <div class="filtros" style="margin:10px 0">${FILTROS_RAPIDOS.map(([k, t, f]) => `<button class="chip" data-frapido="${k}" aria-pressed="${filtroRapido === k}">${t} <span style="color:var(--texto3)">${base.filter(f).length}</span></button>`).join("")}
     ${filtroEtapaLista ? `<button class="btn-texto" data-fetapa="">Quitar filtro «${esc(filtroEtapaLista)}» ×</button>` : ""}</div>
-  <div class="tabla-env"><table class="tabla-lista"><thead><tr><th>Empresa</th><th>Prioridad</th><th>Proyecto</th><th>Etapa</th><th>Interés</th><th>Próximo paso</th><th>Teléfono</th><th>Comercial</th><th class="num">Valor</th></tr></thead><tbody>
-  ${ls.map(l => `<tr class="clic" data-lead="${l.id}"><td><b style="font-weight:600">${esc(l.empresa)}</b><small style="display:block;color:var(--texto3)">${esc(l.contacto || "Sin contacto")}${linkedinDe(l) ? ` · <a href="${esc(linkedinDe(l))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#4a90d9;font-weight:600">LinkedIn</a>` : ""}</small></td><td>${pildoraPrio(l.prioridad)}</td><td>${etiquetaProy(l.proyecto_id)}</td><td>${esc(l.etapa)}</td><td>${pildoraInteres(l.interes) || `<span style="color:var(--texto3)">—</span>`}</td>
+  <div class="tabla-env"><table class="tabla-lista"><thead><tr><th>Empresa</th><th>Prioridad</th><th>Proyecto</th><th>Etapa</th><th>Interés</th><th>Último contacto</th><th>Próximo paso</th><th>Teléfono</th><th>Comercial</th><th class="num">Valor</th></tr></thead><tbody>
+  ${ls.map(l => `<tr class="clic" data-lead="${l.id}"><td><b style="font-weight:600">${esc(l.empresa)}</b><small style="display:block;color:var(--texto3)">${esc(l.contacto || "Sin contacto")}${linkedinDe(l) ? ` · <a href="${esc(linkedinDe(l))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#4a90d9;font-weight:600">LinkedIn</a>` : ""}</small></td><td>${pildoraPrio(l.prioridad)}</td><td>${etiquetaProy(l.proyecto_id)}</td><td>${esc(l.etapa)}</td><td>${pildoraInteres(l.interes) || `<span style="color:var(--texto3)">—</span>`}</td><td>${celdaUltAct(l)}</td>
     <td>${l.proximo_paso_fecha ? `${esc(l.proximo_paso || "Seguimiento")}<small style="display:block"><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${rel(l.proximo_paso_fecha)}</span></small>` : `<span style="color:var(--aviso)">Sin programar</span>`}</td>
-    <td>${enlacesTel(telLead(l), l.id)}${l.movil && l.telefono ? `<small style="display:block;color:var(--texto3)">fijo ${esc(l.telefono)}</small>` : ""}</td><td>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}${l.setter_id ? `<small style="display:block;color:var(--texto3)">setter ${esc(nomPersona(l.setter_id))}</small>` : ""}</td><td class="num">${valorDoble(l)}</td></tr>`).join("") || `<tr><td colspan="8">No hay leads con este filtro.</td></tr>`}
+    <td>${enlacesTel(telLead(l), l.id)}${l.movil && l.telefono ? `<small style="display:block;color:var(--texto3)">fijo ${esc(l.telefono)}</small>` : ""}</td><td>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}${l.setter_id ? `<small style="display:block;color:var(--texto3)">setter ${esc(nomPersona(l.setter_id))}</small>` : ""}</td><td class="num">${valorDoble(l)}</td></tr>`).join("") || `<tr><td colspan="10">No hay leads con este filtro.</td></tr>`}
   </tbody></table></div>`;
 }
 
@@ -1989,7 +2010,7 @@ function nuevoLead() {
 }
 
 /* ===== FICHA DEL LEAD ===== */
-async function abrirLead(id) {
+async function abrirLead(id) { ultActCargado = 0;
   const l = leads.find(x => x.id === id); if (!l) return;
   const otros = otrosDelCliente(l), idsCli = [id, ...otros.map(x => x.id)];
   const {data: actTodo, error} = await sb.from("crm_actividad").select("*").in("lead_id", idsCli).order("fecha", {ascending: false});
@@ -2387,6 +2408,7 @@ async function exportarPipeline(Ls) {
   try {
     if (!window.XLSX) await new Promise((ok, ko) => { const sc = document.createElement("script"); sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; sc.onload = ok; sc.onerror = () => ko(new Error("no se pudo cargar Excel")); document.head.appendChild(sc); });
   } catch (e) { return aviso("No se pudo preparar el Excel: " + e.message, true); }
+  await cargarUltAct(true);
   const hoyD = new Date(fechaISO(new Date())), dias = (a, b) => (a && b) ? Math.round((new Date(b) - new Date(String(a).slice(0, 10))) / 864e5) : "";
   const filas = Ls.map(l => {
     const pz = presupuestos.filter(p => p.lead_id === l.id), env = pz.filter(p => p.estado === "enviado" || p.estado === "aceptado");
@@ -2396,6 +2418,7 @@ async function exportarPipeline(Ls) {
       "Origen": l.origen || "", "Prioridad": l.prioridad || "", "Interés": (INTERES[l.interes] || [""])[0], "Tipo de cliente": l.tipo_cliente || "", "Ciudad": l.ciudad || "",
       "Contacto": l.contacto || "", "Cargo": l.cargo || "", "Teléfono": l.telefono || "", "Móvil": l.movil || "", "Correo": l.email || "",
       "Closer": l.closer_id ? nomPersona(l.closer_id) : "", "Setter": l.setter_id ? nomPersona(l.setter_id) : "",
+      "Último contacto": ultAct[l.id] ? fechaISO(new Date(ultAct[l.id].fecha)) : "", "Días sin contacto": ultAct[l.id] ? dias(fechaISO(new Date(ultAct[l.id].fecha)), hoyD) : "", "Lo último escrito": ultAct[l.id] ? String(ultAct[l.id].texto || "") : "",
       "Próximo paso": l.proximo_paso || "", "Fecha próximo paso": l.proximo_paso_fecha || "", "Días de retraso": retraso,
       "Motivo (pérdida / descarte)": l.motivo_perdida || "", "Nº propuestas": pz.length, "Importe propuestas enviadas (€)": env.reduce((s, p) => s + (+p.subtotal || 0), 0),
       "Comprado (€)": totalComprado(l) || 0, "Fecha de entrada": String(l.creado || "").slice(0, 10), "Días en el CRM": l.creado ? dias(l.creado, hoyD) : "", "Última actualización": String(l.actualizado || "").slice(0, 10)};
