@@ -514,8 +514,13 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 
   <!-- REGISTROS -->
   <div id="t-registros" style="display:none">
+   <div class="reg-layout">
+    <div class="reg-col-lista">
     <div class="stats-grid" id="statsRegistros"></div>
     <div id="listaRegistros"></div>
+    </div>
+    <div class="reg-col-tablas" id="tablasTiempo"></div>
+   </div>
   </div>
 
   <!-- GLOSARIO TARIFAS -->
@@ -3835,6 +3840,89 @@ renderVentasProyecto=function(proyNombre,containerId){
   grid.insertAdjacentHTML('afterend',`<div id="det-${pref}"></div>`);
 };
 try{ renderRegistros(); }catch(e){}
+</script>
+<script>
+// =====================
+// TIEMPO: tablas mensual y acumulado anual al lado de los registros (nov. 2026)
+// =====================
+(function estilosTablasTiempo(){
+  const st=document.createElement('style');
+  st.textContent=`
+  .reg-layout{display:flex;flex-direction:column}
+  .reg-col-tablas{order:-1;margin-bottom:14px}
+  @media(min-width:1100px){
+    .content:has(#section-tiempo.active #t-registros[style*="block"]){max-width:1400px}
+    .reg-layout{display:grid;grid-template-columns:minmax(0,560px) minmax(0,1fr);gap:24px;align-items:start}
+    .reg-col-tablas{order:0;margin-bottom:0;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+  }
+  .tt-caja{background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:14px}
+  .tt-tit{font-family:'Cormorant Garamond',serif;font-size:19px;color:var(--dorado);display:flex;align-items:center;gap:8px;justify-content:space-between;margin-bottom:10px}
+  .tt-nav{background:transparent;border:1px solid var(--negro-borde);color:var(--gris-claro);border-radius:8px;padding:2px 10px;cursor:pointer;font-size:14px}
+  .tt-nav:hover{border-color:var(--dorado);color:var(--dorado)}
+  .tt-res{display:flex;gap:18px;flex-wrap:wrap;font-size:11px;color:var(--gris);margin-bottom:10px}
+  .tt-res b{display:block;font-size:17px;color:var(--blanco-suave);font-weight:700}
+  .tt-tabla{width:100%;border-collapse:collapse;font-size:12px}
+  .tt-tabla th{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--gris);font-weight:600;text-align:left;padding:6px 6px;border-bottom:1px solid var(--negro-borde);white-space:nowrap}
+  .tt-tabla td{padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.05);color:var(--blanco-suave);vertical-align:top}
+  .tt-tabla .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .tt-tabla tfoot td{font-weight:700;color:var(--dorado);border-top:1px solid rgba(201,168,76,.35);border-bottom:none}
+  .tt-tabla .mesact{background:rgba(201,168,76,.08)}
+  .tt-barra{height:6px;border-radius:3px;background:rgba(255,255,255,.06);margin-top:4px;overflow:hidden}
+  .tt-barra span{display:block;height:100%;border-radius:3px}
+  .tt-sub{font-size:10px;color:var(--gris);margin-top:3px;line-height:1.4}
+  .tt-pt{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .tt-vacio{color:var(--gris);opacity:.45}
+  `;
+  document.head.appendChild(st);
+})();
+const MESES_TT=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+let ttMes=new Date().toISOString().slice(0,7);
+function ttCorto(h){const t=Math.round((Number(h)||0)*60);if(!t)return '';const hh=Math.floor(t/60),mm=t%60;return hh?(mm?`${hh} h ${mm}`:`${hh} h`):`${mm} min`;}
+function ttNombre(k){const c=claveAG(k);const p=PROY_AG.find(x=>x.k===c);return p?p.nombre:(PNOMBRES[c]||k||'Sin proyecto');}
+function ttMover(n){const [y,m]=ttMes.split('-').map(Number);const d=new Date(y,m-1+n,1);ttMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');renderTablasTiempo();}
+function ttAgrupar(lista,clave){const m={};lista.forEach(r=>{const k=clave(r);const x=m[k]=m[k]||{k,h:0,v:0,n:0,sub:{}};x.h+=Number(r.horas)||0;x.v+=Number(r.valor)||0;x.n++;const a=(r.categoria||'Sin actividad');x.sub[a]=(x.sub[a]||0)+(Number(r.horas)||0);});return Object.values(m).sort((a,b)=>b.h-a.h);}
+function renderTablasTiempo(){
+  const cont=document.getElementById('tablasTiempo'); if(!cont) return;
+  const [y,m]=ttMes.split('-').map(Number), anio=String(y);
+  const delMes=registros.filter(r=>String(r.fecha||'').slice(0,7)===ttMes);
+  const delAnio=registros.filter(r=>String(r.fecha||'').slice(0,4)===anio);
+  const tH=delMes.reduce((a,r)=>a+(Number(r.horas)||0),0), tV=delMes.reduce((a,r)=>a+(Number(r.valor)||0),0);
+  const dias=new Set(delMes.map(r=>r.fecha)).size;
+  const pct=h=>tH?Math.round(h/tH*100):0;
+  const porProy=ttAgrupar(delMes,r=>claveAG(r.proyecto));
+  const porAct=ttAgrupar(delMes,r=>r.categoria||'Sin actividad');
+  const filaProy=x=>{const c=colorProyecto(x.k);const subs=Object.entries(x.sub).sort((a,b)=>b[1]-a[1]).map(([a,h])=>`${escH(a)} ${ttCorto(h)}`).join(' · ');
+    return `<tr><td><span class="tt-pt" style="background:${c}"></span>${escH(ttNombre(x.k))}<div class="tt-barra"><span style="width:${pct(x.h)}%;background:${c}"></span></div><div class="tt-sub">${subs}</div></td><td class="n">${fmtHM(x.h)}</td><td class="n">${pct(x.h)} %</td><td class="n">${Math.round(x.v)}€</td></tr>`;};
+  const filaAct=x=>`<tr><td>${escH(x.k)}<div class="tt-barra"><span style="width:${pct(x.h)}%;background:var(--dorado)"></span></div></td><td class="n">${fmtHM(x.h)}</td><td class="n">${pct(x.h)} %</td></tr>`;
+  // Acumulado anual: proyecto × mes
+  const mesesH=Array.from({length:12},()=>0), mesesV=Array.from({length:12},()=>0);
+  const anual={}; delAnio.forEach(r=>{const k=claveAG(r.proyecto), i=Number(String(r.fecha).slice(5,7))-1; if(i<0||i>11) return; const x=anual[k]=anual[k]||{k,m:Array(12).fill(0),h:0,v:0}; const h=Number(r.horas)||0; x.m[i]+=h; x.h+=h; x.v+=Number(r.valor)||0; mesesH[i]+=h; mesesV[i]+=Number(r.valor)||0;});
+  const filasA=Object.values(anual).sort((a,b)=>b.h-a.h), totA=mesesH.reduce((a,b)=>a+b,0), totAV=mesesV.reduce((a,b)=>a+b,0);
+  const colAct=i=>String(y)===new Date().toISOString().slice(0,4)&&i===m-1?' mesact':'';
+  cont.innerHTML=`
+  <div class="tt-caja">
+    <div class="tt-tit"><button class="tt-nav" onclick="ttMover(-1)" aria-label="Mes anterior">◀</button><span>${MESES_TT[m-1]} ${y}</span><button class="tt-nav" onclick="ttMover(1)" aria-label="Mes siguiente">▶</button></div>
+    <div class="tt-res"><span><b>${fmtHM(tH)}</b>Horas del mes</span><span><b>${Math.round(tV)}€</b>Valor del mes</span><span><b>${dias}</b>Días con registro</span><span><b>${dias?fmtHM(tH/dias):'—'}</b>Media por día</span></div>
+    ${delMes.length?`
+    <table class="tt-tabla"><thead><tr><th>Proyecto</th><th class="n">Tiempo</th><th class="n">%</th><th class="n">Valor</th></tr></thead>
+      <tbody>${porProy.map(filaProy).join('')}</tbody>
+      <tfoot><tr><td>Total</td><td class="n">${fmtHM(tH)}</td><td class="n">100 %</td><td class="n">${Math.round(tV)}€</td></tr></tfoot></table>
+    <div style="height:14px"></div>
+    <table class="tt-tabla"><thead><tr><th>Actividad</th><th class="n">Tiempo</th><th class="n">%</th></tr></thead><tbody>${porAct.map(filaAct).join('')}</tbody></table>`
+    :`<div class="tt-sub" style="font-size:12px">Sin registros en ${MESES_TT[m-1].toLowerCase()}.</div>`}
+  </div>
+  <div class="tt-caja">
+    <div class="tt-tit"><span>Acumulado ${y}</span><span style="font-size:13px;color:var(--gris-claro)">${fmtHM(totA)} · ${Math.round(totAV)}€</span></div>
+    ${filasA.length?`<div style="overflow-x:auto"><table class="tt-tabla"><thead><tr><th>Proyecto</th>${MESES_TT.map((n,i)=>`<th class="n${colAct(i)}">${n.slice(0,3)}</th>`).join('')}<th class="n">Total</th><th class="n">%</th></tr></thead>
+      <tbody>${filasA.map(x=>`<tr><td style="white-space:nowrap"><span class="tt-pt" style="background:${colorProyecto(x.k)}"></span>${escH(ttNombre(x.k))}</td>${x.m.map((h,i)=>`<td class="n${colAct(i)}${h?'':' tt-vacio'}">${h?ttCorto(h):'·'}</td>`).join('')}<td class="n"><b>${ttCorto(x.h)}</b></td><td class="n">${totA?Math.round(x.h/totA*100):0} %</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Total horas</td>${mesesH.map((h,i)=>`<td class="n${colAct(i)}">${h?ttCorto(h):'·'}</td>`).join('')}<td class="n">${ttCorto(totA)}</td><td class="n">100 %</td></tr>
+      <tr><td>Valor</td>${mesesV.map((v,i)=>`<td class="n${colAct(i)}">${v?Math.round(v)+'€':'·'}</td>`).join('')}<td class="n">${Math.round(totAV)}€</td><td></td></tr></tfoot></table></div>`
+    :`<div class="tt-sub" style="font-size:12px">Sin registros en ${y}.</div>`}
+  </div>`;
+}
+const _renderRegistrosTT=renderRegistros;
+renderRegistros=function(){ _renderRegistrosTT(); try{ renderTablasTiempo(); }catch(e){ console.error(e); } };
+try{ renderTablasTiempo(); }catch(e){}
 </script>
 </body>
 </html>
