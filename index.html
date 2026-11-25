@@ -343,7 +343,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
         <option value="elocrea">Azul — Elocrea</option>
         <option value="liga">Dorado — Liga</option>
         <option value="consultoria">Gris — Consultoría</option>
-        <option value="incubacion">Púrpura — IA/Tech</option>
+        <option value="incubacion">Área 04 · Digitalización e IA</option>
       </select></div>
     <input type="hidden" id="pEditId" value="">
     <button class="btn-primary" onclick="guardarProyecto()">Guardar Proyecto</button>
@@ -962,7 +962,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 // =====================
 const TARIFAS = {verde:40,azul:90,rojo:150,cero:0};
 function fmtHM(h){const t=Math.round((Number(h)||0)*60);const hh=Math.floor(t/60),mm=t%60;return hh&&mm?`${hh} h ${mm} min`:hh?`${hh} h`:`${mm} min`;}
-const PNOMBRES = {elocrea:'Elocrea',liga:'Liga DJ',cdv:'CDV by JCerezo',consultoria:'Consultoría',personal:'Personal',jbernad:'José Bernad',cayfi:'CAYFI',yiux:'YIUX',zeren:'Zeren Clinic',elogistic:'Elogistic',deca:'DeCA',heru:'Heru',kinelia:'Kinelia'};
+const PNOMBRES = {incubacion:'Área 04 · Digitalización e IA',elocrea:'Elocrea',liga:'Liga DJ',cdv:'CDV by JCerezo',consultoria:'Consultoría',personal:'Personal',jbernad:'José Bernad',cayfi:'CAYFI',yiux:'YIUX',zeren:'Zeren Clinic',elogistic:'Elogistic',deca:'DeCA',heru:'Heru',kinelia:'Kinelia'};
 const SNOMBRES = {'0':'Sesión 0 — Siroco','1':'Sesión 1 — Epoka','2':'Sesión 2 — Hangar48','3':'Sesión 3 — Varvi','4':'Sesión 4 — 27 Jun','general':'General'};
 
 const T0 = [
@@ -3533,7 +3533,7 @@ const PROY_AG=[
   {k:'liga',nombre:'Liga DJ',color:'#F2D21B'},
   {k:'eventos',nombre:'Eventos',color:'#9B59B6'},
   {k:'cdv',nombre:'CDV by JCerezo',color:'#C9A84C'},
-  {k:'incubacion',nombre:'IA / Tech',color:'#40B0A6'},
+  {k:'incubacion',nombre:'Área 04 · Digitalización e IA',color:'#40B0A6'},
   {k:'personal',nombre:'Personal',color:'#00CED1'}
 ];
 // Claves antiguas (colores sueltos y proyectos con otro nombre) → proyecto actual, para que las citas ya guardadas se vean bien
@@ -3571,7 +3571,7 @@ Object.keys(ALIAS_AG).forEach(a=>{ PNOMBRES[a]=PNOMBRES[ALIAS_AG[a]]; }); Object
   const opts=(lista)=>lista.map(p=>`<option value="${p.k}">${p.nombre}</option>`).join('');
   const poner=(id,html)=>{const s=document.getElementById(id); if(!s) return; const v=s.value; s.innerHTML=html; if([...s.options].some(o=>o.value===v)) s.value=v;};
   poner('neTipo',opts(PROY_AG.filter(p=>p.k!=='incubacion')));
-  poner('pColor',PROY_AG.filter(p=>p.k!=='personal'&&p.k!=='medico').map(p=>`<option value="${p.k}">${p.k==='incubacion'?'IA / Tech':p.nombre}</option>`).join(''));
+  poner('pColor',PROY_AG.filter(p=>p.k!=='personal'&&p.k!=='medico').map(p=>`<option value="${p.k}">${p.nombre}</option>`).join(''));
   poner('incProyecto',opts(sinTipos));
   poner('notaProyecto',opts(sinTipos)+'<option value="personal">Personal</option>');
   poner('ntProyecto',opts(sinTipos));
