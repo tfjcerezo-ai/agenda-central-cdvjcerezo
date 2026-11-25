@@ -352,8 +352,8 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 
   <div id="listaProyectos"></div>
 
-  <div class="divider"></div>
-  <div class="section-title">En Incubación</div>
+  <div id="bloqueIncubacionTitulo"><div class="divider"></div>
+  <div class="section-title">En Incubación</div></div>
 
   <!-- FORMULARIO NUEVA IDEA -->
   <div style="background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:16px;margin-bottom:14px;" id="formIncubacion" style="display:none">
@@ -582,7 +582,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
   <div class="cal-vistas">
     <button class="vista-btn active" onclick="navFin('personal',this)">👤 Personal</button>
     <button class="vista-btn" onclick="navFin('familiar',this)">🏠 Familiar</button>
-    <button class="vista-btn" onclick="navFin('cdv',this)">🏢 CDV by JCerezo</button>
+    <button class="vista-btn" id="btnFinCDV" onclick="navFin('cdv',this)">🏢 CDV by JCerezo</button>
   </div>
 
   <!-- PERSONAL -->
@@ -867,8 +867,8 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
   <!-- HERRAMIENTAS DIRECTOR (solo Director) -->
   <div id="panelHerramientasDirector" style="display:none;margin-top:16px;">
     <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">🛠️ Herramientas</div>
-    <button onclick="resetearVentas()" style="width:100%;padding:13px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:10px;color:var(--dorado);font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;margin-bottom:10px;">🔄 CARGAR VENTAS INICIALES (19 CLIENTES)</button>
-    <div style="font-size:10px;color:var(--gris);text-align:center;margin-top:-6px;margin-bottom:10px;">Solo si no hay ventas cargadas</div>
+    <button style="display:none" onclick="resetearVentas()" style="width:100%;padding:13px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:10px;color:var(--dorado);font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;margin-bottom:10px;">🔄 CARGAR VENTAS INICIALES (19 CLIENTES)</button>
+    <div style="display:none;font-size:10px;color:var(--gris);text-align:center;margin-top:-6px;margin-bottom:10px;">Solo si no hay ventas cargadas</div>
   </div>
 
   <!-- SINCRONIZACIÓN Y NUBE -->
@@ -1456,7 +1456,8 @@ async function doLogin() {
     return mostrarError(m === 'Invalid login credentials' ? 'Correo o contraseña incorrectos (Supabase: ' + m + ')' : m === 'Email not confirmed' ? 'Confirma tu correo: revisa tu bandeja de entrada' : 'No se pudo entrar: ' + m);
   }
   const r = await activarSesion();
-  if(r === 'noacceso') return mostrarError('Has entrado, pero esta cuenta no figura como director en el CRM');
+  if(r === 'recargando') return;
+  if(r === 'noacceso') return mostrarError('Has entrado, pero tu cuenta todavía no está activada en el CRM. Pide al director que la active en Equipo.');
   if(r !== 'ok') return mostrarError('Has entrado, pero no se pudo comprobar tu perfil: ' + (window.__ultimoFalloAcceso || r));
   err.style.display = 'none'; btn.textContent = 'Entrar';
 }
@@ -2262,28 +2263,8 @@ function renderIncubacion() {
 // =====================
 let finPersonal = JSON.parse(localStorage.getItem('cdv_fp')) || [];
 let finFamiliar = JSON.parse(localStorage.getItem('cdv_ff')) || [];
-const VENTAS0 = [
-  // Datos verificados con el Excel de comisiones Elocrea (29/09/2026)
-  {"id": 1001, "cliente": "Grupo Logístico Albacete", "proyecto": "Elogistic", "tipo_cobro": "unico", "importe": 9300, "closer": "Juan Antonio", "setter": "Juan Antonio", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 465, "com_closer": 744, "com_setter": 186, "com_jr": 0},
-  {"id": 1002, "cliente": "Cirac Logística", "proyecto": "Elogistic", "tipo_cobro": "unico", "importe": 19500, "closer": "Juan Antonio", "setter": "Koenraad", "closer2": "Koenraad", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 975, "com_closer": 780, "com_closer2": 780, "com_setter": 390, "com_jr": 0, "notas": "Closer compartido: 4% Juanan + 4% Koenraad"},
-  {"id": 1003, "cliente": "Transportes Aurelio Abellán", "proyecto": "Elogistic", "tipo_cobro": "unico", "importe": 14500, "closer": "Juan Antonio", "setter": "Juan Antonio", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 725, "com_closer": 1160, "com_setter": 290, "com_jr": 0},
-  {"id": 1004, "cliente": "Grupo López Hortelano", "proyecto": "Elogistic", "tipo_cobro": "unico", "importe": 8648, "closer": "Juan Antonio", "setter": "Paula", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 432.4, "com_closer": 691.84, "com_setter": 172.96, "com_jr": 0, "liquidado_cdv": 605.36, "notas": "Setter Paula: lo cobra CDV by JCerezo y se lo paga a ella"},
-  {"id": 1005, "cliente": "Transportes Santiago Jiménez e Hijos S.L.", "proyecto": "Elogistic", "tipo_cobro": "unico", "importe": 17800, "closer": "Juan Antonio", "setter": "Juan Antonio", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 0, "com_closer": 1424, "com_setter": 356, "com_jr": 0, "notas": "Referido: sin comisión para CDV by JCerezo. Confirmar comisiones de Juanan"},
-  {"id": 1006, "cliente": "Hormigones Zenit S.L.", "proyecto": "DeCA", "tipo_cobro": "unico", "importe": 1950, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 195, "com_closer": 292.5, "com_setter": 0, "com_jr": 0},
-  {"id": 1007, "cliente": "Transmaba S.L.", "proyecto": "DeCA", "tipo_cobro": "unico", "importe": 1950, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 195, "com_closer": 292.5, "com_setter": 0, "com_jr": 0},
-  {"id": 1008, "cliente": "Transportes Cavero Caballero S.L.", "proyecto": "DeCA", "tipo_cobro": "unico", "importe": 1950, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 195, "com_closer": 292.5, "com_setter": 0, "com_jr": 0},
-  {"id": 1009, "cliente": "Enrique Riaño", "proyecto": "DeCA", "tipo_cobro": "unico", "importe": 1852.5, "closer": "Koenraad", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 185.25, "com_closer": 277.88, "com_setter": 0, "com_jr": 0, "notas": "Cerrado 29/09/2026 (1.950 € con 5% dto.)"},
-  {"id": 1010, "cliente": "Garrido Mora 2007 S.L.", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
-  {"id": 1011, "cliente": "Hermanos Serrano Muñoz", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
-  {"id": 1012, "cliente": "Trading Sureste", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
-  {"id": 1013, "cliente": "Transporte Varea", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
-  {"id": 1014, "cliente": "Manuel Garrido Fernández (hermano)", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 45, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 4.5, "com_closer": 6.75, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
-  {"id": 1015, "cliente": "De Pepillo a Miguel", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
-  {"id": 1016, "cliente": "Hijos de Isaías Abad S.L.", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
-  {"id": 1017, "cliente": "P.valiente2012s.l", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Juan Antonio", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
-  {"id": 1018, "cliente": "Hermanos Rodríguez Parrilla", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Juan Antonio", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
-  {"id": 1019, "cliente": "La Salud Productos", "proyecto": "DeCA", "tipo_cobro": "mensual", "importe": 95, "closer": "Javier Cerezo", "setter": "Javier Cerezo", "fecha_cobro": "2026-09-01", "estado": "pendiente", "com_cdv": 9.5, "com_closer": 14.25, "com_setter": 0, "com_jr": 0, "notas": "Cuota 09/2026"},
-];
+// Las ventas están en la base de datos (tabla ventas) y en la copia de seguridad: no se guardan en el código
+const VENTAS0 = [];
 const _ventasGuardadas = JSON.parse(localStorage.getItem('cdv_v'));
 let ventas = (_ventasGuardadas && _ventasGuardadas.length > 0) ? _ventasGuardadas : VENTAS0;
 
@@ -3269,10 +3250,7 @@ function resetearVentas() {
     '¿Cargar los 19 clientes iniciales?',
     'Se borrarán todas las ventas actuales y se cargarán los clientes base de CDV by JCerezo.',
     function() {
-      localStorage.removeItem('cdv_v');
-      ventas = VENTAS0.map(v => Object.assign({}, v));
-      localStorage.setItem('cdv_v', JSON.stringify(ventas));
-      mostrarMensaje('✅ 19 clientes cargados correctamente');
+      mostrarMensaje('Las ventas se cargan siempre desde la base de datos');
     }
   );
 }
@@ -3925,6 +3903,201 @@ function renderTablasTiempo(){
 const _renderRegistrosTT=renderRegistros;
 renderRegistros=function(){ _renderRegistrosTT(); try{ renderTablasTiempo(); }catch(e){ console.error(e); } };
 try{ renderTablasTiempo(); }catch(e){}
+</script>
+<script>
+// =====================
+// AGENDA MULTIUSUARIO (25/11/2026)
+// Cada usuario activo del CRM tiene su propia agenda, vacía al empezar. La base de datos impide ver la de otro.
+// El director ve la suya como siempre y puede consultar la de los demás en solo lectura (sección Equipo).
+// =====================
+let AG_UID = null, AG_DIR = true, AG_PROY_CRM = [], AG_CRM_IDS = new Set();
+const AG_PROPIAS = new Set(['tareas','eventos','notas','registros','proyectos','incubacion','fin_personal','fin_familiar']);
+const AG_SOLO_DIR = new Set(['mov_liga','equipo','proyectos','incubacion']);
+const AG_SUBE_NO_DIR = new Set(['tareas','eventos','notas','registros','fin_personal','fin_familiar']);
+const AG_CLAVES_LS = ['cdv_t','cdv_e','cdv_n','cdv_r','cdv_l','cdv_proy','cdv_proy_orden','cdv_inc','cdv_fp','cdv_ff','cdv_v','cdv_eq','cdv_pend_nube','cdv_fusion_v1'];
+const CRM_A_AG = {'jose-bernad':'jbernad','liga25dj':'liga','eventos-varios':'eventos'};
+const AG_A_CRM = {jbernad:'jose-bernad',liga:'liga25dj',eventos:'eventos-varios'};
+DEFAULT_PERMISOS.comercial = ['hoy','tareas','proyectos','calendario','notas','tiempo','finanzas','comisiones','ajustes'];
+
+// Lectura: cada uno solo carga lo suyo (el director también, para no mezclar agendas)
+const _agSbGet = sbGet;
+sbGet = async function(tabla) {
+  if(!AG_DIR && AG_SOLO_DIR.has(tabla)) return null;
+  if(!AG_UID || !AG_PROPIAS.has(tabla)) return _agSbGet(tabla);
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/${tabla}?select=*&usuario_id=eq.${AG_UID}&order=id.desc`, {headers: await sbHeaders({'Content-Type':'application/json'})});
+    if(!r.ok) { console.warn(`[Supabase] sbGet(${tabla}) error ${r.status}`); return null; }
+    return await r.json();
+  } catch(e) { console.warn(`[Supabase] sbGet(${tabla})`, e.message); return null; }
+};
+// Escritura: quien no es director solo guarda sus tablas personales
+const _agSbUpsert = sbUpsert;
+sbUpsert = async function(tabla, data) {
+  if(!AG_DIR && !AG_SUBE_NO_DIR.has(tabla)) return true;
+  return _agSbUpsert(tabla, data);
+};
+const _agAsegurar = asegurarProyectosNuevos;
+asegurarProyectosNuevos = function() { if(AG_DIR) _agAsegurar(); };
+const _agMisTareas = misTareas;
+misTareas = function() { return AG_DIR ? _agMisTareas() : tareas; };
+const _agMisEventosPropios = misEventosPropios;
+misEventosPropios = function() { return AG_DIR ? _agMisEventosPropios() : eventos; };
+
+activarSesion = async function() {
+  if(!sbAuth) return 'sinlib';
+  const {data:{session}} = await sbAuth.auth.getSession();
+  if(!session) return 'nosesion';
+  const uid = session.user.id;
+  let perfil = null, fallo = '';
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/crm_perfiles?select=nombre,rol,activo&id=eq.${uid}`, {headers: await sbHeaders()});
+    if(r.ok) perfil = (await r.json())[0] || null;
+    else fallo = 'perfil HTTP ' + r.status + ' ' + (await r.text().catch(()=>'')).slice(0,120);
+  } catch(e) { fallo = 'perfil sin conexión: ' + e.message; }
+  if(!perfil && fallo) {
+    // Sin conexión: seguir con la última sesión válida de este dispositivo
+    const cache = JSON.parse(localStorage.getItem('cdv_session') || 'null');
+    if(cache && cache.uid === uid) perfil = {nombre: cache.nombre, rol: cache.rolCRM || cache.rol, activo: true};
+    else { console.warn('[Acceso]', fallo); window.__ultimoFalloAcceso = fallo; return 'error'; }
+  }
+  if(!perfil || !perfil.activo) return 'noacceso';
+  const esDir = perfil.rol === 'director';
+  // Si este dispositivo tiene guardada la agenda de otra persona, se quita (está en la nube) y se recarga
+  const dueno = localStorage.getItem('cdv_datos_uid');
+  if(dueno !== uid && (dueno || !esDir)) {
+    AG_CLAVES_LS.forEach(k => localStorage.removeItem(k));
+    localStorage.setItem('cdv_datos_uid', uid);
+    if(!sessionStorage.getItem('cdv_recarga')) { sessionStorage.setItem('cdv_recarga', '1'); location.reload(); return 'recargando'; }
+  }
+  sessionStorage.removeItem('cdv_recarga');
+  localStorage.setItem('cdv_datos_uid', uid);
+  AG_UID = uid; AG_DIR = esDir;
+  let user;
+  if(esDir) user = {...USUARIOS_BASE[0], nombre: perfil.nombre || USUARIOS_BASE[0].nombre};
+  else {
+    const nombre = perfil.nombre || session.user.email;
+    user = {usuario: 'u' + uid.slice(0, 8), nombre, nombreEquipo: nombre.split(' ')[0], rol: 'comercial', uid};
+    // Agenda nueva: sin datos de ejemplo
+    if(!localStorage.getItem('cdv_t')) tareas = [];
+    if(!localStorage.getItem('cdv_e')) eventos = [];
+    if(!localStorage.getItem('cdv_v')) ventas = [];
+    proyectos = []; incubacion = []; equipo = []; movLiga = [];
+  }
+  usuarioActual = user;
+  localStorage.setItem('cdv_session', JSON.stringify({usuario:user.usuario, nombre:user.nombre, rol:user.rol, rolCRM:perfil.rol, uid}));
+  document.getElementById('userNombre').textContent = user.nombre;
+  document.getElementById('userRol').textContent = esDir ? '👑 Director' : (perfil.rol === 'setter' ? '🤝 Setter' : '🤝 Closer');
+  mostrarApp();
+  if(esDir) agPrepararDirector(); else await agPrepararNoDirector();
+  iniciarApp();
+  cargarReunionesCRM();
+  return 'ok';
+};
+
+// ---- Quien no es director: proyectos del CRM en los que está dado de alta y pantallas propias ----
+async function agPrepararNoDirector() {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/crm_miembros?select=proyecto_id,socio,crm_proyectos(nombre,cuenta,estado)&perfil_id=eq.${AG_UID}`, {headers: await sbHeaders()});
+    if(r.ok) AG_PROY_CRM = await r.json();
+  } catch(e) { console.warn('[Agenda] proyectos del CRM', e.message); }
+  proyectos = AG_PROY_CRM.map((m, i) => { const p = m.crm_proyectos || {};
+    return {id: -(i + 1), crm: true, nombre: (p.nombre || m.proyecto_id).toUpperCase(),
+      desc: [p.cuenta, p.estado, m.socio ? 'Socio del proyecto' : ''].filter(Boolean).join(' · '), estado: 'activo', color: '', progreso: 0}; });
+  // Desplegables de proyecto: solo sus proyectos y «Personal»
+  const permitidas = new Set(['personal', ...AG_PROY_CRM.map(m => CRM_A_AG[m.proyecto_id] || m.proyecto_id)]);
+  const lista = PROY_AG.filter(p => permitidas.has(p.k));
+  ['notaProyecto','cronoProyecto','manProyecto','ntProyecto','neTipo'].forEach(id => {
+    const el = document.getElementById(id); if(!el || !lista.length) return;
+    el.innerHTML = lista.map(p => `<option value="${p.k}">${p.nombre}${p.k === 'personal' && id !== 'ntProyecto' && id !== 'neTipo' && id !== 'notaProyecto' ? ' · 0€/h' : ''}</option>`).join('');
+    el.value = lista[0].k;
+  });
+  // Lo que es de CDV by JCerezo no aparece
+  ['btnNuevoProyecto','formProyecto','bloqueIncubacionTitulo','formIncubacion','btnNuevaIdea','listaIncubacion','btnFinCDV','fin-cdv'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.style.display = 'none';
+  });
+}
+const _agRenderProyectos = renderProyectos;
+renderProyectos = function() {
+  _agRenderProyectos();
+  if(AG_DIR) return;
+  const lista = document.getElementById('listaProyectos');
+  if(!proyectos.length && lista) lista.innerHTML = '<div class="empty-state"><div class="empty-text">Todavía no tienes proyectos asignados en el CRM</div></div>';
+  document.querySelectorAll('#listaProyectos .card-header button, #listaProyectos .progreso-bar').forEach(b => b.remove());
+  document.querySelectorAll('#listaProyectos .proyecto-card > div:last-child').forEach(d => { if(/Progreso/.test(d.textContent)) d.remove(); });
+};
+
+// ---- Director: convocar a otros en una cita (sale en su agenda y en el CRM) ----
+let AG_PERFILES = [];
+async function agPrepararDirector() {
+  try {
+    const [rp, rc] = await Promise.all([
+      fetch(`${SB_URL}/rest/v1/crm_perfiles?select=id,nombre,rol,activo&activo=eq.true&order=nombre`, {headers: await sbHeaders()}),
+      fetch(`${SB_URL}/rest/v1/crm_proyectos?select=id`, {headers: await sbHeaders()})
+    ]);
+    if(rp.ok) AG_PERFILES = (await rp.json()).filter(p => p.id !== AG_UID);
+    if(rc.ok) AG_CRM_IDS = new Set((await rc.json()).map(p => p.id));
+  } catch(e) { console.warn('[Agenda] equipo', e.message); }
+  const grupo = document.getElementById('neVisible')?.closest('.form-group');
+  if(grupo) grupo.innerHTML = `<label class="form-label">Convocar también a (sale en su agenda y en el CRM)</label>
+    <select id="neVisible" style="display:none"><option value="todos">todos</option></select>
+    ${AG_PERFILES.length ? AG_PERFILES.map(p => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--blanco-suave);margin:4px 0;"><input type="checkbox" class="ag-convocar" value="${p.id}"> ${escH(p.nombre)} <span style="color:var(--gris);font-size:11px;">(${escH(p.rol)})</span></label>`).join('') : '<div style="font-size:12px;color:var(--gris);">No hay más personas activas en el CRM</div>'}
+    <select class="form-select" id="neClase" style="margin-top:6px;"><option value="reunion">Reunión</option><option value="visita">Visita</option><option value="llamada">Llamada</option><option value="demo">Demo</option><option value="otro">Otro</option></select>
+    <div style="font-size:10px;color:var(--gris);margin-top:4px;">Si no marcas a nadie, la cita queda solo en tu agenda.</div>`;
+  agPanelEquipo();
+}
+const _agGuardarEvento = guardarEvento;
+guardarEvento = async function() {
+  const marcados = [...document.querySelectorAll('.ag-convocar:checked')].map(x => x.value);
+  const editId = parseInt(document.getElementById('neEditId').value) || 0;
+  if(!AG_DIR || editId || !marcados.length) return _agGuardarEvento();
+  const txt = document.getElementById('neTexto').value.trim(), fecha = document.getElementById('neFecha').value, hora = document.getElementById('neHora').value;
+  if(!txt || !fecha || !hora) { alert('Rellena título, fecha y hora'); return; }
+  const inicio = new Date(`${fecha}T${hora}`), fin = new Date(inicio.getTime() + 3600e3);
+  const tp = document.getElementById('neTipo').value, pid = AG_A_CRM[tp] || tp;
+  const filas = marcados.map(uid => ({titulo: txt, responsable_id: uid, inicio: inicio.toISOString(), fin: fin.toISOString(),
+    tipo: document.getElementById('neClase')?.value || 'reunion', notas: document.getElementById('neDesc').value || null,
+    proyecto_id: AG_CRM_IDS.has(pid) ? pid : null, estado: 'programada'}));
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/crm_reuniones`, {method: 'POST', headers: await sbHeaders({'Content-Type': 'application/json', 'Prefer': 'return=minimal'}), body: JSON.stringify(filas)});
+    if(!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()).slice(0, 150));
+  } catch(e) { alert('No se pudo crear la cita: ' + e.message); return; }
+  document.querySelectorAll('.ag-convocar').forEach(x => x.checked = false);
+  document.getElementById('neTexto').value = ''; document.getElementById('neDesc').value = '';
+  document.getElementById('modalEvento').classList.remove('open');
+  const nombres = marcados.map(id => (AG_PERFILES.find(p => p.id === id) || {}).nombre).filter(Boolean).join(', ');
+  mostrarMensaje('✅ Cita creada en la agenda de ' + nombres);
+  cargarReunionesCRM();
+};
+
+// ---- Director: ver la agenda de otra persona (solo lectura) ----
+function agPanelEquipo() {
+  const sec = document.getElementById('section-equipo'); if(!sec || document.getElementById('agPanelEquipo')) return;
+  const otros = AG_PERFILES; if(!otros.length) return;
+  const div = document.createElement('div'); div.id = 'agPanelEquipo';
+  div.style.cssText = 'background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:16px;';
+  div.innerHTML = `<div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:8px;">📅 Agenda del equipo (solo lectura)</div>
+    <select class="form-select" id="agVerUsuario" onchange="agVerAgenda(this.value)"><option value="">Elige a una persona…</option>${otros.map(p => `<option value="${p.id}">${escH(p.nombre)}</option>`).join('')}</select>
+    <div id="agVerResultado" style="margin-top:10px;"></div>`;
+  sec.insertBefore(div, sec.children[1] || null);
+}
+async function agVerAgenda(uid) {
+  const out = document.getElementById('agVerResultado'); if(!out) return;
+  if(!uid) { out.innerHTML = ''; return; }
+  out.innerHTML = '<div style="font-size:12px;color:var(--gris);">Cargando…</div>';
+  const leer = async (t, extra) => { try { const r = await fetch(`${SB_URL}/rest/v1/${t}?select=*&usuario_id=eq.${uid}${extra || ''}`, {headers: await sbHeaders()}); return r.ok ? await r.json() : []; } catch(e) { return []; } };
+  const hoy = new Date().toISOString().slice(0, 10), mes = hoy.slice(0, 7);
+  const [ts, es, ns, rs] = await Promise.all([leer('tareas', '&order=fecha.asc'), leer('eventos', `&fecha=gte.${hoy}&order=fecha.asc`), leer('notas', '&order=id.desc&limit=5'), leer('registros', `&fecha=gte.${mes}-01`)]);
+  const pend = ts.filter(t => !t.completada);
+  const horas = {}; rs.forEach(r => { const k = PNOMBRES[claveAG(r.proyecto)] || r.proyecto || '—'; horas[k] = (horas[k] || 0) + (+r.horas || 0); });
+  const tot = Object.values(horas).reduce((a, b) => a + b, 0);
+  const caja = (t, h) => `<div style="margin-top:10px;"><div class="etiq" style="font-size:11px;color:var(--dorado);margin-bottom:4px;">${t}</div>${h}</div>`;
+  const fila = t => `<div style="font-size:12px;color:var(--blanco-suave);padding:3px 0;border-bottom:1px solid var(--negro-borde);">${t}</div>`;
+  const vacio = '<div style="font-size:12px;color:var(--gris);">Nada</div>';
+  out.innerHTML = caja(`Tareas pendientes (${pend.length})`, pend.slice(0, 15).map(t => fila(`${escH(t.texto)}${t.fecha ? ' · ' + fmtFecha(t.fecha) : ''}`)).join('') || vacio)
+    + caja('Próximas citas', es.slice(0, 10).map(e => fila(`${fmtFecha(e.fecha)} ${e.hora || ''} · ${escH(e.titulo)}`)).join('') || vacio)
+    + caja(`Tiempo este mes: ${tot.toFixed(1)} h`, Object.entries(horas).sort((a, b) => b[1] - a[1]).map(([k, h]) => fila(`${escH(k)} · ${h.toFixed(1)} h`)).join('') || vacio)
+    + caja('Últimas notas', ns.map(n => fila(escH(String(n.texto || '').slice(0, 140)))).join('') || vacio);
+}
 </script>
 </body>
 </html>
