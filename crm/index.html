@@ -801,6 +801,7 @@ function enlazar(r) {
   r.querySelectorAll("[data-exportar-pipe]").forEach(b => b.onclick = () => exportarPipeline(filtrados()));
   r.querySelectorAll("[data-hoy]").forEach(b => b.onclick = () => { vistaPipe = "lista"; filtroRapido = "pendientes"; filtroEtapaLista = null; render(); });
   r.querySelectorAll("[data-fprio]").forEach(b => b.onclick = () => { filtroPrio = b.dataset.fprio; render(); });
+  r.querySelectorAll("[data-fcerezus]").forEach(b => b.onclick = () => { soloCerezus = !soloCerezus; render(); });
   r.querySelectorAll("[data-fetapa]").forEach(b => b.onclick = () => { const e = b.dataset.fetapa; filtroEtapaLista = !e || filtroEtapaLista === e ? null : e; render(); });
   r.querySelectorAll("[data-impuesto]").forEach(b => b.onclick = () => editarImpuesto(+b.dataset.impuesto));
   const ni = $("#nuevo-impuesto", r); if (ni) ni.onclick = () => editarImpuesto(null);
@@ -895,6 +896,7 @@ function filtrados() {
   return leads.filter(l => pasaFiltro(l.proyecto_id, filtroProy))
     .filter(l => filtroPersona === "todos" || (filtroPersona === "sin" ? !l.closer_id && !l.setter_id : l.closer_id === filtroPersona || l.setter_id === filtroPersona))
     .filter(l => filtroPrio === "todas" || (l.prioridad || "media") === filtroPrio)
+    .filter(l => !soloCerezus || !!cerezusDe(l))
     .filter(l => !q || [l.empresa, l.contacto, l.email, l.telefono].join(" ").toLowerCase().includes(q));
 }
 function infoReunionLead(l) {
@@ -907,7 +909,7 @@ function infoReunionLead(l) {
 function tarjeta(l) {
   return `<div class="lead" role="button" tabindex="0" data-lead="${l.id}" draggable="true" title="Pulsa para abrir · arrastra para cambiar de etapa" style="border-left:3px solid ${colorProy(l.proyecto_id)};cursor:grab">
     <span class="lead-sup"><span class="avatar">${iniciales(l.empresa)}</span><span class="lead-nom"><b>${esc(l.empresa)}</b><small>${esc(l.contacto || "Sin contacto")}</small></span><span class="prob">${PROB[l.etapa] || 0} %</span></span>
-    <span class="lead-serv"><span>${etiquetaProy(l.proyecto_id)}</span> ${pildoraPrio(l.prioridad)}${l.origen ? ` <span class="pildora p-neutro" title="Origen del lead">${esc(l.origen)}</span>` : ""}${linkedinDe(l) ? ` <span title="Tiene LinkedIn" style="font-size:11px;font-weight:700;color:#4a90d9">in</span>` : ""}</span>
+    <span class="lead-serv"><span>${etiquetaProy(l.proyecto_id)}</span> ${pildoraPrio(l.prioridad)}${l.origen ? ` <span class="pildora p-neutro" title="Origen del lead">${esc(l.origen)}</span>` : ""}${marcaCerezus(l)}${linkedinDe(l) ? ` <span title="Tiene LinkedIn" style="font-size:11px;font-weight:700;color:#4a90d9">in</span>` : ""}</span>
     ${tagsProd(l.productos)}${l.interes ? `<span style="display:block;margin-top:4px">${pildoraInteres(l.interes)}</span>` : ""}${l.etapa === GANADO && propuestasEnCurso(l).length ? `<span class="pildora p-aviso" style="display:inline-block;margin-top:4px">Propuesta en curso</span>` : ""}${otrosDelCliente(l).length ? `<span style="display:block;margin-top:4px;font-size:11px;color:var(--texto3)">+${otrosDelCliente(l).length} oportunidad${otrosDelCliente(l).length > 1 ? "es" : ""} con este cliente</span>` : ""}
     ${l.etapa === "Reunión" ? infoReunionLead(l) : ""}
     <span class="lead-inf">${valorDoble(l)}<span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${esc(l.proximo_paso || "Sin próximo paso")}${l.proximo_paso_fecha ? " · " + rel(l.proximo_paso_fecha) : ""}</span></span>
@@ -1006,7 +1008,7 @@ function vPipeline() {
   const personas = esDir() ? perfiles.filter(p => p.activo) : [];
   const conmutador = `<div class="filtros" role="group" aria-label="Vista"><button class="chip" data-vpipe="tablero" aria-pressed="${vistaPipe !== "lista"}">Tablero</button><button class="chip" data-vpipe="lista" aria-pressed="${vistaPipe === "lista"}">Lista</button></div>`;
   return `<div class="cabecera"><div><h2>Pipeline</h2><div class="sub">${Ls.filter(esActivo).length} leads abiertos${vg.length ? ` · ${vg.length} ventas cerradas` : ""} · pulsa uno para ver y actualizar</div></div><div class="filtros"><button class="btn" data-exportar-pipe title="Descarga en Excel los leads que estás viendo (con los filtros aplicados) para analizarlos">⬇ Exportar</button><button class="btn" data-hoy title="Lo que tienes que hacer hoy y lo atrasado, de todas las etapas">📞 Hoy <b>${Ls.filter(l => esActivo(l) && difDias(l.proximo_paso_fecha) !== null && difDias(l.proximo_paso_fecha) <= 0).length}</b></button>${conmutador}${esDir() ? `<button class="btn" data-importar-leads>⬆ Importar leads</button>` : ""}<button class="btn btn-oro" data-nuevo-lead>+ Nuevo lead</button></div></div>
-  <div class="barra-herr"><div class="izq">${chipsProyecto("fproy", filtroProy)}<div class="filtros" role="group" aria-label="Prioridad" style="margin-top:8px">${[["todas", "Toda prioridad"], ["alta", "Alta"], ["media", "Media"], ["baja", "Baja"]].map(([k, t]) => `<button class="chip" data-fprio="${k}" aria-pressed="${filtroPrio === k}">${k === "todas" ? t : pildoraPrio(k)}</button>`).join("")}</div></div>
+  <div class="barra-herr"><div class="izq">${chipsProyecto("fproy", filtroProy)}<div class="filtros" role="group" aria-label="Prioridad" style="margin-top:8px">${[["todas", "Toda prioridad"], ["alta", "Alta"], ["media", "Media"], ["baja", "Baja"]].map(([k, t]) => `<button class="chip" data-fprio="${k}" aria-pressed="${filtroPrio === k}">${k === "todas" ? t : pildoraPrio(k)}</button>`).join("")}<button class="chip" data-fcerezus aria-pressed="${soloCerezus}" title="Solo los cualificados por CEREZUS">✓ CEREZUS <span style="color:var(--texto3)">${leads.filter(x => cerezusDe(x)).length}</span></button></div></div>
     <div class="der">${esDir() ? `<select class="entrada" id="f-persona" aria-label="Comercial"><option value="todos">Todo el equipo</option><option value="sin" ${filtroPersona === "sin" ? "selected" : ""}>Sin asignar</option>${personas.map(p => `<option value="${p.id}" ${filtroPersona === p.id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select>` : ""}
     <input class="entrada buscar" id="buscar" type="search" placeholder="Buscar empresa o contacto" value="${esc(busqueda)}"></div></div>
   ${vistaPipe === "lista" ? vLista(Ls) : `<div class="kanban-scroll"><div class="kanban">${ETAPAS.map(e => {
@@ -2029,6 +2031,131 @@ function nuevoLead() {
 }
 
 /* ===== FICHA DEL LEAD ===== */
+/* ===== Informe CEREZUS y personas de contacto (doc 20 · opción B) — se guarda en crm_leads.extra ===== */
+const ENCAJES = ["Muy alto", "Alto", "Medio-alto", "Medio", "Bajo", "Por verificar"];
+const ESTADOS_PERS = ["pendiente", "contactado", "reunión", "descartado"];
+const cerezusDe = (l) => (l.extra && l.extra.cerezus) || null;
+const personasDe = (l) => (l.extra && Array.isArray(l.extra.personas)) ? l.extra.personas : [];
+const CLAVES_PROPIAS = ["linkedin", "cerezus", "personas"];
+const marcaCerezus = (l) => cerezusDe(l) ? ` <span class="pildora" title="Cualificado por CEREZUS" style="background:rgba(201,162,39,.15);color:var(--oro);border:1px solid rgba(201,162,39,.45)">✓ CEREZUS${cerezusDe(l).fecha ? " · " + fF(cerezusDe(l).fecha) : ""}</span>` : "";
+let soloCerezus = false;
+const DATOS_EMP = [["actividad", "Actividad"], ["ambito", "Ámbito"], ["sede", "Sede"], ["delegaciones", "Delegaciones"], ["vehiculos", "Vehículos"], ["plantilla", "Plantilla"], ["web", "Web"], ["linkedin", "LinkedIn"]];
+function valDato(d) { if (d == null || d === "") return null; return typeof d === "object" ? d : {valor: String(d), verificar: false}; }
+function bloqueCerezus(l) {
+  const c = cerezusDe(l), inf = (c && c.informe) || {}, emp = inf.empresa || {};
+  const filas = DATOS_EMP.map(([k, t]) => { const d = valDato(emp[k]); if (!d) return ""; const v = /^https?:\/\//i.test(d.valor) ? `<a href="${esc(d.valor)}" target="_blank" rel="noopener">${esc(d.valor)}</a>` : esc(d.valor); return `<dt>${t}</dt><dd>${v}${d.verificar ? ` <span class="pildora p-neutro" style="font-size:10.5px">por verificar</span>` : ""}</dd>`; }).join("");
+  const prods = inf.productos || [];
+  const colEnc = (e) => /muy alto/i.test(e) ? "p-ok" : /^alto/i.test(e) ? "p-ok" : /verificar/i.test(e) ? "p-neutro" : "p-aviso";
+  return `<details class="bloque" style="padding:12px 14px" ${c ? "" : ""}><summary class="etiq" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;list-style:none">▸ Informe CEREZUS ${c ? `<span style="text-transform:none;letter-spacing:0;color:var(--oro)">✓ cualificado ${c.fecha ? fF(c.fecha) : ""}</span>` : `<span style="text-transform:none;letter-spacing:0;color:var(--texto3)">sin informe</span>`}</summary>
+    <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">
+    ${filas ? `<dl class="datos">${filas}</dl>` : ""}
+    ${prods.length ? `<div><div class="etiq" style="margin-bottom:6px">Qué venderle</div><table class="tabla" style="width:100%;font-size:12.5px"><thead><tr><th style="text-align:left">Producto</th><th style="text-align:left">Encaje</th><th style="text-align:left">Aplicación</th></tr></thead><tbody>${prods.map(p => `<tr><td>${esc(p.producto || "")}</td><td><span class="pildora ${colEnc(p.encaje || "")}">${esc(p.encaje || "—")}</span></td><td>${esc(p.aplicacion || "")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    ${inf.estrategia ? `<div><div class="etiq" style="margin-bottom:4px">Estrategia de entrada</div><div style="font-size:13px">${esc(inf.estrategia)}</div></div>` : ""}
+    ${inf.pregunta_clave ? `<div><div class="etiq" style="margin-bottom:4px">Pregunta clave</div><div style="font-size:13px">${esc(inf.pregunta_clave)}</div></div>` : ""}
+    ${inf.siguiente_accion ? `<div><div class="etiq" style="margin-bottom:4px">Siguiente acción</div><div style="font-size:13px">${esc(inf.siguiente_accion)}</div></div>` : ""}
+    ${inf.notas ? `<div><div class="etiq" style="margin-bottom:4px">Notas</div><div style="font-size:13px;white-space:pre-wrap">${esc(inf.notas)}</div></div>` : ""}
+    <div class="filtros"><button class="btn" type="button" id="cz-pegar">📋 Pegar / editar informe</button>${c ? `<button class="btn-texto" type="button" id="cz-quitar" style="color:var(--mal)">Quitar marca CEREZUS</button>` : ""}</div>
+    </div></details>`;
+}
+function bloquePersonas(l) {
+  const ps = personasDe(l).map((p, i) => [p, i]).sort((a, b) => (+a[0].prioridad || 9) - (+b[0].prioridad || 9));
+  const colEst = {pendiente: "p-neutro", contactado: "p-aviso", "reunión": "p-ok", descartado: "p-mal"};
+  return `<details class="bloque" style="padding:12px 14px" ${ps.length ? "open" : ""}><summary class="etiq" style="cursor:pointer;list-style:none">▸ Personas de contacto <span style="text-transform:none;letter-spacing:0;color:var(--texto3)">${ps.length}</span></summary>
+    <ul class="lista" style="margin:10px 0 8px">${ps.map(([p, i]) => `<li style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><span style="flex:1"><b style="font-weight:600">${esc(p.nombre || "")}</b> <span class="pildora p-neutro" title="Prioridad">P${esc(p.prioridad || "—")}</span> <span class="pildora ${colEst[p.estado] || "p-neutro"}">${esc(p.estado || "pendiente")}</span><small style="display:block;color:var(--texto3)">${esc(p.cargo || "")}${p.ubicacion ? " · " + esc(p.ubicacion) : ""}</small>${p.notas ? `<small style="display:block;color:var(--texto2)">${esc(p.notas)}</small>` : ""}
+      <span class="filtros" style="margin-top:4px;gap:6px">${p.telefono ? enlacesTel(p.telefono) : ""}${p.email ? `<a class="chip" href="mailto:${esc(p.email)}">✉ ${esc(p.email)}</a>` : ""}${p.linkedin ? `<a class="chip" href="${esc(p.linkedin)}" target="_blank" rel="noopener" style="color:#4a90d9">in</a>` : ""}</span></span>
+      <button class="btn-texto" type="button" data-pers="${i}">Editar</button></li>`).join("") || `<li style="color:var(--texto3)">Sin personas de contacto añadidas.</li>`}</ul>
+    <div id="pers-form"></div>
+    <button class="btn" type="button" data-pers="nueva">+ Añadir persona</button></details>`;
+}
+function formPersona(p) {
+  return `<form id="f-pers" class="rejilla-campos" style="margin-bottom:10px;padding:10px;border:1px solid var(--borde,rgba(255,255,255,.12));border-radius:8px">
+    <div class="campo"><label>Nombre *</label><input id="pp-nombre" value="${esc(p.nombre || "")}" required></div>
+    <div class="campo"><label>Cargo</label><input id="pp-cargo" value="${esc(p.cargo || "")}"></div>
+    <div class="campo"><label>Ubicación</label><input id="pp-ubic" value="${esc(p.ubicacion || "")}"></div>
+    <div class="campo"><label>Prioridad</label><select id="pp-prio">${["1", "2", "3"].map(x => `<option ${String(p.prioridad || "2") === x ? "selected" : ""}>${x}</option>`).join("")}</select></div>
+    <div class="campo"><label>Estado</label><select id="pp-estado">${ESTADOS_PERS.map(x => `<option ${(p.estado || "pendiente") === x ? "selected" : ""}>${x}</option>`).join("")}</select></div>
+    <div class="campo"><label>Teléfono</label><input id="pp-tel" type="tel" value="${esc(p.telefono || "")}"></div>
+    <div class="campo"><label>Correo</label><input id="pp-email" type="email" value="${esc(p.email || "")}"></div>
+    <div class="campo"><label>LinkedIn</label><input id="pp-li" value="${esc(p.linkedin || "")}"></div>
+    <div class="campo" style="grid-column:1/-1"><label>Notas</label><textarea id="pp-notas" rows="2">${esc(p.notas || "")}</textarea></div>
+    <div class="filtros" style="grid-column:1/-1"><button class="btn btn-oro" type="submit">Guardar persona</button><button class="btn" type="button" id="pp-cancel">Cancelar</button>${p.nombre ? `<button class="btn-texto" type="button" id="pp-borrar" style="color:var(--mal)">Quitar persona</button>` : ""}</div></form>`;
+}
+async function guardarExtra(l, cambiosExtra, msg) {
+  const extra = {...(l.extra || {}), ...cambiosExtra};
+  Object.keys(extra).forEach(k => extra[k] === undefined && delete extra[k]);
+  const {data, error} = await sb.from("crm_leads").update({extra, actualizado: new Date().toISOString()}).eq("id", l.id).select().single();
+  if (error) throw error;
+  Object.assign(l, data); if (msg) aviso(msg); abrirLead(l.id); render();
+}
+function enlazarCerezus(capa, l) {
+  capa.querySelectorAll("[data-pers]").forEach(b => b.onclick = () => {
+    const i = b.dataset.pers === "nueva" ? -1 : +b.dataset.pers, p = i >= 0 ? personasDe(l)[i] : {};
+    const caja = capa.querySelector("#pers-form"); caja.innerHTML = formPersona(p); caja.scrollIntoView({block: "nearest"});
+    capa.querySelector("#pp-cancel").onclick = () => { caja.innerHTML = ""; };
+    const bb = capa.querySelector("#pp-borrar"); if (bb) bb.onclick = async () => { if (!confirm("¿Quitar a " + p.nombre + " de las personas de contacto?")) return; try { await guardarExtra(l, {personas: personasDe(l).filter((_, j) => j !== i)}, "Persona quitada"); } catch (e) { fallo(e, "No se pudo guardar"); } };
+    capa.querySelector("#f-pers").onsubmit = async (e) => {
+      e.preventDefault(); const v = (id) => capa.querySelector(id).value.trim();
+      const np = {nombre: v("#pp-nombre"), cargo: v("#pp-cargo"), ubicacion: v("#pp-ubic"), prioridad: +v("#pp-prio"), estado: v("#pp-estado"), telefono: v("#pp-tel"), email: v("#pp-email"), linkedin: v("#pp-li"), notas: v("#pp-notas")};
+      Object.keys(np).forEach(k => np[k] === "" && delete np[k]); if (!np.nombre) return aviso("Pon el nombre", true);
+      const lista = [...personasDe(l)]; if (i >= 0) lista[i] = np; else lista.push(np);
+      try { await guardarExtra(l, {personas: lista}, "Persona guardada"); } catch (err) { fallo(err, "No se pudo guardar"); }
+    };
+  });
+  const bq = capa.querySelector("#cz-quitar"); if (bq) bq.onclick = async () => { if (!confirm("¿Quitar la marca CEREZUS y el informe de esta ficha? (las personas de contacto se quedan)")) return; try { await guardarExtra(l, {cerezus: undefined}, "Marca CEREZUS quitada"); } catch (e) { fallo(e, "No se pudo guardar"); } };
+  const bp = capa.querySelector("#cz-pegar"); if (bp) bp.onclick = () => pegarInforme(l);
+}
+/* Lee el informe del Cualificador: acepta JSON ({cerezus, personas}) o el texto con tablas en Markdown */
+function leerInforme(txt) {
+  txt = String(txt || "").trim(); if (!txt) return null;
+  if (/^[{[]/.test(txt)) { const j = JSON.parse(txt); return {cerezus: j.cerezus || (j.informe ? {fecha: j.fecha, informe: j.informe} : null), personas: j.personas || null}; }
+  const tablas = [], lineas = txt.split(/\r?\n/); let t = null;
+  lineas.forEach(li => { if (/^\s*\|/.test(li)) { const celdas = li.trim().replace(/^\||\|$/g, "").split("|").map(s => s.trim()); if (celdas.every(c => /^:?-{2,}:?$/.test(c) || !c)) return; if (!t) { t = {cab: celdas.map(c => c.toLowerCase()), filas: []}; tablas.push(t); } else t.filas.push(celdas); } else t = null; });
+  const col = (tb, ...nom) => tb.cab.findIndex(h => nom.some(n => h.includes(n)));
+  let personas = null, productos = [];
+  tablas.forEach(tb => {
+    const iN = col(tb, "nombre"), iP = col(tb, "producto");
+    if (iN >= 0) { const iC = col(tb, "cargo"), iU = col(tb, "ubica", "ciudad"), iPr = col(tb, "prioridad"), iE = col(tb, "correo", "email"), iT = col(tb, "tel", "móvil", "movil"), iS = col(tb, "estado");
+      personas = tb.filas.map(f => { const p = {nombre: f[iN], cargo: iC >= 0 ? f[iC] : "", ubicacion: iU >= 0 ? f[iU] : "", prioridad: iPr >= 0 ? (+String(f[iPr]).replace(/\D/g, "") || 2) : 2, estado: iS >= 0 && ESTADOS_PERS.includes((f[iS] || "").toLowerCase()) ? f[iS].toLowerCase() : "pendiente"};
+        if (iE >= 0 && /@/.test(f[iE] || "")) p.email = f[iE]; if (iT >= 0 && /\d{6,}/.test((f[iT] || "").replace(/\s/g, ""))) p.telefono = f[iT];
+        const m = /\(([^)]+)\)/.exec(p.cargo || ""); if (m) { p.notas = m[1]; p.cargo = p.cargo.replace(m[0], "").trim(); }
+        Object.keys(p).forEach(k => p[k] === "" && delete p[k]); return p; }).filter(p => p.nombre); }
+    else if (iP >= 0) { const iEn = col(tb, "encaje"), iA = col(tb, "aplica"); productos = tb.filas.map(f => ({producto: f[iP], encaje: iEn >= 0 ? f[iEn] : "", aplicacion: iA >= 0 ? f[iA] : ""})).filter(p => p.producto); }
+  });
+  const sinTablas = lineas.filter(li => !/^\s*\|/.test(li)).join("\n");
+  const tras = (...et) => { for (const e of et) { const m = new RegExp("(?:^|\\n)\\s*[-*]?\\s*\\**\\s*" + e + "\\s*:?\\**\\s*:?\\s*([^\\n]+)", "i").exec(sinTablas); if (m) return m[1].replace(/\*\*/g, "").trim(); } return ""; };
+  const dato = (...et) => { const v = tras(...et); return v ? {valor: v.replace(/[«»"]?\s*\(?por verificar\)?\s*[«»"]?/i, "").trim(), verificar: /verificar/i.test(v)} : undefined; };
+  const empresa = {actividad: dato("actividad", "sector"), ambito: dato("ámbito", "ambito"), sede: dato("sede"), delegaciones: dato("delegaciones"), vehiculos: dato("vehículos", "vehiculos", "flota"), plantilla: dato("plantilla", "empleados"), web: dato("web"), linkedin: dato("linkedin")};
+  Object.keys(empresa).forEach(k => empresa[k] === undefined && delete empresa[k]);
+  const informe = {empresa, productos, estrategia: tras("estrategia de entrada", "estrategia"), pregunta_clave: tras("pregunta clave"), siguiente_accion: tras("siguiente acción posible", "siguiente acción", "siguiente accion")};
+  Object.keys(informe).forEach(k => (informe[k] === "" || (Array.isArray(informe[k]) && !informe[k].length)) && delete informe[k]);
+  return {cerezus: {fecha: fechaISO(new Date()), informe}, personas};
+}
+function pegarInforme(l) {
+  const c = cerezusDe(l);
+  const caja = document.createElement("div"); caja.className = "capa-modal";
+  caja.innerHTML = `<div class="velo" data-cz-cerrar style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:90"></div>
+  <div role="dialog" aria-label="Informe CEREZUS" style="position:fixed;z-index:91;left:50%;top:50%;transform:translate(-50%,-50%);width:min(720px,94vw);max-height:90vh;overflow:auto;background:var(--fondo2,#151a22);border:1px solid rgba(201,162,39,.4);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px">
+    <h3 style="margin:0">Informe CEREZUS · ${esc(l.empresa)}</h3>
+    <p style="font-size:12.5px;color:var(--texto3);margin:0">Pega aquí el informe del Cualificador CEREZUS tal cual (con sus tablas) o el bloque que te prepare Claude. Se reparte solo en «Informe CEREZUS» y «Personas de contacto». No se inventa nada: lo que no venga en el informe se queda vacío.</p>
+    <textarea class="entrada" id="cz-txt" rows="14" style="font-family:monospace;font-size:12px">${c ? esc(JSON.stringify({cerezus: c, personas: personasDe(l)}, null, 2)) : ""}</textarea>
+    <div class="rejilla-campos"><div class="campo"><label for="cz-fecha">Fecha de cualificación</label><input id="cz-fecha" type="date" value="${(c && c.fecha) || fechaISO(new Date())}"></div>
+    <div class="campo"><label for="cz-pers">Personas de contacto</label><select id="cz-pers"><option value="sumar">Añadir las nuevas a las que ya hay</option><option value="sustituir">Sustituir las que hay</option></select></div></div>
+    <div id="cz-vista" style="font-size:12.5px;color:var(--texto2)"></div>
+    <div class="filtros"><button class="btn" type="button" id="cz-prev">Revisar</button><button class="btn btn-oro" type="button" id="cz-ok">Guardar en la ficha</button><button class="btn" type="button" data-cz-cerrar>Cancelar</button></div></div>`;
+  document.body.appendChild(caja);
+  const cerrar = () => caja.remove(); caja.querySelectorAll("[data-cz-cerrar]").forEach(b => b.onclick = cerrar);
+  const leer = () => { try { return leerInforme(caja.querySelector("#cz-txt").value); } catch (e) { aviso("No se entiende el texto pegado: " + e.message, true); return null; } };
+  caja.querySelector("#cz-prev").onclick = () => { const r = leer(); if (!r) return; const inf = (r.cerezus && r.cerezus.informe) || {};
+    caja.querySelector("#cz-vista").innerHTML = `Se cargará: ${Object.keys(inf.empresa || {}).length} datos de empresa · ${(inf.productos || []).length} productos · ${(r.personas || []).length} personas${inf.estrategia ? " · estrategia" : ""}${inf.pregunta_clave ? " · pregunta clave" : ""}${inf.siguiente_accion ? " · siguiente acción" : ""}.`; };
+  caja.querySelector("#cz-ok").onclick = async () => {
+    const r = leer(); if (!r) return; if (!r.cerezus && !r.personas) return aviso("No he encontrado nada que cargar", true);
+    const cz = {...(r.cerezus || c || {informe: {}}), fecha: caja.querySelector("#cz-fecha").value || fechaISO(new Date())};
+    let pers = personasDe(l);
+    if (r.personas) { if (caja.querySelector("#cz-pers").value === "sustituir") pers = r.personas; else { const ya = new Set(pers.map(p => (p.nombre || "").toLowerCase())); pers = pers.concat(r.personas.filter(p => !ya.has((p.nombre || "").toLowerCase()))); } }
+    try { cerrar(); await guardarExtra(l, {cerezus: cz, personas: pers}, "Informe CEREZUS guardado"); } catch (e) { fallo(e, "No se pudo guardar el informe"); }
+  };
+}
+
 async function abrirLead(id) { ultActCargado = 0;
   const l = leads.find(x => x.id === id); if (!l) return;
   const otros = otrosDelCliente(l), idsCli = [id, ...otros.map(x => x.id)];
@@ -2044,7 +2171,7 @@ async function abrirLead(id) { ultActCargado = 0;
   const capa = $("#capa");
   capa.innerHTML = `<div class="velo" data-cerrar></div>
   <aside class="cajon" role="dialog" aria-label="Lead ${esc(l.empresa)}">
-    <div class="cajon-sup"><div class="filtros"><span class="area dir">${etiquetaProy(l.proyecto_id)}</span><span class="prio ${l.prioridad}">Prioridad ${l.prioridad}</span>${linkedinDe(l) ? `<a class="pildora" href="${esc(linkedinDe(l))}" target="_blank" rel="noopener" style="color:#4a90d9;border:1px solid rgba(74,144,217,.5);text-decoration:none">in LinkedIn</a>` : ""}${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? `<span class="pildora p-mal">${esc(l.etapa)}</span>` : ""}</div><button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
+    <div class="cajon-sup"><div class="filtros"><span class="area dir">${etiquetaProy(l.proyecto_id)}</span><span class="prio ${l.prioridad}">Prioridad ${l.prioridad}</span>${marcaCerezus(l)}${linkedinDe(l) ? `<a class="pildora" href="${esc(linkedinDe(l))}" target="_blank" rel="noopener" style="color:#4a90d9;border:1px solid rgba(74,144,217,.5);text-decoration:none">in LinkedIn</a>` : ""}${l.etapa === PERDIDO || l.etapa === NO_INTERESA ? `<span class="pildora p-mal">${esc(l.etapa)}</span>` : ""}</div><button class="cerrar" data-cerrar aria-label="Cerrar">×</button></div>
     <div class="cajon-id"><span class="avatar g">${iniciales(l.empresa)}</span><div><h2>${esc(l.empresa)}</h2><p>${esc(l.contacto || "Sin contacto")}${l.cargo ? " · " + esc(l.cargo) : ""}</p>${l.tipo_cliente ? `<p style="margin-top:4px"><span class="pildora p-neutro">${esc(l.tipo_cliente)}</span></p>` : ""}${l.movil ? `<p style="margin-top:6px">📱 ${enlacesTel(l.movil, l.id)}</p>` : ""}${l.telefono ? `<p style="margin-top:6px">☎ ${l.movil ? `<a href="tel:${esc(l.telefono)}" style="color:var(--oro-claro)">${esc(l.telefono)}</a>` : enlacesTel(l.telefono, l.id)}</p>` : ""}</div></div>
     <div class="prob-bloque">${totalComprado(l) ? `<div><b>${enNegociacion(l) ? eur(enNegociacion(l)) : "—"}</b><span>en negociación</span><small style="display:block;color:var(--texto2);margin-top:4px">Comprado: <b style="font-weight:600">${eur(totalComprado(l))}</b></small></div>` : `<div><b>${+l.valor ? eur(l.valor) : "—"}</b><span>valor</span></div>`}<div><b>${PROB[l.etapa] || 0} %</b><span>probabilidad</span></div><div><b>${esc(l.closer_id ? nomPersona(l.closer_id) : "—")}</b><span>closer</span></div><div class="barra"><span style="width:${PROB[l.etapa] || 0}%"></span></div></div>
     <div class="paso-caja"><div class="paso-actual"><span><span class="etiq">Próximo paso</span><br><b style="font-weight:500">${esc(l.proximo_paso || "Sin programar")}</b></span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><span class="paso ${estadoPaso(l.proximo_paso_fecha)}">${l.proximo_paso_fecha ? rel(l.proximo_paso_fecha) + " · " + fF(l.proximo_paso_fecha) : ""}</span>${l.proximo_paso ? `<button type="button" class="btn" id="paso-hecho" title="Marcar este paso como hecho y apuntar cómo fue">✓ Hecho</button>` : ""}</span></div>
@@ -2055,6 +2182,8 @@ async function abrirLead(id) { ultActCargado = 0;
       </form>
       <form class="paso-form" id="f-paso"><input class="entrada" id="paso-accion" aria-label="Acción" value="${esc(l.proximo_paso || "Llamar")}"><input class="entrada" type="date" id="paso-fecha" aria-label="Fecha" value="${l.proximo_paso_fecha || ""}"><button class="btn" type="submit">Programar</button></form></div>
     ${bloqueCliente}
+    ${bloqueCerezus(l)}
+    ${bloquePersonas(l)}
     <button class="btn" id="reunion-lead" style="align-self:flex-start">📅 Programar reunión</button>
     ${catalogoDe(l.proyecto_id).length && tieneFicha(l.proyecto_id) ? "" : bloquePresupuestos(l)}
     ${tieneFicha(l.proyecto_id) ? bloqueCompras(l) : ""}
@@ -2085,7 +2214,7 @@ async function abrirLead(id) { ultActCargado = 0;
       ${selectorProductos("l", l.proyecto_id, l.productos)}
     </div>
     <button class="btn" id="guardar-ficha">Guardar cambios</button>
-    ${l.extra && Object.keys(l.extra).filter(k => k !== "linkedin").length ? `<div><div class="etiq" style="margin-bottom:8px">Otros datos (importados del Excel)</div><dl class="datos">${Object.entries(l.extra).filter(([k]) => k !== "linkedin").map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>` : ""}
+    ${l.extra && Object.keys(l.extra).filter(k => !CLAVES_PROPIAS.includes(k)).length ? `<div><div class="etiq" style="margin-bottom:8px">Otros datos (importados del Excel)</div><dl class="datos">${Object.entries(l.extra).filter(([k]) => !CLAVES_PROPIAS.includes(k)).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>` : ""}
     <dl class="datos"><dt>Origen</dt><dd>${esc(l.origen || "—")}</dd><dt>Creado</dt><dd>${fHora(l.creado)}</dd><dt>Actualizado</dt><dd>${fHora(l.actualizado)}</dd>${l.motivo_perdida ? `<dt>Motivo</dt><dd>${esc(l.motivo_perdida)}</dd>` : ""}</dl>
     <div><div class="etiq" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px">Historial${otros.length ? `<label style="font-size:12px;text-transform:none;letter-spacing:0;display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="hist-todo" style="width:auto;margin:0"> Ver todo el historial del cliente</label>` : ""}</div>
       <ul class="historial" id="hist-lead">${act.length ? act.map(h => filaHist(h, false)).join("") : "<li>Sin actividad todavía</li>"}</ul>
@@ -2098,6 +2227,7 @@ async function abrirLead(id) { ultActCargado = 0;
   { const no = capa.querySelector("#nueva-oport"); if (no) no.onclick = () => nuevaOportunidad(l); }
   $("#reunion-lead").onclick = () => editarReunion(null, {lead_id: l.id});
   enlazarEntregasFicha();
+  enlazarCerezus(capa, l);
   const nc = $("#nueva-compra"); if (nc) nc.onclick = () => editarCompra(l, null);
   const np = $("#nuevo-presupuesto"); if (np) np.onclick = () => editarPresupuesto(l, null);
   capa.querySelectorAll("[data-presupuesto]").forEach(b => b.onclick = () => editarPresupuesto(l, +b.dataset.presupuesto));
