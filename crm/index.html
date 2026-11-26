@@ -2108,6 +2108,9 @@ function enlazarCerezus(capa, l) {
 function leerInforme(txt) {
   txt = String(txt || "").trim(); if (!txt) return null;
   if (/^[{[]/.test(txt)) { const j = JSON.parse(txt); return {cerezus: j.cerezus || (j.informe ? {fecha: j.fecha, informe: j.informe} : null), personas: j.personas || null}; }
+  { const m = /PARA EL CRM/i.exec(txt); if (m) txt = txt.slice(m.index + m[0].length); }
+  // tablas copiadas de ChatGPT (separadas por tabuladores) → mismo formato que las de Markdown
+  txt = txt.split(/\r?\n/).map(li => (li.match(/\t/g) || []).length >= 1 && li.split("\t").filter(c => c.trim()).length >= 2 ? "| " + li.split("\t").map(c => c.trim()).join(" | ") + " |" : li).join("\n");
   const tablas = [], lineas = txt.split(/\r?\n/); let t = null;
   lineas.forEach(li => { if (/^\s*\|/.test(li)) { const celdas = li.trim().replace(/^\||\|$/g, "").split("|").map(s => s.trim()); if (celdas.every(c => /^:?-{2,}:?$/.test(c) || !c)) return; if (!t) { t = {cab: celdas.map(c => c.toLowerCase()), filas: []}; tablas.push(t); } else t.filas.push(celdas); } else t = null; });
   const col = (tb, ...nom) => tb.cab.findIndex(h => nom.some(n => h.includes(n)));
@@ -2123,7 +2126,7 @@ function leerInforme(txt) {
   });
   const sinTablas = lineas.filter(li => !/^\s*\|/.test(li)).join("\n");
   const tras = (...et) => { for (const e of et) { const m = new RegExp("(?:^|\\n)\\s*[-*]?\\s*\\**\\s*" + e + "\\s*:?\\**\\s*:?\\s*([^\\n]+)", "i").exec(sinTablas); if (m) return m[1].replace(/\*\*/g, "").trim(); } return ""; };
-  const dato = (...et) => { const v = tras(...et); return v ? {valor: v.replace(/[«»"]?\s*\(?por verificar\)?\s*[«»"]?/i, "").trim(), verificar: /verificar/i.test(v)} : undefined; };
+  const dato = (...et) => { const v = tras(...et); return v ? {valor: v.replace(/\s*\(por verificar\)\s*\.?\s*$/i, "").trim(), verificar: /verificar/i.test(v)} : undefined; };
   const empresa = {actividad: dato("actividad", "sector"), ambito: dato("ámbito", "ambito"), sede: dato("sede"), delegaciones: dato("delegaciones"), vehiculos: dato("vehículos", "vehiculos", "flota"), plantilla: dato("plantilla", "empleados"), web: dato("web"), linkedin: dato("linkedin")};
   Object.keys(empresa).forEach(k => empresa[k] === undefined && delete empresa[k]);
   const informe = {empresa, productos, estrategia: tras("estrategia de entrada", "estrategia"), pregunta_clave: tras("pregunta clave"), siguiente_accion: tras("siguiente acción posible", "siguiente acción", "siguiente accion")};
