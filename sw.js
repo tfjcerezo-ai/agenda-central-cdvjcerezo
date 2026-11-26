@@ -1,4 +1,4 @@
-const CACHE_NAME = 'agenda-cdv-v86';
+const CACHE_NAME = 'agenda-cdv-v87';
 const ASSETS = ['/'];
 
 self.addEventListener('install', e => {

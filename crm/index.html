@@ -2023,7 +2023,7 @@ function nuevoLead() {
     else if (yo.rol === "setter") fila.setter_id = yo.id; else fila.closer_id = yo.id;
     const {data, error} = await sb.from("crm_leads").insert(fila).select().single();
     if (error) return "No se pudo guardar: " + error.message;
-    await sb.from("crm_actividad").insert({lead_id: data.id, autor_id: yo.id, tipo: "nota", texto: "Lead creado"});
+    await sb.from("crm_actividad").insert([{lead_id: data.id, autor_id: yo.id, tipo: "nota", texto: "Lead creado"}].concat(data.proximo_paso ? [{lead_id: data.id, autor_id: yo.id, tipo: "paso", texto: data.proximo_paso + (data.proximo_paso_fecha ? " · " + fF(data.proximo_paso_fecha) : "")}] : []));
     leads.unshift(data); aviso("Lead creado");
   }, "Crear lead");
   const pintarProds = () => { $("#n-prods-caja").innerHTML = selectorProductos("n", $("#n-proy").value, []); };
