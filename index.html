@@ -860,7 +860,7 @@ body{background:var(--negro);color:var(--blanco);font-family:'Montserrat',sans-s
 
   <!-- GESTIÓN DE USUARIOS (solo Director) -->
   <div id="panelGestionUsuarios" style="display:none;margin-top:16px;">
-    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">⚙️ Gestión de permisos</div>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--dorado);margin-bottom:14px;">👥 Usuarios de la Agenda y el CRM</div>
     <div id="listaGestionUsuarios"></div>
   </div>
 
@@ -4071,7 +4071,7 @@ guardarEvento = async function() {
 
 // ---- Director: ver la agenda de otra persona (solo lectura) ----
 function agPanelEquipo() {
-  const sec = document.getElementById('section-equipo'); if(!sec || document.getElementById('agPanelEquipo')) return;
+  const sec = document.getElementById('section-equipo'); if(!sec) return; document.getElementById('agPanelEquipo')?.remove();
   const otros = AG_PERFILES; if(!otros.length) return;
   const div = document.createElement('div'); div.id = 'agPanelEquipo';
   div.style.cssText = 'background:var(--negro-claro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:16px;';
@@ -4097,6 +4097,45 @@ async function agVerAgenda(uid) {
     + caja('Próximas citas', es.slice(0, 10).map(e => fila(`${fmtFecha(e.fecha)} ${e.hora || ''} · ${escH(e.titulo)}`)).join('') || vacio)
     + caja(`Tiempo este mes: ${tot.toFixed(1)} h`, Object.entries(horas).sort((a, b) => b[1] - a[1]).map(([k, h]) => fila(`${escH(k)} · ${h.toFixed(1)} h`)).join('') || vacio)
     + caja('Últimas notas', ns.map(n => fila(escH(String(n.texto || '').slice(0, 140)))).join('') || vacio);
+}
+
+// ---- Ajustes (director): usuarios reales de la Agenda y el CRM (sustituye a la gestión antigua, que solo guardaba usuarios en este dispositivo) ----
+renderGestionUsuarios = async function() {
+  const caja = document.getElementById('listaGestionUsuarios'); if(!caja) return;
+  caja.innerHTML = '<div style="font-size:12px;color:var(--gris);">Cargando usuarios…</div>';
+  let lista = [];
+  try { const r = await fetch(`${SB_URL}/rest/v1/crm_perfiles?select=id,nombre,email,rol,activo,creado&order=creado`, {headers: await sbHeaders()}); if(r.ok) lista = await r.json(); } catch(e) {}
+  const otros = lista.filter(p => p.id !== AG_UID);
+  const ayuda = `<div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:12px;padding:14px;margin-bottom:12px;font-size:12px;color:var(--blanco-suave);line-height:1.6;">
+    <div style="color:var(--dorado);font-weight:600;margin-bottom:6px;">Cómo dar acceso a una persona</div>
+    1. Que entre en <b>agenda.cdvbyjcerezo.com/crm/</b> y pulse <b>Crear cuenta</b> con su correo y su contraseña.<br>
+    2. Aparecerá abajo como <b>Pendiente</b>: elige su papel y pulsa <b>Activar</b>.<br>
+    3. Con esa misma cuenta entra en el CRM y en la Agenda (agenda.cdvbyjcerezo.com).<br>
+    <span style="color:var(--gris);">Su agenda empieza <b>vacía</b>. Nunca puede ver la tuya. Tú puedes ver la suya en <b>Equipo → Agenda del equipo</b>. Los proyectos que ve se asignan en el CRM → Equipo.</span></div>`;
+  const fila = p => `<div style="background:var(--negro);border:1px solid var(--negro-borde);border-radius:12px;padding:12px;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
+    <div><div style="font-size:13px;font-weight:600;color:var(--blanco-suave);">${escH(p.nombre || p.email)}</div>
+      <div style="font-size:11px;color:var(--gris);">${escH(p.email)} · ${p.activo ? '<span style="color:#5cb85c;">Activo</span>' : '<span style="color:var(--rojo);">Pendiente / sin acceso</span>'}</div></div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <select class="form-select" id="agRol_${p.id}" style="font-size:11px;padding:6px;">${['closer','setter'].map(r => `<option value="${r}" ${p.rol === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
+      ${p.activo ? `<button class="btn-secondary" style="font-size:11px;padding:6px 10px;" onclick="agVerDesdeAjustes('${p.id}')">Ver su agenda</button>
+        <button class="btn-secondary" style="font-size:11px;padding:6px 10px;" onclick="agCambiarAcceso('${p.id}',false)">Quitar acceso</button>`
+      : `<button class="btn-primary" style="font-size:11px;padding:6px 12px;" onclick="agCambiarAcceso('${p.id}',true)">Activar</button>`}
+    </div></div>`;
+  caja.innerHTML = ayuda + (otros.length ? otros.map(fila).join('') : '<div style="font-size:12px;color:var(--gris);">Todavía no hay más usuarios.</div>');
+};
+async function agCambiarAcceso(id, activar) {
+  const rol = document.getElementById('agRol_' + id)?.value || 'closer';
+  if(!activar && !confirm('¿Quitar el acceso a esta persona? No se borra nada: su agenda y sus datos se conservan y puedes volver a activarla.')) return;
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/crm_perfiles?id=eq.${id}`, {method: 'PATCH', headers: await sbHeaders({'Content-Type': 'application/json', 'Prefer': 'return=minimal'}), body: JSON.stringify(activar ? {activo: true, rol} : {activo: false})});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    mostrarMensaje(activar ? '✅ Acceso activado' : 'Acceso quitado');
+  } catch(e) { alert('No se pudo cambiar: ' + e.message); }
+  renderGestionUsuarios(); agPrepararDirector();
+}
+function agVerDesdeAjustes(id) {
+  nav('equipo');
+  setTimeout(() => { const sel = document.getElementById('agVerUsuario'); if(sel) { sel.value = id; agVerAgenda(id); } }, 300);
 }
 </script>
 </body>
