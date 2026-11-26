@@ -1529,7 +1529,7 @@ function nav(id, btn) {
   if(btn) btn.classList.add('active');
   if(id==='tiempo') renderRegistros();
   if(id==='liga') renderLiga();
-  if(id==='ajustes') renderComResumen();
+  if(id==='ajustes') { if(document.getElementById('comResumen')) renderComResumen(); if(AG_DIR) renderGestionUsuarios(); }
   if(id==='comisiones') renderMisComisiones();
 }
 
